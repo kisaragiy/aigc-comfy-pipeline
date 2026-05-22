@@ -1,0 +1,121 @@
+{
+  "3": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 123456789,
+      "steps": 32,
+      "cfg": 7,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": ["13", 0],
+      "positive": ["6", 0],
+      "negative": ["7", 0],
+      "latent_image": ["5", 0]
+    }
+  },
+  "4": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "waiIllustriousSDXL_v160.safetensors"
+    }
+  },
+  "5": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {
+      "width": 1344,
+      "height": 896,
+      "batch_size": 1
+    }
+  },
+  "6": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "masterpiece, best quality, ultra detailed, 2girls, multiple girls, closers, anime, game cg, high quality, full body, wide shot, dynamic composition, different outfits, different poses, different expressions, (knives, closers, silver hair, grey hair, lavender hair, blunt bangs, hime cut, gradient eyes, two-tone eyes, olive green eyes, school uniform, standing on the left, smiling:1.2), (caster, closers, pink hair, light pink hair, bubblegum pink hair, blue eyes, cyan eyes, gradient eyes, dress, standing on the right, confident expression:1.2), detailed background, soft lighting",
+      "clip": ["13", 1]
+    }
+  },
+  "7": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "worst quality, low quality, blurry, jpeg artifacts, bad anatomy, extra limbs, deformed hands, extra fingers, missing fingers, bad face, duplicate, watermark, text, logo, photorealistic, 3d render, western cartoon, 1girl, solo, boy, fused bodies, merged characters, same outfit, clone, identical pose, asymmetric eyes, silver hair on caster, pink hair on knives, wrong eye color",
+      "clip": ["13", 1]
+    }
+  },
+  "8": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": ["3", 0],
+      "vae": ["4", 2]
+    }
+  },
+  "9": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "multi_char_lora_sdxl",
+      "images": ["30", 0]
+    }
+  },
+  "12": {
+    "class_type": "LoraLoader",
+    "inputs": {
+      "model": ["4", 0],
+      "clip": ["4", 1],
+      "lora_name": "knives_sdxl.safetensors",
+      "strength_model": 0.72,
+      "strength_clip": 0.72
+    }
+  },
+  "13": {
+    "class_type": "LoraLoader",
+    "inputs": {
+      "model": ["12", 0],
+      "clip": ["12", 1],
+      "lora_name": "caster_sdxl.safetensors",
+      "strength_model": 0.72,
+      "strength_clip": 0.72
+    }
+  },
+  "20": {
+    "class_type": "UltralyticsDetectorProvider",
+    "inputs": {
+      "model_name": "bbox/face_yolov8m.pt"
+    }
+  },
+  "30": {
+    "class_type": "FaceDetailer",
+    "inputs": {
+      "image": ["8", 0],
+      "model": ["13", 0],
+      "clip": ["13", 1],
+      "vae": ["4", 2],
+      "guide_size": 512,
+      "guide_size_for": true,
+      "max_size": 1024,
+      "seed": 123456789,
+      "steps": 20,
+      "cfg": 6.5,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "positive": ["6", 0],
+      "negative": ["7", 0],
+      "denoise": 0.42,
+      "feather": 8,
+      "noise_mask": true,
+      "force_inpaint": true,
+      "bbox_threshold": 0.45,
+      "bbox_dilation": 12,
+      "bbox_crop_factor": 3,
+      "sam_detection_hint": "none",
+      "sam_dilation": 0,
+      "sam_threshold": 0.93,
+      "sam_bbox_expansion": 0,
+      "sam_mask_hint_threshold": 0.7,
+      "sam_mask_hint_use_negative": "False",
+      "drop_size": 10,
+      "bbox_detector": ["20", 0],
+      "wildcard": "high quality anime face, detailed eyes, symmetrical eyes, sharp focus",
+      "cycle": 1
+    }
+  }
+}
