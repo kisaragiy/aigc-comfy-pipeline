@@ -1,0 +1,69 @@
+{
+  "3": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 123456789,
+      "steps": 28,
+      "cfg": 6.5,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": ["12", 0],
+      "positive": ["6", 0],
+      "negative": ["7", 0],
+      "latent_image": ["5", 0]
+    }
+  },
+  "4": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "waiIllustriousSDXL_v160.safetensors"
+    }
+  },
+  "5": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {
+      "width": 896,
+      "height": 1152,
+      "batch_size": 1
+    }
+  },
+  "6": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "masterpiece, best quality, ultra detailed, knives, closers, 1girl, solo, character portrait, anime, game cg, high quality, long hair, straight hair, blunt bangs, hime cut, silver hair, grey hair, lavender hair, light purple hair, medium breasts, large breasts, curvy, slim waist, gradient eyes, two-tone eyes, olive green eyes, green eyes, yellow-green eyes, small pupils, thick eyelashes, detailed eyes, thin eyebrows, symmetrical eyes, looking at viewer, upper body, cowboy shot, face focus, portrait, school uniform, white shirt, red necktie, soft daylight",
+      "clip": ["12", 1]
+    }
+  },
+  "7": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "worst quality, low quality, blurry, jpeg artifacts, bad anatomy, extra limbs, deformed hands, extra fingers, missing fingers, bad face, duplicate, watermark, text, logo, photorealistic, 3d render, western cartoon, multiple girls, boy, asymmetric eyes, uneven eyes, mismatched eyes, crooked eyes, different eye heights, lazy eye, wonky eyes, cross-eyed, misaligned eyes, large pupils, round pupils, amber eyes, orange eyes, yellow eyes, solid yellow eyes, multicolored eyes, heterochromia, rainbow eyes",
+      "clip": ["12", 1]
+    }
+  },
+  "8": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": ["3", 0],
+      "vae": ["4", 2]
+    }
+  },
+  "9": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "knives_lora_sdxl",
+      "images": ["8", 0]
+    }
+  },
+  "12": {
+    "class_type": "LoraLoader",
+    "inputs": {
+      "model": ["4", 0],
+      "clip": ["4", 1],
+      "lora_name": "knives_sdxl.safetensors",
+      "strength_model": 0.9,
+      "strength_clip": 0.9
+    }
+  }
+}

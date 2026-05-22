@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AIGC 作品集 · ComfyUI Pipeline</title>
+  <style>
+    :root { --bg: #0f1115; --card: #1a1d24; --text: #e8eaed; --muted: #9aa0a6; --accent: #6ea8fe; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
+    header { padding: 2rem 1.5rem; text-align: center; border-bottom: 1px solid #2a2f3a; }
+    header h1 { margin: 0 0 0.5rem; font-size: 1.6rem; }
+    header p { margin: 0; color: var(--muted); font-size: 0.95rem; }
+    header a { color: var(--accent); }
+    .grid-hero { max-width: 1100px; margin: 1.5rem auto; padding: 0 1rem; }
+    .grid-hero img { width: 100%; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,.4); }
+    main { max-width: 1100px; margin: 0 auto; padding: 1rem 1rem 3rem; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.25rem; }
+    figure { margin: 0; background: var(--card); border-radius: 12px; overflow: hidden; border: 1px solid #2a2f3a; }
+    figure img { width: 100%; aspect-ratio: 3/4; object-fit: cover; display: block; }
+    figcaption { padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--muted); }
+    footer { text-align: center; padding: 2rem; color: var(--muted); font-size: 0.8rem; border-top: 1px solid #2a2f3a; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>AIGC 生产管线 · 作品集</h1>
+    <p>ComfyUI REST API · SDXL LoRA · IPAdapter · Ollama 提示词 · Python 批处理</p>
+    <p><a href="https://github.com/kisaragiy/aigc-comfy-pipeline">GitHub 仓库</a> ·
+       <a href="https://github.com/kisaragiy">kisaragiy</a> ·
+       <a href="../README.md">README</a></p>
+  </header>
+  <div class="grid-hero">
+    <img src="samples/00_gallery_grid.jpg" alt="样张拼图" />
+  </div>
+  <main id="gallery"></main>
+  <footer>非商用个人练习 · 仅展示工程化出图能力 · 张伟强 2025–2026</footer>
+  <script>
+    const items = [
+      ["01_sdxl_lora_txt2img.jpg", "SDXL 角色 LoRA 文生图"],
+      ["02_sdxl_caster_lora.jpg", "第二角色 LoRA"],
+      ["03_ipadapter_face_lock.jpg", "IPAdapter 参考图锁脸"],
+      ["04_multi_character.jpg", "双 LoRA 多角色同框"],
+      ["05_galgame_heroine.jpg", "Galgame 向角色立绘"],
+      ["06_batch_pipeline.jpg", "批处理出图"],
+      ["07_pose_variation.jpg", "同角色多姿势"],
+      ["08_style_consistency.jpg", "风格一致性"],
+      ["09_ipadapter_series.jpg", "IPAdapter 系列"],
+    ];
+    const root = document.getElementById("gallery");
+    items.forEach(([file, cap]) => {
+      const fig = document.createElement("figure");
+      fig.innerHTML = `<img src="samples/${file}" alt="${cap}" loading="lazy" /><figcaption>${cap}</figcaption>`;
+      root.appendChild(fig);
+    });
+  </script>
+</body>
+</html>

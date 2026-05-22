@@ -1,0 +1,777 @@
+{
+  "id": "0a246c86-a4cc-4ddc-98fc-0f7dda4e9d28",
+  "revision": 0,
+  "last_node_id": 10,
+  "last_link_id": 15,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "CheckpointLoaderSimple",
+      "pos": [
+        40,
+        120
+      ],
+      "size": [
+        315,
+        98
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "ckpt_name",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "ckpt_name"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            1,
+            2
+          ]
+        },
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            3,
+            4
+          ]
+        },
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            5
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.18.1",
+        "Node name for S&R": "CheckpointLoaderSimple"
+      },
+      "widgets_values": [
+        "waiIllustriousSDXL_v160.safetensors"
+      ]
+    },
+    {
+      "id": 2,
+      "type": "CLIPTextEncode",
+      "pos": [
+        400,
+        -120
+      ],
+      "size": [
+        480,
+        280
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 3
+        },
+        {
+          "name": "text",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "text"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": [
+            6,
+            7
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.18.1",
+        "Node name for S&R": "CLIPTextEncode"
+      },
+      "widgets_values": [
+        "// 全身立绘 | 樱之刻手绘CG感 | 降AI感：少质量堆砌词、哑光肤色、自然光影\n// {} 随机: 姿势 / 背景光\n\n1girl, solo,\n(sakura no toki:1.4), (sakura no uta:1.3), (makura:1.15), (pillow visual novel:1.15),\n(inuhiro:1.2), (kagome_(sakura_no_uta):1.1), (hand-painted visual novel CG:1.35), (2d game illustration:1.3), (traditional anime cel shading:1.2),\n(literary melancholic atmosphere:1.1), (muted natural color palette:1.25), (soft matte finish:1.2), (subtle painterly shading:1.15), (organic line weight variation:1.1), (natural skin tone:1.15), (not over-rendered:1.2),\n(gradient eyes:1.25), (soft eye highlights:1.2), (thin eyelashes:1.15), (gentle slightly droopy eye shape:1.15),\n(galgame heroine full body standing sprite:1.4), (tachie:1.3),\n(full body:1.5), (head to toe:1.45), (entire body in frame:1.4), (feet visible:1.35), (shoes visible:1.3), (standing on floor:1.25), (wide shot:1.2), (distant view showing legs:1.15),\n{plain soft gradient background|subtle indoor window light|muted neutral background|simple vn event CG backdrop},\n(beautiful chinese high school girl:1.2), (17 years old:1.2), (mature adolescent body:1.3), (realistic head to body ratio:1.35), (slender tall figure:1.2), (not childlike:1.25), (not chibi:1.25),\n(very long straight black hair reaching waist:1.3), (bangs above eyebrows:1.15),\n{half updo princess hairstyle with braided crown|elegant princess hime updo loose side locks|classic half updo twin loops at back|refined half-up heroine hairstyle},\n(mole under left eye only:1.4), (beauty mark below left eye:1.3), (clean smooth forehead:1.2),\n{introverted reserved expression|shy gentle eyes looking slightly downward|quiet melancholic soft smile|timid averting gaze|polite reserved slight smile|calm introverted face subtle blush},\n{standing arms at sides full body|hands clasped loosely at waist|holding hardcover book at chest|one hand tucking hair behind ear|holding school satchel at side|subtle three-quarter turn reserved stance|walking slowly calm mid-step},\n(chinese high school tracksuit uniform:1.45), (white athletic jacket with dark brown black side panels:1.4), (front zipper:1.15), (navy blue inner shirt:1.3), (white collar:1.2), (cyan blue ribbon bow on chest:1.3), (golden school badge on jacket:1.25), (matching blue white long sweatpants:1.35), (white sneakers:1.2), PRC campus sportswear, no skirt,\n{soft natural daylight|diffused overcast light|gentle indoor ambient light|quiet afternoon light},\n{amber brown eyes|dark brown eyes|hazel brown eyes},\nlooking at viewer, standing"
+      ]
+    },
+    {
+      "id": 3,
+      "type": "CLIPTextEncode",
+      "pos": [
+        400,
+        220
+      ],
+      "size": [
+        480,
+        220
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 4
+        },
+        {
+          "name": "text",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "text"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": [
+            8,
+            9
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.18.1",
+        "Node name for S&R": "CLIPTextEncode"
+      },
+      "widgets_values": [
+        "worst quality, low quality, lowres, jpeg artifacts, blurry,\n(ai generated:1.35), (artificial:1.3), (synthetic:1.25), (plastic skin:1.4), (waxy skin:1.4), (porcelain skin:1.35), (overly smooth skin:1.4), (airbrushed:1.35), (glossy skin:1.35), (oily shine:1.3), (HDR:1.3), (oversaturated:1.35), (hyperdetailed:1.25), (excessive sharpness:1.3), (sterile clean render:1.3), (uncanny valley:1.25), (digital noise reduction:1.2),\n(midjourney:1.25), (novelai default:1.2), (generic AI art:1.35), (stable diffusion artifact:1.2), (8k wallpaper:1.2), (ultra sharp:1.25), (cinematic bloom overload:1.25), (heavy bokeh:1.2), (depth of field abuse:1.2), (perfect symmetry:1.15),\nloli, child, toddler, kindergarten, elementary school age, baby face, youthful child proportions,\n(big head:1.4), (oversized head:1.4), chibi, super deformed, sd character, toy, figurine,\nforehead mark, forehead dots, bindi, third eye, mole on forehead, beauty mark on forehead, dots between eyebrows, facial tattoos on forehead, red dots on face,\nbad anatomy, bad hands, bad fingers, extra fingers, missing fingers, fused fingers, malformed limbs,\nextra arms, extra legs, long neck, short body, duplicate, multiple girls, 2girls, crowd,\nwatermark, text, signature, logo, username, barcode, border, frame,\n3d render, cgi, realistic photo, photorealistic, western cartoon, ray tracing,\n(flat eyes:1.3), (simple dot eyes:1.3), (googly eyes:1.25), (huge round moe eyes:1.3), (neon eyes:1.3), (oversized sparkling anime eyes:1.3), (gacha splash art:1.25), (pixiv trending:1.2), (generic modern anime:1.2),\nheavy makeup, gyaru, aggressive expression, shouting, laughing loudly, extroverted pose, winking,\n(hand on forehead:1.3), (shading eyes:1.3), (salute pose:1.3), (hand covering one eye:1.3), (reaching toward viewer:1.4), (foreshortened hand:1.4), (dramatic perspective hand:1.3), peace sign, selfie pose,\nnsfw, nude, cleavage focus, underwear, bikini, spread legs,\n(japanese school uniform:1.4), (sailor uniform:1.4), seifuku, serafuku, pleated mini skirt, school skirt, (necktie:1.3), blazer with tie, western plaid skirt uniform, sailor collar, loafers with skirt,\nholding skirt hem, skirt lift,\nwrong uniform, cosplay, armor, fantasy sci-fi outfit,\nplain, generic, boring, stock illustration, amateur, dull design, forgettable character, low effort art,\n(frilly pink dress:1.45), (pastel pink dress:1.45), pink dress, pink outfit, lolita dress, childish dress, sundress, lace trim dress, puff sleeves dress, ribbon waist dress, white cardigan over dress,\nplain white flats, (ugly shoes:1.35), mary janes, cheap footwear, pink shoes, bow flats, generic shoes,\nT-pose, arms spread wide, stiff pose, empty pose, wooden chair, briefcase prop, window grid background only,\nshort hair, bob cut, blonde hair, colored hair,\nno mole, mole on right eye, bald, hat covering face,\n(upper body only:1.45), (cowboy shot:1.4), (medium shot:1.4), (portrait:1.4), (close-up:1.4), (bust shot:1.35), (waist up:1.4), (knee up:1.35), (missing feet:1.4), (feet out of frame:1.4),\ncropped, out of frame, head out of frame, cut off legs, cut off feet, cut off shoes"
+      ]
+    },
+    {
+      "id": 4,
+      "type": "EmptyLatentImage",
+      "pos": [
+        400,
+        500
+      ],
+      "size": [
+        315,
+        106
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "width",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "width"
+          }
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "height"
+          }
+        },
+        {
+          "name": "batch_size",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "batch_size"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            10
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.18.1",
+        "Node name for S&R": "EmptyLatentImage"
+      },
+      "widgets_values": [
+        896,
+        1344,
+        1
+      ]
+    },
+    {
+      "id": 5,
+      "type": "KSampler",
+      "pos": [
+        920,
+        320
+      ],
+      "size": [
+        315,
+        474
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 1
+        },
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 6
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 8
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 10
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "seed"
+          }
+        },
+        {
+          "name": "steps",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "steps"
+          }
+        },
+        {
+          "name": "cfg",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "cfg"
+          }
+        },
+        {
+          "name": "sampler_name",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "sampler_name"
+          }
+        },
+        {
+          "name": "scheduler",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "scheduler"
+          }
+        },
+        {
+          "name": "denoise",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "denoise"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            11
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.18.1",
+        "Node name for S&R": "KSampler"
+      },
+      "widgets_values": [
+        0,
+        "randomize",
+        32,
+        4.8,
+        "dpmpp_2m_sde",
+        "karras",
+        1.0
+      ]
+    },
+    {
+      "id": 6,
+      "type": "LatentUpscaleBy",
+      "pos": [
+        1280,
+        400
+      ],
+      "size": [
+        270,
+        106
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 11
+        },
+        {
+          "name": "upscale_method",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "upscale_method"
+          }
+        },
+        {
+          "name": "scale_by",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "scale_by"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            12
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.18.1",
+        "Node name for S&R": "LatentUpscaleBy"
+      },
+      "widgets_values": [
+        "bislerp",
+        1.5
+      ]
+    },
+    {
+      "id": 7,
+      "type": "KSampler",
+      "pos": [
+        1620,
+        320
+      ],
+      "size": [
+        315,
+        474
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 2
+        },
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 7
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 9
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 12
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "seed"
+          }
+        },
+        {
+          "name": "steps",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "steps"
+          }
+        },
+        {
+          "name": "cfg",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "cfg"
+          }
+        },
+        {
+          "name": "sampler_name",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "sampler_name"
+          }
+        },
+        {
+          "name": "scheduler",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "scheduler"
+          }
+        },
+        {
+          "name": "denoise",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "denoise"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            13
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.18.1",
+        "Node name for S&R": "KSampler"
+      },
+      "widgets_values": [
+        0,
+        "fixed",
+        20,
+        4.5,
+        "dpmpp_2m_sde",
+        "karras",
+        0.32
+      ]
+    },
+    {
+      "id": 8,
+      "type": "VAEDecode",
+      "pos": [
+        1980,
+        360
+      ],
+      "size": [
+        210,
+        46
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 13
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 5
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            14,
+            15
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.18.1",
+        "Node name for S&R": "VAEDecode"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 9,
+      "type": "PreviewImage",
+      "pos": [
+        2240,
+        280
+      ],
+      "size": [
+        400,
+        400
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 14
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.18.1",
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 10,
+      "type": "SaveImage",
+      "pos": [
+        2240,
+        720
+      ],
+      "size": [
+        320,
+        270
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 15
+        },
+        {
+          "name": "filename_prefix",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "filename_prefix"
+          }
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.18.1",
+        "Node name for S&R": "SaveImage"
+      },
+      "widgets_values": [
+        "gal_heroine_gacha"
+      ]
+    }
+  ],
+  "links": [
+    [
+      1,
+      1,
+      0,
+      5,
+      0,
+      "MODEL"
+    ],
+    [
+      2,
+      1,
+      0,
+      7,
+      0,
+      "MODEL"
+    ],
+    [
+      3,
+      1,
+      1,
+      2,
+      0,
+      "CLIP"
+    ],
+    [
+      4,
+      1,
+      1,
+      3,
+      0,
+      "CLIP"
+    ],
+    [
+      5,
+      1,
+      2,
+      8,
+      1,
+      "VAE"
+    ],
+    [
+      6,
+      2,
+      0,
+      5,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      7,
+      2,
+      0,
+      7,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      8,
+      3,
+      0,
+      5,
+      2,
+      "CONDITIONING"
+    ],
+    [
+      9,
+      3,
+      0,
+      7,
+      2,
+      "CONDITIONING"
+    ],
+    [
+      10,
+      4,
+      0,
+      5,
+      3,
+      "LATENT"
+    ],
+    [
+      11,
+      5,
+      0,
+      6,
+      0,
+      "LATENT"
+    ],
+    [
+      12,
+      6,
+      0,
+      7,
+      3,
+      "LATENT"
+    ],
+    [
+      13,
+      7,
+      0,
+      8,
+      0,
+      "LATENT"
+    ],
+    [
+      14,
+      8,
+      0,
+      9,
+      0,
+      "IMAGE"
+    ],
+    [
+      15,
+      8,
+      0,
+      10,
+      0,
+      "IMAGE"
+    ]
+  ],
+  "groups": [
+    {
+      "title": "全身立绘 | 降AI感 CFG4.8 | {} 随机姿势",
+      "bounding": [
+        360,
+        -200,
+        560,
+        780
+      ],
+      "color": "#3f789e",
+      "font_size": 22
+    },
+    {
+      "title": "生成 + 1.5x 细化",
+      "bounding": [
+        880,
+        240,
+        1000,
+        580
+      ],
+      "color": "#8A8",
+      "font_size": 22
+    },
+    {
+      "title": "预览 + 保存到 output",
+      "bounding": [
+        2180,
+        200,
+        520,
+        820
+      ],
+      "color": "#a1309b",
+      "font_size": 22
+    }
+  ],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.9,
+      "offset": [
+        80,
+        80
+      ]
+    },
+    "info": {
+      "name": "galgame_heroine_gacha_sdxl",
+      "description": "樱之刻全身立绘，低CFG降AI感，手绘CG向"
+    }
+  },
+  "version": 0.4
+}
