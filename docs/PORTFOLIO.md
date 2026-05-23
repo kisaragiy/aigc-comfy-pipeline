@@ -3,17 +3,13 @@
 | 模块 | 仓库 | 演示 |
 |------|------|------|
 | LLM Agent Runtime | [Memory-Agent-OS](https://github.com/kisaragiy/Memory-Agent-OS) | README 一键启动 · Playwright 冒烟截图 |
-| AIGC ComfyUI 管线 | [aigc-comfy-pipeline](https://github.com/kisaragiy/aigc-comfy-pipeline) | [GALLERY.html](GALLERY.html) · [workflow 截图](assets/) |
+| AIGC ComfyUI 管线 | [aigc-comfy-pipeline](https://github.com/kisaragiy/aigc-comfy-pipeline) | [GALLERY.html](GALLERY.html)（**工作流截图**，不含成图） |
 | 电影推荐（Java） | [Movie-Recomand-System](https://github.com/kisaragiy/Movie-Recomand-System) | 本地录屏（面试可提供） |
 
-## 本仓库
+## 本仓库公开展示
 
-- **成图样张**：[`samples/`](samples/)（9 张 + 拼图）
-- **工作流界面**：[`assets/`](assets/)（ComfyUI 节点图截图）
-- **浏览器浏览**：[`GALLERY.html`](GALLERY.html)
+- [`samples/`](samples/)：ComfyUI 节点/workflow 界面截图（7 张 + 拼图）
+- [`assets/`](assets/)：同上源文件备份
+- [`GALLERY.html`](GALLERY.html)：浏览器浏览
 
-## 维护
-
-```bash
-python scripts/finalize_portfolio.py   # 从 DrawingLive 同步样张 + 压缩示例截图
-```
+成图样张不在公开仓库；面试时可本地演示完整 AIGC 管线。

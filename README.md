@@ -5,13 +5,13 @@
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](requirements.txt)
 
-## 演示样张（无需录屏）
+## 演示（公开展示 · 工作流截图）
 
-| 拼图 | 单张 |
+| 拼图 | 说明 |
 |------|------|
-| ![gallery](docs/samples/00_gallery_grid.jpg) | 见 [`docs/samples/`](docs/samples/) 共 9 张 |
+| ![gallery](docs/samples/00_gallery_grid.jpg) | ComfyUI **节点/workflow 界面**截图（不含成图） |
 
-打开 **[docs/GALLERY.html](docs/GALLERY.html)** 可在浏览器中浏览完整作品集页（含 9 张成图 + ComfyUI 工作流截图）。
+打开 **[docs/GALLERY.html](docs/GALLERY.html)** 浏览完整作品集。成图能力可在面试时本地演示。
 
 ## 能力概览
 
@@ -81,7 +81,7 @@ scripts/
 
 ## 说明
 
-- 样张为个人 **非商用** AIGC 练习，用于展示工程化管线能力；角色模型需自行训练，本仓库不包含权重文件。
+- 公开仓库仅含 **工作流截图与脚本**，用于展示工程化能力；角色模型与成图样张在本地，面试时可演示。
 - 完整素材与 kohya 训练环境在本地 `C:\DrawingLive`，未纳入本仓库。
 
 ## License

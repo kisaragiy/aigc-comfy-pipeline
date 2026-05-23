@@ -1,20 +1,22 @@
-# 推送到 GitHub（若 Agent 未自动推送成功）
+# 推送前：在 GitHub 创建空仓库
 
-本地已 `git commit`，在 GitHub 网页新建空仓库 **`aigc-comfy-pipeline`**（不要勾选 README），然后：
+1. 打开 https://github.com/new  
+2. Repository name：`aigc-comfy-pipeline`  
+3. Public，**不要**勾选 Add a README  
+4. Create repository  
+5. 运行：
 
 ```powershell
 cd C:\面试\aigc-comfy-pipeline
-git remote add origin https://github.com/kisaragiy/aigc-comfy-pipeline.git
-git branch -M main
 git push -u origin main
 ```
 
-推送后验证：
+## Profile 主页（可选，建议）
 
-- 仓库：https://github.com/kisaragiy/aigc-comfy-pipeline  
-- 作品集页：https://github.com/kisaragiy/aigc-comfy-pipeline/blob/main/docs/GALLERY.html  
-- 在仓库 Settings → 勾选 **Pages**（可选）：Source 选 `main` / `/docs`，可用 Pages 打开 GALLERY（需把 GALLERY 放到 docs 根或配置）
+1. https://github.com/new → 仓库名 **`kisaragiy`**（与用户名相同）  
+2. 把 `C:\面试\kisaragiy-profile\README.md` 内容粘贴进去  
 
-## Profile README
+## 作品集链接（推送成功后）
 
-把 `C:\面试\github-profile-README.md` 内容复制到 GitHub 新建仓库 **`kisaragiy/kisaragiy`** 的 README.md。
+- https://github.com/kisaragiy/aigc-comfy-pipeline  
+- https://github.com/kisaragiy/aigc-comfy-pipeline/blob/main/docs/GALLERY.html  

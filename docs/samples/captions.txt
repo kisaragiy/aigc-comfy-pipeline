@@ -1,9 +1,7 @@
-01_sdxl_lora_txt2img.jpg	SDXL 角色 LoRA 文生图
-02_sdxl_caster_lora.jpg	第二角色 LoRA
-03_ipadapter_face_lock.jpg	IPAdapter 参考图锁脸
-04_multi_character.jpg	双 LoRA 多角色同框
-05_galgame_heroine.jpg	Galgame 向角色立绘
-06_batch_pipeline.jpg	批处理出图
-07_pose_variation.jpg	同角色多姿势
-08_style_consistency.jpg	风格一致性
-09_ipadapter_series.jpg	IPAdapter 系列
+01_flux_klein_workflow.jpg	Flux.2 + Klein 身份一致性工作流
+02_multi_node_pipeline.jpg	多节点 AIGC 管线总览
+03_identity_guidance.jpg	身份引导 / 单图工作流
+04_img2img_swap.jpg	图生图 / 局部重绘流程
+05_ipadapter_blend.jpg	IPAdapter 参考图融合
+06_lora_txt2img_setup.jpg	SDXL LoRA 文生图节点配置
+07_lora_img2img_setup.jpg	LoRA + 图生图编排
