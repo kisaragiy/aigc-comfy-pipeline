@@ -13,7 +13,7 @@ import requests
 AGENTS_DIR = Path(__file__).resolve().parent
 DEFAULT_COMFY_URL = os.environ.get("COMFY_URL", "http://127.0.0.1:8188/prompt")
 DEFAULT_OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434/api/generate")
-DEFAULT_OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen3:1.7b")
+DEFAULT_OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen3:14b")
 
 
 def bootstrap_agents_path() -> Path:

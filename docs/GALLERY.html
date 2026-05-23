@@ -19,6 +19,9 @@
     figure img { width: 100%; aspect-ratio: 3/4; object-fit: cover; display: block; }
     figcaption { padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--muted); }
     footer { text-align: center; padding: 2rem; color: var(--muted); font-size: 0.8rem; border-top: 1px solid #2a2f3a; }
+    h2.section { max-width: 1100px; margin: 2rem auto 0.75rem; padding: 0 1rem; font-size: 1.1rem; color: var(--muted); font-weight: 600; }
+    .wf-grid { max-width: 1100px; margin: 0 auto 2rem; padding: 0 1rem; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1rem; }
+    .wf-grid img { width: 100%; border-radius: 8px; border: 1px solid #2a2f3a; }
   </style>
 </head>
 <body>
@@ -33,6 +36,8 @@
     <img src="samples/00_gallery_grid.jpg" alt="样张拼图" />
   </div>
   <main id="gallery"></main>
+  <h2 class="section">ComfyUI 工作流（节点图）</h2>
+  <section class="wf-grid" id="workflows"></section>
   <footer>非商用个人练习 · 仅展示工程化出图能力 · 张伟强 2025–2026</footer>
   <script>
     const items = [
@@ -51,6 +56,15 @@
       const fig = document.createElement("figure");
       fig.innerHTML = `<img src="samples/${file}" alt="${cap}" loading="lazy" /><figcaption>${cap}</figcaption>`;
       root.appendChild(fig);
+    });
+    const wf = ["workflow_demo_01.jpg","workflow_demo_02.jpg","workflow_demo_03.jpg","workflow_demo_04.jpg","workflow_demo_05.jpg","workflow_demo_06.jpg","workflow_demo_07.jpg"];
+    const wfRoot = document.getElementById("workflows");
+    wf.forEach((file) => {
+      const img = document.createElement("img");
+      img.src = "assets/" + file;
+      img.alt = "ComfyUI workflow";
+      img.loading = "lazy";
+      wfRoot.appendChild(img);
     });
   </script>
 </body>
