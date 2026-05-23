@@ -15,5 +15,10 @@ Thumbs.db
 *.pth
 models/
 
-# 原始大图备份（仓库内为压缩样张）
+# 原始大图/录屏（仓库内用 docs/ 压缩版）
+示例/
+*.mp4
+*.mov
+
+# 原始大图备份
 docs/samples/_source/

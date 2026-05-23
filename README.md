@@ -11,7 +11,7 @@
 |------|------|
 | ![gallery](docs/samples/00_gallery_grid.jpg) | 见 [`docs/samples/`](docs/samples/) 共 9 张 |
 
-打开 **[docs/GALLERY.html](docs/GALLERY.html)** 可在浏览器中浏览完整作品集页。
+打开 **[docs/GALLERY.html](docs/GALLERY.html)** 可在浏览器中浏览完整作品集页（含 9 张成图 + ComfyUI 工作流截图）。
 
 ## 能力概览
 
@@ -63,9 +63,12 @@ agents/           # Python 编排脚本 + 内嵌 workflow JSON
 workflows/        # ComfyUI 导出工作流（可在 UI 中打开）
 docs/
   samples/        # 压缩样张（作品集）
+  assets/         # ComfyUI 工作流界面截图
   GALLERY.html    # 浏览器作品集页
+  PORTFOLIO.md    # 三项目作品集索引
 scripts/
   bootstrap_portfolio.py   # 从本机 DrawingLive 重新同步样张
+  finalize_portfolio.py    # 样张 + 示例截图一键整理
 ```
 
 ## 与其他项目
