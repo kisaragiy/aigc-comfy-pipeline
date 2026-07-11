@@ -1,1 +1,2 @@
 requests>=2.28.0
+# pillow 可选 — 仅 scripts/bootstrap_portfolio.py 需要（开发用）

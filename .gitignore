@@ -22,3 +22,16 @@ models/
 
 # 原始大图备份
 docs/samples/_source/
+
+# 生图输出
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.bmp
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
