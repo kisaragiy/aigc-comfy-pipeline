@@ -150,12 +150,26 @@ def _run_workflow() -> None:
                 print(f"   - {ct}")
             print("处理: 使用 ComfyUI Manager 或 `comfy node install` 安装对应自定义节点。")
 
+    elif action == "convert":
+        if len(sys.argv) < 4:
+            print("用法: python -m agents workflow convert <name> [--output <path>]")
+            return
+        name = sys.argv[3]
+        output = None
+        if "--output" in sys.argv:
+            idx = sys.argv.index("--output")
+            if idx + 1 < len(sys.argv):
+                output = sys.argv[idx + 1]
+        from agents.workflow_manager import convert_to_api
+
+        convert_to_api(name, output_path=output)
+
     else:
         _show_workflow_help()
 
 
 def _show_workflow_help() -> None:
-    print("用法: python -m agents workflow list|show <name>|schema <name>|check <name>")
+    print("用法: python -m agents workflow list|show <name>|schema <name>|check <name>|convert <name>")
 
 
 def _run_models() -> None:

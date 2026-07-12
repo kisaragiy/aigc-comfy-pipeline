@@ -10,8 +10,9 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.18.0** — 当前：工程化测试 + CI
-- V0.17.0 — 上一版：Output Gallery 增强
+- **V0.19.0** — 当前：workflow API 格式转换
+- V0.18.0 — 上一版：工程化测试 + CI
+- V0.17.0 — Output Gallery 增强
 - V0.16.0 — 模型下载
 - V0.15.0 — ComfyUI 队列管理
 - V0.14.0 — 管线验收报告
@@ -26,7 +27,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 - V0.5.0 — LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
 - V0.0.XXX — 小修
 
-## 当前版本：V0.18.0
+## 当前版本：V0.19.0
 
 ## 核心能力
 
@@ -42,7 +43,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 | Dry-run 验证 | `comfy_utils.DRY_RUN` | `--dry-run` 全局参数 | 跳过真实提交，验证参数正确性 |
 | Flux.2 Klein 身份一致性 | agents 脚本加载 workflows/JSON | — | 身份引导 + 单图工作流 |
 | Prompt 优化 | `comfy_utils.optimize_prompt()` | — | 六维度构图法转为结构化英文 tag |
-| 工作流管理 | `workflow_manager.py` | `python -m agents workflow` | 模板扫描、参数 schema 提取、节点依赖检查 |
+| 工作流管理 | `workflow_manager.py` | `python -m agents workflow` | 模板扫描、参数 schema 提取、节点依赖检查、格式转换 |
 | 模型管理 | `model_manager.py` | `python -m agents models` | 列出/查询/检查/下载模型 |
 | Flux.2 Klein 生图 | `go_flux.py` | `python -m agents flux` | 程序化构建 Flux 工作流（9B/4B、LoRA 注入） |
 | 参数扫描 | `go_sweep.py` | `python -m agents sweep` | 网格参数迭代、自动对比拼图 |
@@ -227,3 +228,4 @@ metadata.json 包含完整的生成参数，面试时打开即可证明工程化
 - [ ] `python -m agents gallery --help` 显示参数
 - [ ] `python -m agents gallery --output /tmp/g.html` 生成 HTML
 - [ ] `PYTHONPATH=agents python -m pytest tests/ -v` 32 项测试通过
+- [ ] `python -m agents workflow convert <name>` ComfyUI 离线时友好提示

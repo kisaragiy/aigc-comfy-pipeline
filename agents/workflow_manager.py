@@ -257,3 +257,144 @@ def show_graph(workflow: dict) -> str:
         else:
             lines.append(f"  [{node_id}] {ct}")
     return "\n".join(lines)
+
+
+# ============================================================
+# UI → API 格式转换
+# ============================================================
+
+
+def _load_ui_workflow(name: str) -> tuple[Path | None, dict | None]:
+    """加载 UI 格式 workflow。返回 (path, data) 或 (None, None)。"""
+    for wf_dir in WORKFLOW_DIRS:
+        if not wf_dir.is_dir():
+            continue
+        for fpath in wf_dir.glob("*.json"):
+            if fpath.stem == name or fpath.name == name:
+                try:
+                    data = json.loads(fpath.read_text(encoding="utf-8"))
+                except (json.JSONDecodeError, OSError):
+                    continue
+                if isinstance(data, dict) and "nodes" in data:
+                    return fpath, data
+    return None, None
+
+
+def convert_to_api(
+    name: str,
+    *,
+    comfy_url: str | None = None,
+    output_path: str | None = None,
+) -> dict | None:
+    """将 UI 格式 workflow 转为 API 格式。
+
+    Args:
+        name: workflow 名称
+        comfy_url: ComfyUI URL（用于 /object_info）
+        output_path: 输出路径（默认覆盖原文件）
+
+    Returns:
+        API 格式 workflow dict，或 None
+    """
+    import requests
+
+    # 1. 加载 UI workflow
+    wf_path, data = _load_ui_workflow(name)
+    if wf_path is None:
+        print(f"未找到 UI 格式 workflow: {name}")
+        return None
+
+    nodes = data.get("nodes", [])
+    links = data.get("links", [])
+
+    if not nodes:
+        print(f"workflow 没有 nodes 数组（可能已是 API 格式）: {name}")
+        return None
+
+    # 2. 获取节点输入结构
+    object_info = None
+    base = (comfy_url or "http://127.0.0.1:8188").rstrip("/prompt").rstrip("/")
+    try:
+        r = requests.get(f"{base}/object_info", timeout=10)
+        if r.status_code == 200:
+            object_info = r.json()
+            print(f"✅ 已从 ComfyUI 获取节点信息（{len(object_info)} 种节点类型）")
+    except Exception:
+        print("[warn] ComfyUI 未运行，无法查询节点输入结构")
+        return None
+
+    # 3. 构建 link 映射: (to_node_id, to_slot) → (from_node_id, from_slot)
+    link_map: dict[tuple[str, int], tuple[str, int]] = {}
+    for link in links:
+        if len(link) >= 5:
+            link_id, from_node, from_slot, to_node, to_slot = link[:5]
+            link_map[(str(to_node), to_slot)] = (str(from_node), from_slot)
+
+    # 4. 转换每个节点
+    api_wf: dict[str, Any] = {}
+    converted = 0
+    skipped = 0
+
+    for node in nodes:
+        nid = str(node.get("id", ""))
+        ntype = node.get("type", "")
+        if not nid or not ntype:
+            continue
+        if ntype == "Reroute":
+            skipped += 1
+            continue
+
+        widgets = node.get("widgets_values", [])
+        node_input_conns = node.get("inputs", [])  # [{name, link, ...}]
+        node_def = object_info.get(ntype, {})
+        required_inputs = node_def.get("input", {}).get("required", {})
+        optional_inputs = node_def.get("input", {}).get("optional", {})
+
+        # 合并所有已知输入名（按顺序）
+        all_known_inputs = list(required_inputs.keys()) + list(optional_inputs.keys())
+
+        inputs: dict[str, Any] = {}
+        widget_idx = 0
+
+        # 对每个输入名：检查是连接还是 widget
+        for inp_name in all_known_inputs:
+            if inp_name not in inputs:
+                # 检查是否有连接
+                is_connected = False
+                for conn_idx, conn in enumerate(node_input_conns):
+                    if isinstance(conn, dict) and conn.get("name") == inp_name:
+                        link_id = conn.get("link")
+                        if link_id is not None and link_id >= 0:
+                            # 查 link 表获取来源
+                            from_info = link_map.get((nid, conn_idx))
+                            if from_info:
+                                inputs[inp_name] = [from_info[0], from_info[1]]
+                                is_connected = True
+                        break
+
+                if not is_connected and widget_idx < len(widgets):
+                    # 无连接 → 使用 widget 值
+                    inputs[inp_name] = widgets[widget_idx]
+                    widget_idx += 1
+
+        api_wf[nid] = {"class_type": ntype, "inputs": inputs}
+        converted += 1
+
+    # 5. 保存
+    if output_path:
+        out = Path(output_path)
+    else:
+        stem = Path(wf_path).stem
+        # 去掉可能重复的 _api
+        stem = stem.replace("_api", "")
+        out = Path(wf_path).parent / f"{stem}_api.json"
+
+    out.write_text(
+        json.dumps(api_wf, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    print(f"\n✅ 转换完成: {converted} 个节点转换, {skipped} 个跳过")
+    print(f"   已保存: {out}")
+    print(f"   现在可以通过 workflow schema/check/show 使用 API 格式")
+
+    return api_wf
