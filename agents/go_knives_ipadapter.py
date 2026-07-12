@@ -117,12 +117,8 @@ def main() -> None:
     elif args.raw:
         positive = build_positive(user, _KNIVES, args.pose, sdxl=True)
     else:
-        try:
-            outfit_tags = call_llm_outfit(user, _KNIVES)
-            positive = build_positive(outfit_tags, _KNIVES, args.pose, sdxl=True)
-        except RuntimeError as exc:
-            print(exc, file=sys.stderr)
-            sys.exit(1)
+        outfit_tags = call_llm_outfit(user, _KNIVES)
+        positive = build_positive(outfit_tags, _KNIVES, args.pose, sdxl=True)
 
     use_portrait = args.portrait and not args.full_body
     if use_portrait and "upper body" not in positive.lower():

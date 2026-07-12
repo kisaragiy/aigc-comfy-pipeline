@@ -7,6 +7,7 @@ Usage:
     python -m agents ipa [options] [prompt]
     python -m agents multi [options] [prompt]
     python -m agents outputs list|show <id>|clean [--days N]
+    python -m agents check
     python -m agents --version
 """
 from __future__ import annotations
@@ -28,6 +29,23 @@ def _show_version() -> None:
     from agents import __version__
 
     print(f"AIGC ComfyUI Pipeline v{__version__}")
+
+
+def _run_check() -> None:
+    """Check ComfyUI + Ollama health."""
+    from agents import comfy_utils
+
+    print("环境检查:")
+    comfy_ok = comfy_utils.check_comfy_health()
+    print(f"  ComfyUI ({comfy_utils.DEFAULT_COMFY_URL}): {'✅' if comfy_ok else '❌ 未连接'}")
+    if not comfy_ok:
+        print("    处理: 启动 ComfyUI 或检查环境变量 COMFY_URL")
+
+    ollama_ok = comfy_utils.check_ollama_health()
+    print(
+        f"  Ollama  ({comfy_utils.DEFAULT_OLLAMA_URL}): "
+        f"{'✅' if ollama_ok else '❌ 未连接（将自动降级到原始输入模式）'}"
+    )
 
 
 def _run_outputs() -> None:
@@ -96,6 +114,17 @@ def main() -> None:
         _show_help()
         return
 
+    # Bootstrap path early — needed for dry-run import and target script imports
+    _bootstrap_agents_path()
+
+    # 全局 --dry-run 处理
+    dry_run = "--dry-run" in sys.argv
+    if dry_run:
+        import comfy_utils as _cu
+
+        _cu.DRY_RUN = True
+        sys.argv.remove("--dry-run")
+
     # python -m agents → sys.argv = ['.../__main__.py']
     # python -m agents run ... → sys.argv = ['.../__main__.py', 'run', ...]
     command = sys.argv[1] if len(sys.argv) > 1 else ""
@@ -106,6 +135,10 @@ def main() -> None:
 
     if command == "--help" or command == "-h":
         _show_help()
+        return
+
+    if command == "check":
+        _run_check()
         return
 
     if command == "outputs":
@@ -123,9 +156,6 @@ def main() -> None:
         print(f"未知命令: {command}\n")
         _show_help()
         sys.exit(1)
-
-    # Bootstrap path BEFORE importing target modules (they use from comfy_utils import ...)
-    _bootstrap_agents_path()
 
     # Rebuild argv so the target script sees its own args
     # python -m agents run --raw "prompt"
@@ -160,6 +190,7 @@ def _show_help() -> None:
         ("lora", "角色 LoRA 文生图（Knives / Caster，支持批量）"),
         ("ipa", "IPAdapter 锁脸文生图（参考图驱动面部一致性）"),
         ("multi", "多角色 LoRA 同图（Knives + Caster + FaceDetailer）"),
+        ("check", "环境检查（ComfyUI / Ollama 连通性）"),
         ("outputs", "产出管理（list / show / clean）"),
     ]:
         print(f"  {name:12s}  {desc}")

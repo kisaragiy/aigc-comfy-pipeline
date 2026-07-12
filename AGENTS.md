@@ -10,11 +10,12 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.6.0** — 当前：统一 CLI + 输出管理
-- V0.5.0 — 上一版：LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
+- **V0.7.0** — 当前：管线健壮性 + 验证（健康检查、Ollama 自动降级、dry-run）
+- V0.6.0 — 上一版：统一 CLI + 输出管理
+- V0.5.0 — LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
 - V0.0.XXX — 小修：bug fix、依赖更新、文档补全、参数调整
 
-## 当前版本：V0.6.0
+## 当前版本：V0.7.0
 
 ## 核心能力
 
@@ -26,6 +27,8 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 | 多角色同框 | `go_multi_char_lora.py` | `python -m agents multi` | 双 LoRA + FaceDetailer 修脸 |
 | 批处理 | `go_knives_lora.py --count N` | `python -m agents lora --count N` | 多张自动复制到草稿库 |
 | 产出管理 | `output_manager.py` | `python -m agents outputs` | 结构化元数据、list/show/clean |
+| 环境检查 | `comfy_utils.py` | `python -m agents check` | 运行前探活 ComfyUI/Ollama，自助诊断 |
+| Dry-run 验证 | `comfy_utils.DRY_RUN` | `--dry-run` 全局参数 | 跳过真实提交，验证参数正确性 |
 | Flux.2 Klein 身份一致性 | agents 脚本加载 workflows/JSON | — | 身份引导 + 单图工作流 |
 
 ## 项目结构
@@ -148,9 +151,13 @@ metadata.json 包含完整的生成参数，面试时打开即可证明工程化
 - [ ] `python agents/go_knives_lora.py --help` 显示完整参数
 - [ ] `python agents/go_knives_ipadapter.py --help` 显示完整参数
 - [ ] `python agents/go_multi_char_lora.py --help` 显示完整参数
-- [ ] `python -m agents --help` 显示 5 个子命令
+- [ ] `python -m agents --help` 显示 6 个子命令（含 check）
+- [ ] `python -m agents check` 显示 ComfyUI/Ollama 状态
+- [ ] `python -m agents run --dry-run "test"` 使用降级提示词 + 跳过提交
+- [ ] `python -m agents lora --dry-run --character knives "test"` 参数可见
+- [ ] `python -m agents ipa --dry-run "test"` 参数可见
+- [ ] `python -m agents multi --dry-run "test"` 参数可见
 - [ ] `python -m agents outputs list` 正常列出（或提示"暂无"）
-- [ ] `python -m agents outputs show <id>` 显示元数据
-- [ ] `python -m agents outputs clean --days 1` 正常清理
+- [ ] 无 ComfyUI/Ollama 运行不崩溃（自动降级 + warn 提示）
 - [ ] 各脚本从任意工作目录运行都能找到 comfy_utils
 - [ ] `.gitignore` 正确排除生图输出

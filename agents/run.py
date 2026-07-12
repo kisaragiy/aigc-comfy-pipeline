@@ -5,7 +5,7 @@ import random
 import sys
 from pathlib import Path
 
-from comfy_utils import AGENTS_DIR, bootstrap_agents_path, comfy_post_prompt, ollama_generate
+from comfy_utils import AGENTS_DIR, bootstrap_agents_path, comfy_post_prompt, ollama_generate_or_fallback
 
 bootstrap_agents_path()
 
@@ -15,7 +15,7 @@ COMFY_URL = os.environ.get("COMFY_URL", "http://127.0.0.1:8188/prompt")
 
 
 def call_llm(prompt: str) -> str:
-    return ollama_generate(f"把用户输入转换成SDXL提示词：{prompt}")
+    return ollama_generate_or_fallback(f"把用户输入转换成SDXL提示词：{prompt}", fallback=prompt)
 
 
 def load_workflow():
