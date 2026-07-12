@@ -1,6 +1,6 @@
 # CLI 参考文档
 
-> 自动生成于 2026-07-12 21:30
+> 自动生成于 2026-07-12 22:34
 
 AIGC ComfyUI Pipeline v?
 
@@ -11,17 +11,39 @@ AIGC ComfyUI Pipeline v?
 一句话提交 ComfyUI 文生图（自然语言 → Ollama → 出图）
 
 ```
-usage: run.py [-h] [--raw] [prompt]
+usage: run.py [-h] [--raw] [--video] [--ref REF] [--frames FRAMES] [--fps FPS]
+              [--steps STEPS] [--cfg CFG] [--width WIDTH] [--height HEIGHT]
+              [--seed SEED] [--negative NEGATIVE] [--denoise DENOISE]
+              [--sampler SAMPLER] [--scheduler SCHEDULER]
+              [--preset {quality,balanced,fast,cinematic,quick}]
+              [--timeout TIMEOUT]
+              [prompt]
 
-一句话提交 ComfyUI 文生图（默认经 Ollama 转写为适用于 SDXL 的英文提示词）。可用环境变量
-COMFY_URL、OLLAMA_URL、OLLAMA_MODEL 覆盖默认地址与模型。
+一句话提交 ComfyUI 文生图（默认经 Ollama 转写为英文提示词）。用 --video 切换为视频生成模式。
 
 positional arguments:
-  prompt      一句话画面描述；省略时从标准输入读取
+  prompt                一句话画面描述；省略时从标准输入读取
 
 options:
-  -h, --help  show this help message and exit
-  --raw       跳过 Ollama，将输入整段作为正向提示词（建议写英文；中文效果因底模而异）
+  -h, --help            show this help message and exit
+  --raw                 跳过 Ollama，将输入整段作为正向提示词
+  --video               视频生成模式（Wan2.2 T2V/I2V）
+  --ref REF             参考图（视频 I2V 模式，提供时自动启用）
+  --frames FRAMES       视频总帧数（默认 49）
+  --fps FPS             视频帧率（默认 15）
+  --steps STEPS         采样步数
+  --cfg CFG             CFG 强度
+  --width WIDTH         视频宽度
+  --height HEIGHT       视频高度
+  --seed SEED           随机种子
+  --negative NEGATIVE   负向提示词
+  --denoise DENOISE     去噪强度（I2V 默认 0.85）
+  --sampler SAMPLER     采样器名称
+  --scheduler SCHEDULER
+                        调度器名称
+  --preset {quality,balanced,fast,cinematic,quick}
+                        视频预设（quality/balanced/fast/cinematic）
+  --timeout TIMEOUT     等待超时秒数
 ```
 
 ---
@@ -570,7 +592,7 @@ options:
 
 ```
 usage: go_gallery.py [-h] [--output OUTPUT] [--serve] [--port PORT]
-                     [--type {all,image,video}]
+                     [--type {all,image,video}] [--refresh-posters]
 
 Output Gallery — 产出画廊
 
@@ -581,6 +603,7 @@ options:
   --port PORT           HTTP 服务端口（默认 8765）
   --type {all,image,video}
                         过滤类型: all(全部) / image(仅图片) / video(仅视频)
+  --refresh-posters     强制重新提取视频海报帧
 ```
 
 ---
