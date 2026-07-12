@@ -505,6 +505,7 @@ def _workshop_create(args: list[str]) -> None:
     parser.add_argument("--output", default=None, help="结果输出目录（保存 metadata.json + best.png）")
     parser.add_argument("--gallery", default=None, help="候选画廊输出目录（生成 index.html 可浏览所有候选图）")
     parser.add_argument("--seed", type=int, default=0, help="起始种子（自动递增，0=随机）")
+    parser.add_argument("--open", action="store_true", help="生成后自动打开最优图")
     parser.add_argument("--verbose", action="store_true", help="详细信息")
     parsed = parser.parse_args(args)
 
@@ -549,6 +550,13 @@ def _workshop_create(args: list[str]) -> None:
         print(f"  (Ollama 增强)")
     print(f"  候选: {len(result['candidates'])} 张")
 
+    # 引擎推测（来自 workshop/engine）
+    from workshop.engine.engine import _detect_style, _detect_composition, _detect_lighting
+    detected_style = _detect_style(nl_text, parsed.style)
+    detected_comp = _detect_composition(nl_text)
+    detected_light = _detect_lighting(nl_text)
+    print(f"\n📋 引擎推测: 风格={detected_style} | 构图={detected_comp[:30]}... | 光照={detected_light[:30]}...")
+
     best = result.get("best", {})
     if best and best.get("image"):
         print(f"\n🏆 最优:")
@@ -582,6 +590,13 @@ def _workshop_create(args: list[str]) -> None:
     had_err = result.get("had_errors", False)
     if had_err:
         print(f"\n⚠️ 部分候选生成失败（ComfyUI 可能不稳定）")
+
+    if parsed.open and best and best.get("image"):
+        img_path = best["image"]
+        if Path(img_path).is_file():
+            import os
+            os.startfile(img_path)
+            print(f"\n📂 已打开: {img_path}")
 
 
 def _workshop_engine(args: list[str]) -> None:
