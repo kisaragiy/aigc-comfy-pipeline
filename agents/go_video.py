@@ -15,6 +15,8 @@ import sys
 from typing import Any
 
 from comfy_utils import (
+    apply_preset,
+    VIDEO_PRESETS,
     bootstrap_agents_path,
     comfy_base_url,
     comfy_post_prompt,
@@ -123,16 +125,18 @@ def main() -> None:
     )
     parser.add_argument("prompt", nargs="?", help="画面描述")
     parser.add_argument("--ref", default=None, help="参考图（I2V 模式，文件名）")
-    parser.add_argument("--frames", type=int, default=DEFAULT_FRAMES, help="总帧数")
-    parser.add_argument("--fps", type=int, default=DEFAULT_FPS, help="帧率")
-    parser.add_argument("--width", type=int, default=DEFAULT_WIDTH, help="视频宽度")
-    parser.add_argument("--height", type=int, default=DEFAULT_HEIGHT, help="视频高度")
-    parser.add_argument("--steps", type=int, default=DEFAULT_STEPS, help="采样步数")
-    parser.add_argument("--cfg", type=float, default=DEFAULT_CFG, help="CFG 强度")
+    parser.add_argument("--frames", type=int, default=None, help="总帧数（预设自动）")
+    parser.add_argument("--fps", type=int, default=None, help="帧率（预设自动）")
+    parser.add_argument("--width", type=int, default=None, help="视频宽度（预设自动）")
+    parser.add_argument("--height", type=int, default=None, help="视频高度（预设自动）")
+    parser.add_argument("--steps", type=int, default=None, help="采样步数（预设自动）")
+    parser.add_argument("--cfg", type=float, default=None, help="CFG 强度（预设自动）")
     parser.add_argument("--seed", type=int, default=-1)
     parser.add_argument("--negative", default="", help="负向提示词")
     parser.add_argument("--raw", action="store_true", help="跳过 Ollama")
     parser.add_argument("--prefix", default="wan_video", help="输出文件名前缀")
+    parser.add_argument("--preset", choices=list(VIDEO_PRESETS.keys()),
+                        default=None, help="视频预设（quality/balanced/fast/cinematic）")
     args = parser.parse_args()
 
     user = args.prompt
@@ -144,16 +148,26 @@ def main() -> None:
 
     prompt = user if args.raw else optimize_prompt(user)
 
+    vparams = apply_preset(
+        dict(
+            seed=args.seed, steps=args.steps, cfg=args.cfg,
+            width=args.width, height=args.height,
+            frames=args.frames, fps=args.fps,
+        ),
+        preset=args.preset,
+        presets=VIDEO_PRESETS,
+    )
+
     wf, seed_actual = build_video_workflow(
         prompt,
         negative=args.negative,
-        seed=args.seed,
-        steps=args.steps,
-        cfg=args.cfg,
-        width=args.width,
-        height=args.height,
-        frames=args.frames,
-        fps=args.fps,
+        seed=vparams.get("seed", -1),
+        steps=vparams.get("steps", DEFAULT_STEPS),
+        cfg=vparams.get("cfg", DEFAULT_CFG),
+        width=vparams.get("width", DEFAULT_WIDTH),
+        height=vparams.get("height", DEFAULT_HEIGHT),
+        frames=vparams.get("frames", DEFAULT_FRAMES),
+        fps=vparams.get("fps", DEFAULT_FPS),
         ref_image=args.ref,
         prefix=args.prefix,
     )
