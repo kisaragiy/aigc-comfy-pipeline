@@ -10,8 +10,9 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.17.0** — 当前：Output Gallery 增强
-- V0.16.0 — 上一版：模型下载
+- **V0.18.0** — 当前：工程化测试 + CI
+- V0.17.0 — 上一版：Output Gallery 增强
+- V0.16.0 — 模型下载
 - V0.15.0 — ComfyUI 队列管理
 - V0.14.0 — 管线验收报告
 - V0.13.0 — 自动标图 + LoRA 训练闭环
@@ -25,7 +26,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 - V0.5.0 — LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
 - V0.0.XXX — 小修
 
-## 当前版本：V0.17.0
+## 当前版本：V0.18.0
 
 ## 核心能力
 
@@ -50,6 +51,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 | 管线报告 | `go_report.py` | `python -m agents report` | 一键验收：ComfyUI/模型/workflow/产出全貌 |
 | 队列管理 | `go_queue.py` | `python -m agents queue` | 查看/清空/中断队列、释放显存 |
 | 产出画廊 | `go_gallery.py` | `python -m agents gallery` | HTML 产出展示、HTTP 服务模式 |
+| 单元测试 | `tests/` | `pytest tests/` | 32 项测试覆盖核心模块纯逻辑函数 |
 
 ## 项目结构
 
@@ -224,3 +226,4 @@ metadata.json 包含完整的生成参数，面试时打开即可证明工程化
 - [ ] `python -m agents models download <url> --type lora --preview` 预览
 - [ ] `python -m agents gallery --help` 显示参数
 - [ ] `python -m agents gallery --output /tmp/g.html` 生成 HTML
+- [ ] `PYTHONPATH=agents python -m pytest tests/ -v` 32 项测试通过
