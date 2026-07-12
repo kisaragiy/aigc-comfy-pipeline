@@ -1,0 +1,427 @@
+"""
+Prompt 引擎 — 自然语言 → 专业绘画提示词。
+
+核心能力:
+  1. nls_to_prompt()       — 自然语言 → 专业 prompt（自动推测画风/构图/光照/镜头）
+  2. ref_analyze_to_prompt() — 参考图 + 自然语言 → 分析角色画风特征 + 组合 prompt
+  3. 多风格预设模板（anime/photoreal/cg/cosplay/cinematic/摄影/CG/油画等）
+  4. Ollama 不可用时强模板兜底（比旧 _fallback_prompt 更智能）
+"""
+
+from __future__ import annotations
+
+import re
+import sys
+from typing import Any
+
+# ── 风格预设库 ──────────────────────────────────────────
+STYLE_PRESETS: dict[str, dict[str, str]] = {
+    "anime": {
+        "quality": "masterpiece, best quality, ultra-detailed, anime key visual",
+        "style": "anime style, cel shading, clean lineart, vibrant colors",
+        "negative": "lowres, bad anatomy, bad hands, text, error, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry",
+    },
+    "photoreal": {
+        "quality": "photorealistic, 8k, highly detailed, sharp focus, natural skin texture",
+        "style": "realistic photography, natural lighting, subsurface scattering, skin pores visible",
+        "negative": "anime, illustration, cartoon, 3d render, CG, painting, deformed, bad anatomy, disfigured, poorly drawn, extra limbs",
+    },
+    "cg": {
+        "quality": "masterpiece, best quality, 8k, CG render, octane render, unreal engine",
+        "style": "3D render style, subsurface scattering, global illumination, ray tracing, volumetric lighting",
+        "negative": "anime, illustration, sketch, line art, flat colors, bad anatomy, ugly, deformed",
+    },
+    "cosplay": {
+        "quality": "masterpiece, best quality, sharp focus, highly detailed, 8k",
+        "style": "cosplay photography, professional studio lighting, costume detail close-up, fabric texture visible",
+        "negative": "anime, illustration, cartoon, CG, 3d render, deformed, bad anatomy, disfigured",
+    },
+    "cinematic": {
+        "quality": "masterpiece, cinematic, film grain, anamorphic, dramatic lighting, 8k",
+        "style": "movie still, cinematic composition, volumetric fog, depth of field, rich shadows",
+        "negative": "anime, illustration, flat lighting, snapshot, amateur, deformed, bad anatomy",
+    },
+    "photography": {
+        "quality": "masterpiece, sharp focus, 8k, highly detailed, professional photography",
+        "style": "portrait photography, studio lighting, shallow depth of field, bokeh background",
+        "negative": "anime, illustration, painting, 3d render, CG, deformed, bad anatomy, cartoon",
+    },
+    "oil": {
+        "quality": "masterpiece, oil on canvas, thick impasto, visible brush strokes, textured",
+        "style": "oil painting style, painterly, classical composition, warm palette, chiaroscuro",
+        "negative": "photograph, digital art, 3d render, anime, illustration, photorealistic",
+    },
+    "sketch": {
+        "quality": "masterpiece, rough sketch, concept art, dynamic lines",
+        "style": "pencil sketch, line art, minimal shading, gestural drawing, expressive strokes",
+        "negative": "color, photograph, digital art, photorealistic, painting, 3d render",
+    },
+    "watercolor": {
+        "quality": "masterpiece, beautiful watercolor painting, soft washes",
+        "style": "watercolor style, pigment bleeding, wet on wet technique, paper texture visible",
+        "negative": "photograph, digital art, sharp lines, photorealistic, oil painting, CG",
+    },
+}
+
+# ── 构图/镜头预设 ──────────────────────────────────────
+COMPOSITION_PRESETS: dict[str, str] = {
+    "全身": "full body shot, standing pose, full figure in frame",
+    "半身": "upper body, cowboy shot, waist up framing",
+    "特写": "close-up, face focus, extreme close-up, detailed facial features",
+    "大头": "close-up on face, headshot, face filling frame",
+    "中景": "medium shot, waist to head, balanced framing",
+    "远景": "wide shot, establishing shot, full environment visible",
+    "俯视": "high angle, bird's eye view, looking down",
+    "仰视": "low angle, worm's eye view, looking up, heroic perspective",
+    "过肩": "over the shoulder shot, POV perspective, depth between subjects",
+    "侧面": "side profile, profile view, silhouette visible",
+    "背面": "from behind, back view, looking away",
+}
+
+LIGHTING_PRESETS: dict[str, str] = {
+    "自然光": "natural lighting, soft sunlight, golden hour glow",
+    "逆光": "backlighting, rim light, silhouette edge glow, backlit",
+    "侧光": "side lighting, chiaroscuro, dramatic shadows on one side",
+    "顶光": "top lighting, overhead light, harsh shadows below",
+    "柔光": "soft lighting, diffused light, even illumination, shadowless",
+    "霓虹": "neon lighting, colorful neon glow, cyberpunk lighting, street light reflection",
+    "烛光": "candle light, warm orange glow, flickering firelight, intimate atmosphere",
+    "舞台": "stage lighting, spotlight, dramatic contrast, colored gels on subject",
+    "晨光": "morning light, cool blue hour, gentle sun rays through window",
+    "黄昏": "sunset lighting, warm golden backlight, orange and pink sky, silhouette rim light",
+    "月光": "moonlight, cool blue illumination, silver glow, night atmosphere",
+    "体积光": "volumetric lighting, god rays, light beams through fog, crepuscular rays",
+}
+
+STYLE_KEYWORDS: dict[str, str] = {
+    "赛博朋克": "cyberpunk, futuristic city, neon lights, holographic displays, rain soaked streets, high tech low life",
+    "蒸汽波": "vaporwave, retro 80s aesthetic, neon grids, purple and pink palette, synthwave",
+    "奇幻": "fantasy, magical atmosphere, glowing elements, ethereal, enchanted forest, mythical",
+    "末世": "post-apocalyptic, wasteland, ruins, abandoned, decay, desolate, survival gear",
+    "古风": "traditional Chinese aesthetic, hanfu, classical architecture, ink wash atmosphere, gufeng",
+    "日式": "japanese style, wabi-sabi, traditional japanese aesthetic, cherry blossoms, lanterns",
+    "校园": "school setting, classroom, campus, youthful atmosphere, cherry blossom schoolyard",
+    "都市": "urban cityscape, modern city, skyscrapers, street level, city life, concrete jungle",
+    "田园": "rural, countryside, pastoral, wheat fields, farmhouse, idyllic village",
+    "科幻": "sci-fi, futuristic technology, holographic interfaces, advanced civilization, starship",
+    "哥特": "gothic, dark aesthetic, Victorian gothic, cathedral, ornate darkness, dramatic shadows",
+    "洛可可": "rococo style, ornate decoration, pastel colors, aristocratic, elegant curves",
+    "像素": "pixel art, 8-bit style, retro game aesthetic, blocky pixels, limited color palette",
+    "水墨": "ink wash painting, sumi-e, minimal brush strokes, monochrome, flowing ink",
+}
+
+# ── 模板化系统 ──────────────────────────────────────────
+
+_OLLAMA_TEMPLATE = """你是一位专业的 AI 绘画提示词工程师。请将用户的自然语言描述，转化为高质量的英文 Stable Diffusion / Flux 提示词。
+
+要求：
+1. 分析描述中隐含的【画风】—— 是二次元、真人摄影、CG渲染、插画、还是油画等
+2. 分析【构图】—— 特写/半身/全身/远景/俯拍等
+3. 分析【光照】—— 自然光/逆光/侧光/霓虹/舞台光等
+4. 分析【色调/氛围】—— 暖色/冷色/赛博朋克/古风等
+5. 如果不确定，根据最常见的搭配做合理推断
+6. 在输出末尾单独一行注明你推测的 → 【风格: xxx】【构图: xxx】【光照: xxx】
+
+用户描述：
+{user_input}
+
+输出格式（只输出英文提示词，不要多余说明，除非风格推断行）：
+MASTERPIECE, best quality, [详细英文描述], [构图], [光照], [色调]
+→ 【风格: xxx】【构图: xxx】【光照: xxx】
+"""
+
+_FALLBACK_TEMPLATE = """你是一位专业的 AI 绘画提示词工程师。请将用户的自然语言描述，转化为高质量的英文绘画提示词。
+
+用户描述（中文）：
+{user_input}
+
+请直接输出英文提示词，包含：主体、细节、环境、构图、光照、质量词。用英文逗号分隔关键词。"""
+
+
+def nls_to_prompt(
+    nl_text: str,
+    style_hint: str | None = None,
+    *,
+    ollama_available: bool = True,
+    ollama_url: str | None = None,
+    ollama_model: str | None = None,
+) -> str:
+    """自然语言描述 → 专业绘画提示词。
+
+    Args:
+        nl_text: 用户自然语言描述（比如"一个银发少女穿着校服在教室窗边看书，逆光"）
+        style_hint: 可选风格提示（anime/photoreal/cg/cosplay/…，或任意关键词）
+        ollama_available: Ollama 是否可用
+        ollama_url: Ollama API 地址
+        ollama_model: Ollama 模型名
+
+    Returns:
+        优化后的英文提示词
+    """
+    if ollama_available:
+        try:
+            result = _ollama_enhance(nl_text, style_hint, url=ollama_url, model=ollama_model)
+            return result
+        except Exception:
+            pass  # 降级到模板
+    return _template_fallback(nl_text, style_hint)
+
+
+def ref_analyze_to_prompt(
+    ref_path: str,
+    nl_text: str,
+    *,
+    ollama_available: bool = True,
+    ollama_url: str | None = None,
+    ollama_model: str | None = None,
+) -> dict[str, Any]:
+    """参考图 + 自然语言 → 分析角色/画风特征 + 组合 prompt。
+
+    使用 Ollama VL 模型（qwen2.5vl:7b）分析参考图，然后结合用户描述生成 prompt。
+
+    Returns:
+        包含以下键的字典:
+          prompt:         组合后的完整提示词
+          character_desc: 分析出的角色特征描述
+          style_desc:     分析出的画风特征描述
+          ref_prompt:     单独用于参考图的 prompt（IPAdapter 使用）
+    """
+    character_desc = ""
+    style_desc = ""
+    ref_prompt = ""
+
+    # 1. 分析参考图（需要 VL 模型）
+    if ollama_available:
+        try:
+            analysis = _ollama_vl_analyze(ref_path, url=ollama_url, model=ollama_model or "qwen2.5vl:7b")
+            character_desc = analysis.get("character", "")
+            style_desc = analysis.get("style", "")
+        except Exception:
+            pass  # 分析失败后纯用 NL
+
+    if not character_desc:
+        # 无法分析图片时，提取 NL 中可能的人物描述
+        character_desc = nl_text
+
+    # 2. 组合 prompt
+    base_prompt = nls_to_prompt(nl_text, ollama_available=ollama_available)
+    if character_desc:
+        # 将角色特征融合
+        ref_prompt = f"{character_desc}, {base_prompt}"
+    else:
+        ref_prompt = base_prompt
+
+    # 3. 提取风格用语
+    style_terms = ", ".join(_extract_keywords(nl_text))
+
+    return {
+        "prompt": ref_prompt,
+        "character_desc": character_desc,
+        "style_desc": style_desc or style_terms,
+        "ref_prompt": f"{character_desc}, masterpiece, best quality, detailed face",
+    }
+
+
+# ── 内部函数 ────────────────────────────────────────────
+
+
+def _ollama_enhance(
+    nl_text: str,
+    style_hint: str | None = None,
+    *,
+    url: str | None = None,
+    model: str | None = None,
+) -> str:
+    """使用 Ollama 增强提示词。"""
+    from agents.comfy_utils import ollama_generate
+
+    template = _OLLAMA_TEMPLATE
+    if style_hint:
+        template = f"（用户指定的画风方向: {style_hint}）\n\n" + template
+
+    prompt = template.format(user_input=nl_text)
+    result = ollama_generate(prompt, url=url, model=model)
+    return result.strip()
+
+
+def _ollama_vl_analyze(
+    ref_path: str,
+    *,
+    url: str | None = None,
+    model: str = "qwen2.5vl:7b",
+) -> dict[str, str]:
+    """使用 Ollama VL 模型分析参考图，提取角色/画风特征。"""
+    import json
+    import requests
+
+    ollama_url = url or "http://172.18.9.126:11434/api/generate"
+    prompt = (
+        "请分析这张图片，并严格按 JSON 格式输出，不要多余文字。\n"
+        "JSON 键:\n"
+        '  "character": 角色外观的详细英文描述（发型/发色/瞳色/服装/姿势/表情）\n'
+        '  "style":    画风的英文描述（写实/二次元/插画/CG/油画等）\n'
+        '  "composition": 构图的英文描述（全身/半身/特写/仰视等）\n'
+        '  "lighting":  光照的英文描述（逆光/侧光/自然光/舞台光等）\n'
+    )
+
+    # Ollama VL 支持 base64 图片
+    import base64
+
+    with open(ref_path, "rb") as f:
+        b64 = base64.b64encode(f.read()).decode("utf-8")
+
+    payload = {
+        "model": model,
+        "prompt": prompt,
+        "images": [b64],
+        "stream": False,
+    }
+    resp = requests.post(ollama_url, json=payload, timeout=120)
+    resp.raise_for_status()
+    data = resp.json()
+    text = data.get("response", "").strip()
+
+    # 尝试解析 JSON
+    try:
+        # 找 JSON 块
+        json_match = re.search(r"\{.*\}", text, re.DOTALL)
+        if json_match:
+            return json.loads(json_match.group())
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    return {"character": text, "style": "", "composition": "", "lighting": ""}
+
+
+def _template_fallback(nl_text: str, style_hint: str | None = None) -> str:
+    """强模板兜底 — 比旧 _fallback_prompt 更智能。
+
+    使用关键词匹配 + 风格预设合成专业提示词，而不是简单拼接。
+    """
+    # 1. 推测画风
+    detected_style = _detect_style(nl_text, style_hint)
+    preset = STYLE_PRESETS.get(detected_style, STYLE_PRESETS["photoreal"])
+
+    # 2. 推测构图
+    composition = _detect_composition(nl_text)
+
+    # 3. 推测光照
+    lighting = _detect_lighting(nl_text)
+
+    # 4. 提取风格关键词
+    style_terms = _extract_keywords(nl_text)
+
+    # 5. 合成主题
+    subject = _clean_subject(nl_text)
+
+    # 6. 组合
+    parts = [
+        preset["quality"],
+        preset["style"],
+        subject,
+        composition,
+        lighting,
+    ]
+    # 风格附加词
+    if style_terms:
+        parts.append(", ".join(style_terms))
+
+    # 去重
+    seen: set[str] = set()
+    unique_parts: list[str] = []
+    for p in parts:
+        p_stripped = p.strip().strip(",")
+        if p_stripped and p_stripped not in seen:
+            seen.add(p_stripped)
+            unique_parts.append(p_stripped)
+
+    return ", ".join(unique_parts)
+
+
+def _detect_style(text: str, hint: str | None = None) -> str:
+    """从描述中推测画风。"""
+    if hint and hint.lower() in STYLE_PRESETS:
+        return hint.lower()
+
+    text_lower = text.lower()
+    style_map: list[tuple[str, str]] = [
+        ("二次元", "anime"),
+        ("动漫", "anime"),
+        ("动画", "anime"),
+        ("日系", "anime"),
+        ("写实", "photoreal"),
+        ("真人", "photoreal"),
+        ("摄影", "photography"),
+        ("照片", "photography"),
+        ("写真", "photography"),
+        ("cos", "cosplay"),
+        ("c服", "cosplay"),
+        ("cg", "cg"),
+        ("3d", "cg"),
+        ("渲染", "cg"),
+        ("电影", "cinematic"),
+        ("镜头", "cinematic"),
+        ("油画", "oil"),
+        ("素描", "sketch"),
+        ("草图", "sketch"),
+        ("线稿", "sketch"),
+        ("水彩", "watercolor"),
+        ("像素", "pixel"),
+        ("水墨", "ink"),
+    ]
+    for kw, style in style_map:
+        if kw in text_lower:
+            return style
+    return "anime"  # 默认 anime（用户常用画风）
+
+
+def _detect_composition(text: str) -> str:
+    """从描述中推测构图。"""
+    for cn_key, en_val in COMPOSITION_PRESETS.items():
+        if cn_key in text:
+            return en_val
+    # 默认中景
+    return "medium shot, balanced composition, eye level"
+
+
+def _detect_lighting(text: str) -> str:
+    """从描述中推测光照。"""
+    for cn_key, en_val in LIGHTING_PRESETS.items():
+        if cn_key in text:
+            return en_val
+    return "soft natural lighting, diffused illumination"
+
+
+def _extract_keywords(text: str) -> list[str]:
+    """提取描述中的风格/氛围关键词。"""
+    result: list[str] = []
+    for cn_key, en_val in STYLE_KEYWORDS.items():
+        if cn_key in text:
+            result.append(en_val)
+    return result
+
+
+def _clean_subject(text: str) -> str:
+    """从原始描述中提取主体描述（去除已知关键词）。"""
+    # 去除所有已匹配的关键词
+    known = list(COMPOSITION_PRESETS.keys()) + list(LIGHTING_PRESETS.keys()) + list(STYLE_KEYWORDS.keys())
+    cleaned = text
+    for kw in known:
+        cleaned = cleaned.replace(kw, "")
+    # 去除标点和多余空格
+    cleaned = re.sub(r"[，。！？、；：""''【】《》「」『』（）、\s]+", " ", cleaned)
+    cleaned = cleaned.strip()
+    # 如果清理后为空，用原始文本
+    if not cleaned or len(cleaned) < 2:
+        cleaned = text
+    return cleaned
+
+
+def list_presets() -> dict[str, list[str]]:
+    """列出可用预设和关键词。"""
+    return {
+        "styles": sorted(STYLE_PRESETS.keys()),
+        "compositions": sorted(COMPOSITION_PRESETS.keys()),
+        "lighting": sorted(LIGHTING_PRESETS.keys()),
+        "style_keywords": sorted(STYLE_KEYWORDS.keys()),
+    }

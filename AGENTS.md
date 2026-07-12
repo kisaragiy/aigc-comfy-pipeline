@@ -2,7 +2,7 @@
 
 ## 定位
 
-**AIGC 工程化管线** — Python 编排 ComfyUI · LoRA 训练 · 批量生图 · 模型管理
+**自然语言驱动的 AIGC 创作工坊** — ComfyUI 编排 · 批量生图 · 质量检测 · 漫画 · 视频
 
 不是作品展示仓库，是工程化工具链。生成的图片是产出，编排脚本是产品。
 
@@ -10,7 +10,8 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.48.0** — 当前：serve API 升级（新增 control/sweep/abtest/bestof 端点）<br>　　　　　　`POST /api/control` — ControlNet 条件生图，ref/type/model，走 generate_with_quality <br>　　　　　　`POST /api/sweep` — 参数网格扫描，grid/type，走 generate_with_quality <br>　　　　　　`POST /api/abtest` — A/B 双 Prompt 对比，prompts[2]，走 generate_with_quality <br>　　　　　　`POST /api/bestof` — Best of N 多轮择优，count/prompt，走 generate_with_quality<br>　　　　　　API 版本升至 0.48.0，新增 4 个后台异步端点 + quality 门禁全覆盖
+- **V0.49.0** — 当前：workshop 模块初建（Prompt 引擎 + 质检 + 漫画骨架 + 视频封装）<br>　　　　　　`workshop/engine/` — 自然语言 → 专业绘画提示词，多风格预设，模板兜底<br>　　　　　　`workshop/inspect/` — 逐部位质检报告 [脸:正常] [手:崩了] [模糊:正常]<br>　　　　　　`workshop/manga/` — 剧本 → 焚诀八列分镜表 → 逐格生图 → 拼页输出<br>　　　　　　`workshop/video/` — 分镜驱动视频生成（封装 Wan2.2 go_video）<br>　　　　　　AGENTS.md 定位改为"自然语言驱动的 AIGC 创作工坊"，不做什么更新<br>　　　　　　版本 0.49.0
+- **V0.48.0** — 上一版：serve API 升级（新增 control/sweep/abtest/bestof 端点）<br>　　　　　　`POST /api/control` — ControlNet 条件生图，ref/type/model，走 generate_with_quality <br>　　　　　　`POST /api/sweep` — 参数网格扫描，grid/type，走 generate_with_quality <br>　　　　　　`POST /api/abtest` — A/B 双 Prompt 对比，prompts[2]，走 generate_with_quality <br>　　　　　　`POST /api/bestof` — Best of N 多轮择优，count/prompt，走 generate_with_quality<br>　　　　　　API 版本升至 0.48.0，新增 4 个后台异步端点 + quality 门禁全覆盖
 - **V0.47.0** — 上一版：AB Test / Best of N 升级 generate_with_quality + 质量门禁<br>　　　　　　`python -m agents abtest --prompts "A" "B" --preset anime --min-score 0.2` <br>　　　　　　`python -m agents bestof "prompt" --count 4 --retry 2 --min-score 0.25` <br>　　　　　　替换直调 `build_flux_workflow` 为 `generate_with_quality`，新增 `--preset`/`--min-score`/`--retry`/`--no-validate`
 - **V0.46.0** — 上一版：gallery 新增全屏/幻灯片/键盘导航<br>　　　　　　点击图片全屏 Lightbox，← → 翻页，缩略图条，Esc 关闭
 - **V0.45.0** — 上一版：video-process 新增帧提取 (--extract-frames --every / --count)
@@ -49,7 +50,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 - V0.5.0 — LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
 - V0.0.XXX — 小修
 
-## 当前版本：V0.48.0
+## 当前版本：V0.49.0
 
 ## 核心能力
 
@@ -141,6 +142,12 @@ agents/                    # Python 编排脚本（产品）
   go_caster_lora.py        #   [兼容] 转发到 go_knives_lora.py --character caster
   run_knives_lora_batch.py #   [兼容] 转发到 go_knives_lora.py --count
 presets.json               #   用户自定义预设（image + video）
+workshop/                  # 创作工坊模块（V0.49+）
+  __init__.py               #   包标识
+  engine/                   #   Prompt 引擎
+  inspect/                  #   质检模块
+  manga/                    #   漫画/分镜生成
+  video/                    #   视频自动化
 workflows/                 # ComfyUI 工作流 JSON（可以从 UI 打开查看节点图）
 scripts/                   # 辅助脚本（开发用）
   bootstrap_portfolio.py   #   从本机 DrawingLive 同步 + 生成 SFW 样张
@@ -180,9 +187,9 @@ outputs/                   # 出图产出（gitignored，本地自动生成）
 ## 不做什么
 
 - ❌ 不开在线服务/API for others
-- ❌ 不接灵枢（复用 lingShu-core 以后再说）
-- ❌ 不做模型训练以外的生图优化（不碰 ControlNet / T2I-Adapter / AnimateDiff 等）
+- ❌ 不接灵枢
 - ❌ 不做 LoRA 训练自动化（用 kohya，本仓库仅编排生图管线）
+- ❌ 不碰 AnimateDiff / T2I-Adapter
 - ❌ 不包含模型权重（所有 .safetensors / .ckpt 都在本地 `.gitignore` 排除）
 - ❌ 不包含成图样张（仅公开展示工作流界面截图）
 
