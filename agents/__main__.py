@@ -191,8 +191,9 @@ def _run_models() -> None:
     action = sys.argv[2]
 
     if action == "list":
-        category = sys.argv[3] if len(sys.argv) > 3 else None
-        models = list_models(category)
+        category = sys.argv[3] if len(sys.argv) > 3 and not sys.argv[3].startswith("--") else None
+        no_cache = "--no-cache" in sys.argv
+        models = list_models(category, no_cache=no_cache)
         if not models:
             msg = f"未找到 {category} 模型。" if category else "未找到模型。"
             print(msg)
@@ -281,12 +282,16 @@ def _run_models() -> None:
         from agents.model_download import download_cli
         download_cli(sys.argv[3:])
 
+    elif action == "refresh":
+        from agents.model_manager import refresh_cache
+        refresh_cache()
+
     else:
         _show_models_help()
 
 
 def _show_models_help() -> None:
-    print("用法: python -m agents models list [category]|info <name>|check <workflow_name>|check video|download <url>")
+    print("用法: python -m agents models list [category]|info <name>|check <workflow_name>|check video|download <url>|download video|refresh")
 
 
 def _run_outputs() -> None:
@@ -509,7 +514,7 @@ def _show_help() -> None:
         ("serve", "REST API 服务（FastAPI，异步作业队列）"),
         ("check", "环境检查（ComfyUI / Ollama 连通性）"),
         ("workflow", "工作流模板管理（list / show / schema / check）"),
-        ("models", "模型管理（list / info / check）"),
+        ("models", "模型管理（list / info / check / download / refresh）"),
         ("outputs", "产出管理（list / show / clean）"),
     ]:
         print(f"  {name:12s}  {desc}")

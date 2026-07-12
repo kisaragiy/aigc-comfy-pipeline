@@ -79,10 +79,18 @@ def _scan_models() -> list[dict[str, Any]]:
 _model_cache: list[dict[str, Any]] | None = None
 
 
-def list_models(category: str | None = None) -> list[dict[str, Any]]:
+def refresh_cache() -> None:
+    """清除并重新扫描模型缓存。"""
+    global _model_cache
+    _model_cache = None
+    _model_cache = _scan_models()
+    print(f"✅ 模型缓存已刷新，共 {len(_model_cache)} 个模型。")
+
+
+def list_models(category: str | None = None, no_cache: bool = False) -> list[dict[str, Any]]:
     """列出模型。category 为 None 返回全部，否则按类型过滤。"""
     global _model_cache
-    if _model_cache is None:
+    if no_cache or _model_cache is None:
         _model_cache = _scan_models()
     models = _model_cache
     if category:
