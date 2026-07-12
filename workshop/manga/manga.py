@@ -475,3 +475,92 @@ def _seed_from_shot(shot_id: str) -> int:
     nums = re.findall(r"\d+", shot_id)
     base = int(nums[0]) if nums else 1
     return hash(f"manga_{shot_id}") % (2 ** 31 - 1)
+
+
+def generate_manga_gallery(
+    output_dir: str,
+    meta: dict[str, Any],
+    panel_paths: dict[str, str],
+    assembled_path: str | None = None,
+) -> str:
+    """为漫画输出生成 HTML 画廊页。
+
+    Args:
+        output_dir: 输出目录（与 metadata.json 同级）
+        meta: metadata.json 内容
+        panel_paths: {镜号: 图片路径} 映射
+        assembled_path: 拼页图片路径
+
+    Returns:
+        生成的 HTML 文件路径
+    """
+    out_dir = Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    panels_html = ""
+    for shot_id, img_path in panel_paths.items():
+        rel = Path(img_path).name
+        panels_html += f"""
+    <div class="panel">
+        <img src="{rel}" loading="lazy">
+        <div class="panel-label">镜号 {shot_id}</div>
+    </div>"""
+
+    assembled_html = ""
+    if assembled_path:
+        rel_ass = Path(assembled_path).name
+        assembled_html = f"""
+    <div class="section">
+        <h2>拼页</h2>
+        <img src="{rel_ass}" class="assembled">
+    </div>"""
+
+    char_html = ""
+    chars = meta.get("角色", {})
+    if chars:
+        char_items = "".join(
+            f'<li><b>{name}</b>: {info.get("服饰","?")} / {info.get("发型","?")} / {info.get("特征","?")}</li>'
+            for name, info in chars.items()
+        )
+        char_html = f"""
+    <div class="section">
+        <h2>角色</h2>
+        <ul>{char_items}</ul>
+    </div>"""
+
+    html = f"""<!DOCTYPE html><html lang="zh-CN">
+<head><meta charset="utf-8"><title>漫画画廊</title>
+<style>
+  *{{margin:0;padding:0;box-sizing:border-box}}
+  body{{font-family:-apple-system,'Segoe UI',sans-serif;background:#f5f5f5;color:#333;padding:24px}}
+  h1{{font-size:24px;margin-bottom:8px}}
+  .meta{{color:#666;font-size:14px;margin-bottom:24px}}
+  .meta span{{margin-right:16px}}
+  .grid{{display:flex;flex-wrap:wrap;gap:16px;margin-bottom:24px}}
+  .panel{{background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08);width:300px}}
+  .panel img{{width:100%;height:auto;display:block}}
+  .panel-label{{padding:8px;font-size:13px;color:#666;text-align:center}}
+  .section{{margin-bottom:24px;background:#fff;border-radius:8px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.08)}}
+  .section h2{{font-size:18px;margin-bottom:12px}}
+  .assembled{{max-width:100%;height:auto}}
+  ul{{list-style:none}}
+  li{{padding:4px 0;font-size:14px}}
+</style></head><body>
+<h1>📖 漫画画廊</h1>
+<div class="meta">
+  <span>🎨 风格: {meta.get("风格", "?")}</span>
+  <span>📐 布局: {meta.get("layout", "?")}</span>
+  <span>📄 共 {len(panel_paths)} 格</span>
+</div>
+<div class="section">
+  <h2>剧本</h2>
+  <p style="font-size:14px;color:#555">{meta.get("脚本", "")}</p>
+</div>{char_html}
+<h2>逐格面板</h2>
+<div class="grid">{panels_html}</div>{assembled_html}
+</body></html>"""
+
+    gallery_path = out_dir / "gallery.html"
+    gallery_path.write_text(html, encoding="utf-8")
+    print(f"  🖼️  画廊: {gallery_path}")
+    return str(gallery_path.resolve())

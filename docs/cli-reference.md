@@ -1057,13 +1057,41 @@ usage: python -m agents workshop manga [-h] [--style STYLE] [--preview]
   # 从文件读取剧本
 
   python -m agents workshop manga "教室中，两人相对而立。" --output ./manga-out
-  # 保存拼页 + 逐格图 + metadata.json
+  # 保存拼页 + 逐格图 + metadata.json + gallery.html（面板+拼页+角色信息）
 ```
 
 ### `workshop video`
 
-分镜驱动视频生成（封装 Wan2.2 go_video）。
+一句话视频生成（Wan2.2 T2V/I2V）。使用 workshop.video 模块，支持预览和参数控制。
 
 ```text
-用法同 python -m agents video [options] [prompt]
+usage: python -m agents workshop video [-h] [--ref REF] [--frames FRAMES] [--fps FPS]
+                                        [--seed SEED] [--preset PRESET] [--preview]
+                                        [--steps STEPS] [--cfg CFG] [--width WIDTH]
+                                        [--height HEIGHT] [--denoise DENOISE]
+                                        [--neg NEG] [--output OUTPUT]
+                                        [prompt ...]
+
+参数:
+  prompt             画面描述（多个词自动拼接）
+  --ref REF          参考图路径（I2V 模式）
+  --frames FRAMES    帧数（默认 49）
+  --fps FPS          帧率（默认 15）
+  --seed SEED        随机种子（-1=自动）
+  --preset PRESET    视频预设 (cinematic/quality/fast)
+  --preview          预览参数不生成
+  --steps STEPS      采样步数（默认 30）
+  --cfg CFG          CFG scale（默认 7.0）
+  --width WIDTH      输出宽度（默认 848）
+  --height HEIGHT    输出高度（默认 480）
+  --denoise DENOISE  去噪强度（默认 1.0）
+  --neg NEG          负向提示词
+  --output OUTPUT    输出目录（复制视频到指定目录）
+
+示例:
+  python -m agents workshop video "赛博朋克城市，霓虹灯闪烁，雨夜"
+  python -m agents workshop video "人物行走" --frames 81 --fps 15
+  python -m agents workshop video "人物奔跑" --ref start.png --frames 49
+  python -m agents workshop video "城市夜景" --preview       # 预览不生成
+  python -m agents workshop video "风景" --output ./video-out  # 输出到目录
 ```

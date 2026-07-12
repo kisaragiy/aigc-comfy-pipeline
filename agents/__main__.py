@@ -479,9 +479,7 @@ def _run_workshop() -> None:
     elif sub == "manga":
         _workshop_manga(args)
     elif sub == "video":
-        from agents.go_video import main as video_main
-        sys.argv = [sys.argv[0]] + args
-        video_main()
+        _workshop_video(args)
     else:
         print(f"未知 workshop 子命令: {sub}")
         _run_workshop()
@@ -810,6 +808,106 @@ def _workshop_inspect(args: list[str]) -> None:
         print(f"  📊 失败原因: {reasons_str}")
 
 
+def _workshop_video(args: list[str]) -> None:
+    """python -m agents workshop video <prompt> [options]"""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="一句话视频生成（Wan2.2）")
+    parser.add_argument("prompt", nargs="*", help="画面描述")
+    parser.add_argument("--ref", default=None, help="参考图路径（I2V 模式）")
+    parser.add_argument("--frames", type=int, default=49, help="帧数")
+    parser.add_argument("--fps", type=int, default=15, help="帧率")
+    parser.add_argument("--seed", type=int, default=-1, help="随机种子 (-1=随机)")
+    parser.add_argument("--preset", default=None, help="视频预设 (cinematic/quality/fast)")
+    parser.add_argument("--preview", action="store_true", help="预览参数不生成")
+    parser.add_argument("--steps", type=int, default=30, help="采样步数")
+    parser.add_argument("--cfg", type=float, default=7.0, help="CFG scale")
+    parser.add_argument("--width", type=int, default=848, help="输出宽度")
+    parser.add_argument("--height", type=int, default=480, help="输出高度")
+    parser.add_argument("--denoise", type=float, default=1.0, help="去噪强度")
+    parser.add_argument("--neg", default="", help="负向提示词")
+    parser.add_argument("--output", default=None, help="输出目录")
+    parsed = parser.parse_args(args)
+
+    if not parsed.prompt:
+        parser.print_help()
+        return
+
+    prompt = " ".join(parsed.prompt)
+
+    if parsed.preview:
+        print(f"📋 视频预览:")
+        print(f"  Prompt: {prompt[:80]}{'...' if len(prompt)>80 else ''}")
+        print(f"  参数: {parsed.frames}帧 / {parsed.fps}fps / {parsed.steps}步")
+        print(f"  尺寸: {parsed.width}×{parsed.height}")
+        print(f"  CFG: {parsed.cfg} / Denoise: {parsed.denoise}")
+        print(f"  种子: {'自动' if parsed.seed == -1 else parsed.seed}")
+        print(f"  预设: {parsed.preset or '默认'}")
+        if parsed.ref:
+            print(f"  参考图: {parsed.ref}")
+        return
+
+    from workshop.video import generate_video
+    from workshop.engine import nls_to_prompt
+
+    print(f"📝 优化提示词...")
+    final_prompt = nls_to_prompt(prompt, style_hint="photoreal", ollama_available=False)
+    print(f"  Prompt: {final_prompt[:100]}...")
+
+    print(f"🎬 生成视频 ({parsed.frames}帧, {parsed.fps}fps)...")
+    result = generate_video(
+        final_prompt,
+        ref_image=parsed.ref,
+        frames=parsed.frames,
+        fps=parsed.fps,
+        width=parsed.width,
+        height=parsed.height,
+        steps=parsed.steps,
+        cfg=parsed.cfg,
+        seed=parsed.seed,
+        denoise=parsed.denoise,
+        negative=parsed.neg,
+        preset=parsed.preset,
+        prefix="wvideo",
+    )
+
+    if result.get("error"):
+        print(f"❌ 生成失败: {result['error']}")
+        return
+
+    images = result.get("images", [])
+    if not images:
+        print("❌ 无视频输出")
+        return
+
+    # 第一个视频路径
+    from agents.comfy_utils import resolve_comfy_root
+    comfy_root = resolve_comfy_root()
+    video_path = None
+    for sub, name in images:
+        p = comfy_root / "output" / sub / name
+        if p.is_file() and p.suffix.lower() in (".mp4", ".webm", ".mov", ".gif"):
+            video_path = str(p.resolve())
+            break
+
+    if video_path:
+        print(f"✅ 视频: {video_path}")
+        if parsed.output:
+            out_dir = Path(parsed.output)
+            out_dir.mkdir(parents=True, exist_ok=True)
+            import shutil
+            dest = out_dir / Path(video_path).name
+            shutil.copy2(video_path, str(dest))
+            print(f"📂 已复制到: {dest}")
+    else:
+        print(f"✅ 视频已生成 (prompt_id={result.get('prompt_id','?')})")
+        print(f"📂 请在 ComfyUI 输出目录查找")
+
+    # 保存种子信息
+    seed_used = result.get("seed", 0)
+    print(f"  🎲 种子: {seed_used}")
+
+
 def _workshop_manga(args: list[str]) -> None:
     """python -m agents workshop manga <script_text> [options]"""
     import argparse
@@ -933,6 +1031,15 @@ def _workshop_manga(args: list[str]) -> None:
             import json
             json.dump(meta, f, ensure_ascii=False, indent=2)
         print(f"📋 metadata.json 已保存")
+
+        # 生成画廊
+        from workshop.manga import generate_manga_gallery
+        generate_manga_gallery(
+            output_dir=str(out_dir),
+            meta=meta,
+            panel_paths=panel_paths,
+            assembled_path=output if output else None,
+        )
     else:
         print("\n📄 拼页...")
         output = assemble_page(results)
