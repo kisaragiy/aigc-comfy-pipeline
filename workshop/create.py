@@ -53,6 +53,7 @@ def create_from_nl(
     output_dir: str | None = None,
     verbose: bool = False,
     gallery_dir: str | None = None,
+    clean: bool = False,
 ) -> dict[str, Any]:
     """自然语言描述 → 生成多张候选 → 质检排序 → 返回最优。
 
@@ -72,6 +73,7 @@ def create_from_nl(
         use_ollama: 使用 Ollama 增强 prompt 生成
         output_dir: 结果输出目录（保存 metadata.json）
         verbose: 详细信息
+        clean: 生成前清理输出目录旧文件
 
     Returns:
         {
@@ -92,6 +94,20 @@ def create_from_nl(
                 "error": "ComfyUI 未连接",
                 "inspection_summary": "",
             }
+
+    # 1b. 清理输出目录
+    if clean and output_dir:
+        out_path = Path(output_dir)
+        if out_path.is_dir():
+            import shutil
+            gallery_path = out_path / "gallery"
+            if gallery_path.is_dir():
+                shutil.rmtree(str(gallery_path))
+            for old in out_path.glob("*"):
+                if old.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".json", ".html"}:
+                    old.unlink()
+            if verbose:
+                print(f"🧹 已清理: {output_dir}/")
 
     # 2. 生成专业提示词
     ollama_avail = use_ollama
@@ -470,6 +486,8 @@ h1{{font-size:1.5rem;margin-bottom:8px;color:#e8a87c}}
 #modal.show{{display:flex}}
 #modal img{{max-width:95vw;max-height:95vh;object-fit:contain;border-radius:4px}}
 #modal-counter{{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.6);color:#ccc;padding:4px 14px;border-radius:12px;font-size:.82rem;pointer-events:none}}
+#modal-dl{{position:fixed;top:20px;right:20px;background:rgba(0,0,0,.6);color:#eee;text-decoration:none;padding:6px 14px;border-radius:8px;font-size:1.1rem;cursor:pointer;z-index:1001;border:1px solid rgba(255,255,255,.2);transition:background .15s}}
+#modal-dl:hover{{background:rgba(80,80,80,.8)}}
 </style></head>
 <body>
 <h1>🖼️ 创作工坊 · Gallery</h1>
@@ -478,18 +496,26 @@ h1{{font-size:1.5rem;margin-bottom:8px;color:#e8a87c}}
 {engine_html}
 <div class="summary-row">{f'质检: {summary}' if summary else ''} · 共 {len(images)} 张<span class="sort-note" title="按综合分降序 · 🏆 最优在前">  已排序</span></div>
 <div class="grid">{rows_html}</div>
-|<div id="modal" onclick="this.classList.remove('show')">
+|<div id="modal" onclick="closeModal(event)">
   <div id="modal-counter"></div>
   <img id="modal-img" src="" alt=""/>
+  <a id="modal-dl" href="#" download="gallery.png" onclick="event.stopPropagation();" title="下载当前图片">⬇</a>
 </div>
 <script>
 var images = {js_images};
 var currentIdx = -1;
+function closeModal(e){{
+    if (e.target === e.currentTarget || e.target.id === 'modal-img') {{
+        document.getElementById('modal').classList.remove('show');
+        currentIdx = -1;
+    }}
+}}
 function openModal(idx){{
     currentIdx = idx;
     document.getElementById('modal-img').src = images[idx];
     document.getElementById('modal').classList.add('show');
     updateCounter();
+    updateDownload();
 }}
 function updateCounter(){{
     var c = document.getElementById('modal-counter');
@@ -500,17 +526,29 @@ function updateCounter(){{
         c.style.display = 'none';
     }}
 }}
+function updateDownload(){{
+    var dl = document.getElementById('modal-dl');
+    if (currentIdx >= 0 && images[currentIdx]) {{
+        dl.href = images[currentIdx];
+        dl.download = images[currentIdx].split('/').pop() || 'gallery.png';
+        dl.style.display = 'block';
+    }} else {{
+        dl.style.display = 'none';
+    }}
+}}
 document.addEventListener('keydown', function(e){{
     if (currentIdx < 0) return;
     if (e.key === 'ArrowLeft' && currentIdx > 0) {{
         currentIdx--;
         document.getElementById('modal-img').src = images[currentIdx];
         updateCounter();
+        updateDownload();
         e.preventDefault();
     }} else if (e.key === 'ArrowRight' && currentIdx < images.length - 1) {{
         currentIdx++;
         document.getElementById('modal-img').src = images[currentIdx];
         updateCounter();
+        updateDownload();
         e.preventDefault();
     }} else if (e.key === 'Escape') {{
         document.getElementById('modal').classList.remove('show');

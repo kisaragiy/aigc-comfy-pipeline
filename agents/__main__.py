@@ -506,6 +506,7 @@ def _workshop_create(args: list[str]) -> None:
     parser.add_argument("--open", action="store_true", help="生成后打开 Gallery 页面（优先）或最优图")
     parser.add_argument("--negative", default=None, help="负向提示词（不设置时使用风格预设默认值）")
     parser.add_argument("--verbose", action="store_true", help="详细信息")
+    parser.add_argument("--clean", action="store_true", help="生成前清理输出目录旧文件")
     parsed = parser.parse_args(args)
 
     nl_text = " ".join(parsed.nl_text) if parsed.nl_text else ""
@@ -536,6 +537,7 @@ def _workshop_create(args: list[str]) -> None:
         output_dir=parsed.output,
         verbose=parsed.verbose,
         gallery_dir=gallery_dir,
+        clean=parsed.clean,
     )
 
     # 引擎推测（也用于 preview 模式）

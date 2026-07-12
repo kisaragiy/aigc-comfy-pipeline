@@ -330,3 +330,92 @@ class TestGenerateGalleryHtml:
         assert "keydown" in html
         assert "modal-counter" in html
         assert "currentIdx" in html
+
+    def test_gallery_download_button(self):
+        """Gallery Lightbox 包含下载按钮。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._sample_result()
+            for i, c in enumerate(result["candidates"]):
+                img_path = Path(tmp) / f"candidate_{i}.png"
+                img_path.write_text("fake-png")
+                c["image"] = str(img_path)
+            result["best"]["image"] = result["candidates"][0]["image"]
+            path = _generate_gallery_html(result, tmp)
+            html = Path(path).read_text(encoding="utf-8")
+        assert "#modal-dl" in html
+        assert "updateDownload" in html
+        assert "download" in html
+        assert "⬇" in html
+
+    def test_gallery_close_all_click(self):
+        """点击 modal 背景（非图片区域）关闭 Lightbox。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._sample_result()
+            for i, c in enumerate(result["candidates"]):
+                img_path = Path(tmp) / f"candidate_{i}.png"
+                img_path.write_text("fake-png")
+                c["image"] = str(img_path)
+            result["best"]["image"] = result["candidates"][0]["image"]
+            path = _generate_gallery_html(result, tmp)
+            html = Path(path).read_text(encoding="utf-8")
+        assert "closeModal" in html
+        assert "function closeModal" in html
+
+
+# ── create_from_nl --clean ───────────────────────────
+
+class TestCreateClean:
+    """测试 create_from_nl 的 --clean 参数。"""
+
+    def test_clean_parameter_accepted(self):
+        """create_from_nl 接受 clean 参数（非 integration 验证）。"""
+        from workshop.create import create_from_nl
+        import inspect
+        sig = inspect.signature(create_from_nl)
+        assert "clean" in sig.parameters
+        assert sig.parameters["clean"].default is False
+
+    def test_clean_removes_files(self):
+        """clean=True 时删除输出目录中的旧文件。"""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            # 创建旧文件
+            (Path(tmp) / "old.png").write_text("old")
+            (Path(tmp) / "old.json").write_text('{"old": true}')
+            (Path(tmp) / "old.html").write_text("<html/>")
+            (Path(tmp) / "keep.txt").write_text("keep")  # 不受影响
+            # 清理至少调用了目录删除逻辑（dry_run 模式会走 cleanup 但后续失败）
+            # 直接测试清理逻辑本身
+            from workshop.create import create_from_nl
+            # dry_run=True 跳过了 ComfyUI 检查，但 cleanup 在 prompt 生成前执行
+            result = create_from_nl(
+                "test",
+                clean=True,
+                output_dir=tmp,
+                dry_run=True,
+            )
+            # cleanup 删除了旧文件，dry_run 模式不生成新文件
+            assert not (Path(tmp) / "old.png").is_file()
+            assert not (Path(tmp) / "old.json").is_file()
+            assert not (Path(tmp) / "old.html").is_file()
+            assert (Path(tmp) / "keep.txt").is_file()  # 不受影响
+
+    def test_clean_removes_gallery_subdir(self):
+        """clean=True 时删除 gallery 子目录。"""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            gal = Path(tmp) / "gallery"
+            gal.mkdir()
+            (gal / "index.html").write_text("gallery")
+            (gal / "candidate_00.png").write_text("img")
+
+            from workshop.create import create_from_nl
+            create_from_nl(
+                "test",
+                clean=True,
+                output_dir=tmp,
+                dry_run=True,
+            )
+            assert not gal.is_dir()
