@@ -928,13 +928,16 @@ usage: python -m agents workshop <subcommand> [args...]
 usage: python -m agents workshop create [-h] [--count COUNT] [--style STYLE]
                                         [--ref REF] [--preset PRESET]
                                         [--min-score MIN_SCORE] [--retry RETRY]
-                                        [--no-inspect] [--preview] [--verbose]
+                                        [--no-inspect] [--preview] [--ollama]
+                                        [--output OUTPUT] [--verbose]
                                         nl_text [nl_text ...]
 
 示例:
   python -m agents workshop create "银发少女校服教室窗边逆光" --count 6 --inspect
   python -m agents workshop create "prompt" --style anime --ref ref.png
   python -m agents workshop create "prompt" --preview  # 仅预览 prompt，不提交
+  python -m agents workshop create "prompt" --ollama  # 使用 Ollama 增强 prompt
+  python -m agents workshop create "prompt" --output ./my_create  # 保存结果
 ```
 
 ### `workshop engine`

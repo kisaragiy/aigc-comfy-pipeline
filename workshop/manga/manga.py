@@ -174,13 +174,14 @@ def generate_panels(
         return panel_list
 
     results = []
+    # Import once at the top
+    from agents.comfy_utils import comfy_post_prompt, wait_images
+
     for panel in panel_list:
         print(f"  [{panel['shot']}] 提交 {panel['character']} — {panel['camera']}...")
 
         if flux:
             from agents.go_flux import build_flux_workflow
-            from agents.comfy_utils import comfy_post_prompt, wait_images, resolve_comfy_root
-
             workflow = build_flux_workflow(
                 panel["prompt"],
                 seed=panel["seed"],
@@ -192,10 +193,7 @@ def generate_panels(
                 filename_prefix=f"{prefix}_{panel['shot']}",
             )
         else:
-            # SDXL
             from agents.go_knives_lora import build_sdxl_workflow
-            from agents.comfy_utils import comfy_post_prompt, wait_images, resolve_comfy_root
-
             workflow = build_sdxl_workflow(
                 panel["prompt"],
                 seed=panel["seed"],
@@ -206,18 +204,22 @@ def generate_panels(
                 filename_prefix=f"{prefix}_{panel['shot']}",
             )
 
+        pid = ""
+        images = []
+        error = ""
         try:
             resp = comfy_post_prompt(workflow)
             pid = resp.get("prompt_id", "")
             images = wait_images(pid)
         except Exception as exc:
+            error = str(exc)
             print(f"    ❌ 失败: {exc}")
-            images = []
 
         results.append({
             "shot": panel["shot"],
             "prompt_id": pid,
             "images": images,
+            "error": error,
             "seed": panel["seed"],
             "prompt": panel["prompt"],
             "dialogue": panel["dialogue"],

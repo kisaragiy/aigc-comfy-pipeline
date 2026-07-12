@@ -501,6 +501,8 @@ def _workshop_create(args: list[str]) -> None:
     parser.add_argument("--retry", type=int, default=0, help="失败重试次数")
     parser.add_argument("--no-inspect", action="store_true", help="跳过质检")
     parser.add_argument("--preview", action="store_true", help="预览模式（跳过生成）")
+    parser.add_argument("--ollama", action="store_true", help="使用 Ollama 优化 prompt")
+    parser.add_argument("--output", default=None, help="结果输出目录（保存 metadata.json + best.png）")
     parser.add_argument("--verbose", action="store_true", help="详细信息")
     parsed = parser.parse_args(args)
 
@@ -521,6 +523,8 @@ def _workshop_create(args: list[str]) -> None:
         retry=parsed.retry,
         inspect=not parsed.no_inspect,
         dry_run=parsed.preview,
+        use_ollama=parsed.ollama,
+        output_dir=parsed.output,
         verbose=parsed.verbose,
     )
 
@@ -530,14 +534,21 @@ def _workshop_create(args: list[str]) -> None:
         print("  (dry-run 模式，未提交)")
         return
 
+    if result.get("error"):
+        print(f"\n❌ {result['error']}")
+        print("  请确认: ComfyUI 已启动，浏览器可打开 http://127.0.0.1:8188")
+        return
+
     print(f"\n{'='*50}")
     print(f"📝 最终 Prompt: {result['prompt']}")
+    if parsed.ollama:
+        print(f"  (Ollama 增强)")
     print(f"  候选: {len(result['candidates'])} 张")
 
     best = result.get("best", {})
-    if best:
+    if best and best.get("image"):
         print(f"\n🏆 最优:")
-        print(f"  图片: {best.get('image', 'N/A')}")
+        print(f"  图片: {best['image']}")
         print(f"  Seed: {best.get('seed', '?')}")
         print(f"  CLIP Score: {best.get('score', -1)}")
         ins = best.get("inspect", {})
@@ -545,10 +556,18 @@ def _workshop_create(args: list[str]) -> None:
             from workshop.inspect import format_report
             print(f"\n{format_report(ins)}")
 
+    if parsed.output:
+        print(f"\n📁 已保存: {parsed.output}/")
+
     print(f"\n📊 排名:")
     for i, c in enumerate(result.get("candidates", [])):
         ins_sum = c.get("inspect", {}).get("summary", "")
-        print(f"  #{i+1} seed={c.get('seed','?')} score={c.get('score', -1)} {ins_sum}")
+        err_tag = " ❌" if c.get("error") else ""
+        print(f"  #{i+1} seed={c.get('seed','?')} score={c.get('score', -1)}{err_tag} {ins_sum}")
+
+    had_err = result.get("had_errors", False)
+    if had_err:
+        print(f"\n⚠️ 部分候选生成失败（ComfyUI 可能不稳定）")
 
 
 def _workshop_engine(args: list[str]) -> None:
