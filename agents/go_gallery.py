@@ -44,7 +44,7 @@ header .stats { color: #9aa0a6; font-size: 0.85rem; }
 .card:hover { border-color: #6ea8fe; }
 .card .images { position: relative; }
 .card .images img { width: 100%; aspect-ratio: 1; object-fit: cover;
-  display: block; background: #2a2f3a; }
+  display: block; background: #2a2f3a; cursor: pointer; }
 .card .meta { padding: 0.6rem 0.8rem; }
 .cmd-badge { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 10px;
   font-size: 0.75rem; font-weight: bold; text-transform: uppercase; }
@@ -58,7 +58,33 @@ header .stats { color: #9aa0a6; font-size: 0.85rem; }
 .cmd-badge.video-batch { background: #f59e0b33; color: #f59e0b; }
 .cmd-badge.sweep-video { background: #f59e0b33; color: #f59e0b; }
 .card .images video { width: 100%; aspect-ratio: 1; object-fit: cover;
-  display: block; background: #2a2f3a; }
+  display: block; background: #2a2f3a; cursor: pointer; }
+/* Lightbox / Fullscreen */
+.lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.92);
+  z-index: 500; align-items: center; justify-content: center; }
+.lightbox.active { display: flex; }
+.lightbox-content { text-align: center; max-width: 95vw; max-height: 95vh;
+  position: relative; }
+.lightbox-media img, .lightbox-media video { max-width: 95vw; max-height: 85vh;
+  object-fit: contain; border-radius: 6px; }
+.lightbox-caption { color: #9aa0a6; font-size: 0.85rem; margin-top: 0.5rem; }
+.lightbox-counter { color: #555; font-size: 0.75rem; margin-top: 0.3rem; }
+.lightbox-close { position: absolute; top: 0.8rem; right: 1.2rem; color: #fff;
+  font-size: 2rem; cursor: pointer; background: none; border: none; z-index: 510; }
+.lightbox-prev, .lightbox-next { position: absolute; top: 50%; transform: translateY(-50%);
+  color: #fff; font-size: 2.5rem; cursor: pointer; background: rgba(0,0,0,0.5);
+  border: none; padding: 0.5rem 0.8rem; border-radius: 8px; z-index: 510;
+  transition: background 0.2s; }
+.lightbox-prev:hover, .lightbox-next:hover { background: rgba(0,0,0,0.8); }
+.lightbox-prev { left: 0.5rem; }
+.lightbox-next { right: 0.5rem; }
+.lightbox-thumbs { display: flex; gap: 0.3rem; justify-content: center; margin-top: 0.5rem;
+  overflow-x: auto; padding: 0.3rem; }
+.lightbox-thumbs img, .lightbox-thumbs video { width: 48px; height: 48px;
+  object-fit: cover; border-radius: 4px; cursor: pointer; opacity: 0.5;
+  border: 2px solid transparent; transition: all 0.2s; }
+.lightbox-thumbs img:hover, .lightbox-thumbs video:hover { opacity: 0.8; }
+.lightbox-thumbs .active { opacity: 1; border-color: #6ea8fe; }
 .time { color: #9aa0a6; font-size: 0.75rem; margin-left: 0.4rem; }
 .prompt { color: #e8eaed; font-size: 0.82rem; margin: 0.4rem 0;
   line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2;
@@ -102,6 +128,93 @@ footer { text-align: center; padding: 1.5rem; color: #555; font-size: 0.75rem; }
 """
 
 GALLERY_JS = """\
+// Build gallery media array
+var galleryMedia = [];
+var mediaIndex = {};
+document.querySelectorAll('.card').forEach(function(card, ci) {
+  var cmd = card.dataset.command || '';
+  var ts = card.querySelector('.time').textContent || '';
+  var prompt = (card.querySelector('.prompt') || {}).textContent || '';
+  card.querySelectorAll('.images img, .images video').forEach(function(el, mi) {
+    var src = el.getAttribute('src') || el.querySelector('source')?.getAttribute('src') || '';
+    if (!src) return;
+    var isVideo = el.tagName === 'VIDEO';
+    var poster = el.getAttribute('poster') || '';
+    var item = { idx: galleryMedia.length, cardIdx: ci, mediaIdx: mi,
+      src: src, poster: poster, isVideo: isVideo, cmd: cmd, ts: ts, prompt: prompt,
+      el: el };
+    galleryMedia.push(item);
+    mediaIndex[ci + '-' + mi] = item;
+  });
+});
+// Click to open lightbox
+document.querySelectorAll('.images img, .images video').forEach(function(el) {
+  el.addEventListener('click', function(e) {
+    if (e.target.closest('.cmp-cb')) return;
+    var card = this.closest('.card');
+    var ci = parseInt(card.dataset.idx);
+    var mi = Array.from(card.querySelectorAll('.images img, .images video')).indexOf(this);
+    var item = mediaIndex[ci + '-' + mi];
+    if (item) openLightbox(item.idx);
+  });
+});
+// Lightbox
+var lb = document.getElementById('lightbox');
+function openLightbox(idx) {
+  if (!galleryMedia.length || idx < 0 || idx >= galleryMedia.length) return;
+  var item = galleryMedia[idx];
+  var mediaDiv = lb.querySelector('.lightbox-media');
+  var captionDiv = lb.querySelector('.lightbox-caption');
+  var counterDiv = lb.querySelector('.lightbox-counter');
+  var thumbsDiv = lb.querySelector('.lightbox-thumbs');
+  if (item.isVideo) {
+    var posterAttr = item.poster ? ' poster="' + item.poster + '"' : '';
+    mediaDiv.innerHTML = '<video controls autoplay' + posterAttr + ' src="' + item.src + '"></video>';
+  } else {
+    mediaDiv.innerHTML = '<img src="' + item.src + '" />';
+  }
+  captionDiv.textContent = (item.cmd ? '[' + item.cmd + '] ' : '') + item.ts + (item.prompt ? ' - ' + item.prompt : '');
+  counterDiv.textContent = (idx + 1) + ' / ' + galleryMedia.length;
+  // Thumbnails
+  thumbsDiv.innerHTML = '';
+  galleryMedia.forEach(function(m, i) {
+    var thumb = document.createElement(m.isVideo ? 'video' : 'img');
+    thumb.src = m.isVideo ? (m.poster || m.src) : m.src;
+    if (m.isVideo) thumb.muted = true;
+    thumb.className = (i === idx) ? 'active' : '';
+    (function(index) {
+      thumb.addEventListener('click', function() { openLightbox(index); });
+    })(i);
+    thumbsDiv.appendChild(thumb);
+  });
+  lb.classList.add('active');
+  lb.dataset.current = idx;
+}
+function closeLightbox() {
+  lb.classList.remove('active');
+  lb.querySelector('.lightbox-media').innerHTML = '';
+}
+function navLightbox(delta) {
+  var cur = parseInt(lb.dataset.current || 0);
+  var next = cur + delta;
+  if (next < 0) next = galleryMedia.length - 1;
+  if (next >= galleryMedia.length) next = 0;
+  openLightbox(next);
+}
+lb.querySelector('.lightbox-close').addEventListener('click', closeLightbox);
+lb.querySelector('.lightbox-prev').addEventListener('click', function() { navLightbox(-1); });
+lb.querySelector('.lightbox-next').addEventListener('click', function() { navLightbox(1); });
+// Keyboard navigation
+document.addEventListener('keydown', function(e) {
+  if (!lb.classList.contains('active')) return;
+  if (e.key === 'Escape') { closeLightbox(); return; }
+  if (e.key === 'ArrowLeft') { navLightbox(-1); e.preventDefault(); }
+  if (e.key === 'ArrowRight') { navLightbox(1); e.preventDefault(); }
+});
+// Click outside media to close
+lb.addEventListener('click', function(e) {
+  if (e.target === lb || e.target.closest('.lightbox-close')) closeLightbox();
+});
 // Type filter
 document.querySelectorAll('.filter-btn').forEach(function(btn) {
   btn.addEventListener('click', function() {
@@ -355,6 +468,17 @@ def _build_html(runs: list[dict[str, Any]], media_type: str = "all", refresh_pos
 <div class="compare-bar">
   <span class="count">0 selected</span>
   <button class="compare-btn" disabled>Compare</button>
+</div>
+<div id="lightbox" class="lightbox">
+  <button class="lightbox-close">&times;</button>
+  <button class="lightbox-prev">&#10094;</button>
+  <button class="lightbox-next">&#10095;</button>
+  <div class="lightbox-content">
+    <div class="lightbox-media"></div>
+    <div class="lightbox-caption"></div>
+    <div class="lightbox-counter"></div>
+    <div class="lightbox-thumbs"></div>
+  </div>
 </div>
 <header>
   <h1>🎨 Output Gallery</h1>
