@@ -942,7 +942,7 @@ usage: python -m agents workshop create [-h] [--count COUNT] [--style STYLE]
   --min-score SCORE  最低 CLIP 分
   --retry RETRY      失败重试次数
   --no-inspect       跳过质检
-  --preview          预览模式（跳过生成）
+  --preview          预览模式（跳过生成，显示引擎推测 + 负向）
   --ollama           使用 Ollama 优化 prompt
   --output OUTPUT    结果输出目录（保存 metadata.json + best.png，自动生成 gallery）
   --gallery GALLERY  候选画廊输出目录（默认仅 --output 时自动生成到 <output>/gallery/）
@@ -956,7 +956,7 @@ usage: python -m agents workshop create [-h] [--count COUNT] [--style STYLE]
 示例:
   python -m agents workshop create "银发少女校服教室窗边逆光" --count 6
   python -m agents workshop create "prompt" --style anime --ref ref.png
-  python -m agents workshop create "prompt" --preview  # 仅预览 prompt
+  python -m agents workshop create "prompt" --preview  # 预览 prompt + 引擎推测 + 负向
   python -m agents workshop create "prompt" --ollama  # 使用 Ollama 增强
   python -m agents workshop create "prompt" --output ./result  # 保存最优
   python -m agents workshop create "prompt" --gallery ./gallery  # 所有候选 HTML 画廊
@@ -1017,7 +1017,7 @@ usage: python -m agents workshop manga [-h] [--style STYLE] [--preview]
 
 参数:
   --style STYLE           画风 (默认: anime)
-  --preview               仅预览 prompt
+  --preview               预览分镜表 + 面板（含种子/尺寸/Prompt，不生成）
   --layout LAYOUT         拼页布局 (auto/4koma)
   --char "名:服饰:发型:特征"  角色定义 (可重复，支持 1~4 个)
   --script-file FILE       从文件读取剧本（替代命令行参数）
@@ -1028,7 +1028,7 @@ usage: python -m agents workshop manga [-h] [--style STYLE] [--preview]
 
 示例:
   python -m agents workshop manga "教室中，两人相对而立。" --preview
-  # 默认角色 Knives / Caster
+  # 默认角色 Knives / Caster，预览完整分镜表 + 面板（种子/尺寸/Prompt）
 
   python -m agents workshop manga "森林里的追逐" --preview \
     --char "战士:重甲:金发:巨剑" \
