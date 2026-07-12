@@ -10,7 +10,8 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.39.0** — 当前：Run 视频路由 + 产出管理视频信息 <br>　　　　　　`python -m agents run "prompt" --video` 自动路由视频生成 <br>　　　　　　`python -m agents outputs show <id> --info` 显示视频时长/大小
+- **V0.40.0** — 当前：Run 升级 Flux（generate_with_quality + --lora + --preset）<br>　　　　　　`python -m agents run` 等价 `python -m agents flux` 超集 <br>　　　　　　支持 `--preset`/`--lora`/`--model`/`--steps`/`--min-score`/`--retry`
+- **V0.39.0** — Run 视频路由 + 产出管理视频信息 <br>　　　　　　`python -m agents run "prompt" --video` 自动路由视频生成 <br>　　　　　　`python -m agents outputs show <id> --info` 显示视频时长/大小
 - **V0.38.0** — Gallery 视频缩略图 + 测试覆盖增强（32→89 项）<br>　　　　　　`--refresh-posters` 强制刷新
 - **V0.37.0** — 视频后处理工具 + 视频预览模式
 - **V0.36.0** — 视频批量生成 + 参数扫描视频支持 + Gallery 增强筛选对比
@@ -41,13 +42,13 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 - V0.5.0 — LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
 - V0.0.XXX — 小修
 
-## 当前版本：V0.39.0
+## 当前版本：V0.40.0
 
 ## 核心能力
 
 | 能力 | 入口 | 统一 CLI | 说明 |
 |------|------|----------|------|
-| 一句话出图 | `run.py` | `python -m agents run` | 自然语言 → Ollama 转写，**--video 切换视频生成** |
+| 一句话出图 | `run.py` | `python -m agents run` | 自然语言 → Ollama 转写，**--video 切换视频**，支持 --lora/--preset/--model 等全参数 |
 | 角色 LoRA 文生图 | `go_knives_lora.py` | `python -m agents lora` | SDXL/SD1.5 多角色（Knives / Caster）、批量、换装 |
 | IPAdapter 锁脸 | `go_knives_ipadapter.py` | `python -m agents ipa` | 参考图驱动面部一致性、权重可调 |
 | 多角色同框 | `go_multi_char_lora.py` | `python -m agents multi` | 双 LoRA + FaceDetailer 修脸 |
