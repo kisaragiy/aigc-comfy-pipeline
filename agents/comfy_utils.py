@@ -283,3 +283,129 @@ def wait_images(
                     raise RuntimeError(f"ComfyUI 任务错误: {msgs}")
         time.sleep(1.5)
     raise TimeoutError(f"等待 ComfyUI 出图超时 prompt_id={prompt_id}")
+
+
+# ============================================================
+# 质量预设 + 自动门禁
+# ============================================================
+
+QUALITY_PRESETS: dict[str, dict[str, Any]] = {
+    "quality": {"steps": 40, "cfg": 7.0, "sampler": "dpmpp_3m_sde", "scheduler": "karras"},
+    "balanced": {"steps": 28, "cfg": 6.5, "sampler": "dpmpp_2m", "scheduler": "karras"},
+    "fast": {"steps": 15, "cfg": 5.0, "sampler": "euler", "scheduler": "normal"},
+    "portrait": {"width": 896, "height": 1152, "cfg": 7.5,
+                 "sampler": "dpmpp_2m", "scheduler": "karras"},
+}
+
+
+def apply_preset(params: dict[str, Any], preset: str | None = None) -> dict[str, Any]:
+    """应用质量预设到参数。用户显式指定的参数优先。"""
+    name = preset or os.environ.get("AIGC_PRESET", "balanced")
+    if name not in QUALITY_PRESETS:
+        print(f"[warn] 未知预设 '{name}'，使用 balanced", file=sys.stderr)
+        name = "balanced"
+
+    result = dict(QUALITY_PRESETS[name])
+    for k, v in params.items():
+        if v is not None and k not in ("preset", "min_score", "retry", "no_validate"):
+            result[k] = v
+
+    print(f"[info] 质量预设: {name} → steps={result.get('steps')}, cfg={result.get('cfg')}, "
+          f"sampler={result.get('sampler')}")
+    return result
+
+
+def generate_with_quality(
+    build_fn: callable,
+    prompt: str,
+    *,
+    min_score: float = 0.0,
+    max_retries: int = 0,
+    preset: str | None = None,
+    no_validate: bool = False,
+    **kwargs: Any,
+) -> dict[str, Any]:
+    """生成 + 质量验证 + 自动重试。
+
+    Args:
+        build_fn: 工作流构建函数（如 build_flux_workflow）
+        prompt: 提示词
+        min_score: CLIP 评分阈值（≤0 跳过验证）
+        max_retries: 最大重试次数
+        preset: 质量预设名
+        no_validate: 强制跳过验证
+        kwargs: 传给 build_fn 的参数
+
+    Returns:
+        {"workflow": wf, "seed": seed, "images": [...], "score": score, "retries": n}
+    """
+    import random
+
+    params = apply_preset(kwargs, preset)
+    for skip_key in ("preset", "no_validate", "min_score", "retry"):
+        params.pop(skip_key, None)
+
+    do_validate = not no_validate and min_score > 0
+
+    best_score = -1.0
+    best_result: dict[str, Any] | None = None
+
+    for attempt in range(max_retries + 1):
+        # seed 由 generate_with_quality 管理，不在 params 中传递
+        params.pop("seed", None)
+        seed = kwargs.get("seed", -1)
+        if isinstance(seed, (int, float)) and (seed == -1 or attempt > 0):
+            seed = random.randint(1, 2**48 - 1)
+
+        wf, actual_seed = build_fn(prompt, seed=int(seed), **params)
+        r = comfy_post_prompt(wf)
+        pid = r.get("prompt_id", "")
+
+        if pid == "dry-run":
+            return {"workflow": wf, "seed": actual_seed, "images": [], "score": None, "retries": 0}
+
+        base = comfy_base_url()
+        try:
+            images = wait_images(pid, base)
+        except (TimeoutError, RuntimeError) as exc:
+            print(f"  [warn] 等待出图失败: {exc}", file=sys.stderr)
+            continue
+
+        comfy_root = resolve_comfy_root()
+        image_paths: list[str] = []
+        for sub, name in images:
+            path = (comfy_root / "output" / sub / name).resolve()
+            if path.is_file():
+                image_paths.append(str(path))
+
+        score: float | None = None
+        if do_validate and image_paths:
+            try:
+                from go_validate import validate_image
+                v = validate_image(image_paths[0], prompt)
+                clip = v.get("clip_score", {})
+                if clip.get("available") and clip.get("score") is not None:
+                    score = clip["score"]
+            except Exception as exc:
+                print(f"  [warn] 验证失败: {exc}", file=sys.stderr)
+
+        current = {"workflow": wf, "seed": actual_seed, "images": image_paths,
+                   "score": score, "retries": attempt}
+
+        if score is not None and score > best_score:
+            best_score = score
+            best_result = current
+
+        if score is not None and score >= min_score:
+            print(f"  ✅ score={score:.3f} ≥ {min_score}")
+            return current
+
+        if attempt < max_retries:
+            s = f"{score:.3f}" if score is not None else "N/A"
+            print(f"  ⚠️ score={s} < {min_score}，重试 ({attempt+1}/{max_retries})")
+
+    if best_result:
+        return best_result
+
+    return {"workflow": wf, "seed": actual_seed, "images": image_paths,
+            "score": score, "retries": attempt}

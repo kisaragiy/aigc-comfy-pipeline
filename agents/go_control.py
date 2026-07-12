@@ -10,20 +10,15 @@ from __future__ import annotations
 
 import argparse
 import os
-import random
 import sys
 from typing import Any
 
 from comfy_utils import (
     bootstrap_agents_path,
-    comfy_base_url,
-    comfy_post_prompt,
     optimize_prompt,
 )
 
 bootstrap_agents_path()
-
-COMFY_URL = os.environ.get("COMFY_URL", "http://127.0.0.1:8188/prompt")
 
 CONTROLNET_MODELS: dict[str, str] = {
     "depth": "controlnet-depth-sdxl-1.0.safetensors",
@@ -42,8 +37,10 @@ def build_controlnet_workflow(
     *,
     negative: str = "",
     seed: int = -1,
-    steps: int = 28,
-    cfg: float = 6.5,
+    steps: int = 20,
+    cfg: float = 5.0,
+    sampler: str = "dpmpp_2m",
+    scheduler: str = "karras",
     strength: float = 0.8,
     width: int = 1024,
     height: int = 1024,
@@ -96,7 +93,7 @@ def build_controlnet_workflow(
     # 7. KSampler
     wf["7"] = {"class_type": "KSampler", "inputs": {
         "seed": seed_actual, "steps": steps, "cfg": cfg,
-        "sampler_name": "dpmpp_2m", "scheduler": "karras", "denoise": 1.0,
+        "sampler_name": sampler, "scheduler": scheduler, "denoise": 1.0,
         "model": model_out, "positive": ["6", 0], "negative": ["3", 0],
         "latent_image": ["8", 0]}}
 
@@ -128,14 +125,24 @@ def main() -> None:
     parser.add_argument("--strength", type=float, default=0.8, help="ControlNet 强度")
     parser.add_argument("--negative", default="", help="负向提示词")
     parser.add_argument("--seed", type=int, default=-1)
-    parser.add_argument("--steps", type=int, default=28)
-    parser.add_argument("--cfg", type=float, default=6.5)
+    parser.add_argument("--steps", type=int, default=None, help="采样步数（预设自动）")
+    parser.add_argument("--cfg", type=float, default=None, help="CFG 引导强度（预设自动）")
     parser.add_argument("--width", type=int, default=1024)
     parser.add_argument("--height", type=int, default=1024)
     parser.add_argument("--raw", action="store_true", help="跳过 Ollama")
+    parser.add_argument("--sampler", default=None, help="采样器（预设自动）")
+    parser.add_argument("--scheduler", default=None, help="调度器（预设自动）")
     parser.add_argument("--lora", default=None, help="LoRA 权重文件名")
     parser.add_argument("--lora-strength", type=float, default=0.9)
     parser.add_argument("--prefix", default="control")
+    parser.add_argument("--preset", choices=["quality", "balanced", "fast", "portrait"],
+                        default=None, help="质量预设")
+    parser.add_argument("--min-score", type=float, default=0.0,
+                        help="最低 CLIP 评分（≤0 跳过验证）")
+    parser.add_argument("--retry", type=int, default=0,
+                        help="质量不合格时最大重试次数")
+    parser.add_argument("--no-validate", action="store_true",
+                        help="跳过质量验证")
     args = parser.parse_args()
 
     user = args.prompt
@@ -147,34 +154,43 @@ def main() -> None:
 
     prompt = user if args.raw else optimize_prompt(user)
 
-    wf, seed_actual = build_controlnet_workflow(
-        prompt, args.ref, args.type,
-        negative=args.negative, seed=args.seed,
-        steps=args.steps, cfg=args.cfg,
+    from comfy_utils import generate_with_quality
+
+    qr = generate_with_quality(
+        build_controlnet_workflow, prompt,
+        min_score=args.min_score if not args.no_validate else 0.0,
+        max_retries=args.retry,
+        preset=args.preset,
+        seed=args.seed,
+        ref_image=args.ref,
+        control_type=args.type,
         strength=args.strength,
+        steps=args.steps, cfg=args.cfg,
+        sampler=args.sampler, scheduler=args.scheduler,
         width=args.width, height=args.height,
+        negative=args.negative,
         lora_name=args.lora, lora_strength=args.lora_strength,
         prefix=args.prefix,
     )
 
-    try:
-        result = comfy_post_prompt(wf, prompt_url=COMFY_URL)
-    except RuntimeError as exc:
-        print(exc, file=sys.stderr)
-        sys.exit(1)
-
-    prompt_id = result.get("prompt_id", "")
+    wf = qr["workflow"]
+    seed_actual = qr["seed"]
 
     print(f"\n====================")
     print(f"ControlNet ({args.type}) 已提交")
     print(f"====================")
-    print(f"  prompt_id: {prompt_id}")
+    print(f"  prompt_id: {qr.get('prompt_id', '')}")
     print(f"  seed:      {seed_actual}")
     print(f"  参考图:    {args.ref}")
     print(f"  ControlNet: {CONTROLNET_MODELS[args.type]} (strength={args.strength})")
     if args.lora:
         print(f"  LoRA:      {args.lora} (strength={args.lora_strength})")
     print(f"  节点数:    {len(wf)}")
+    score = qr.get("score", -1)
+    if score > 0:
+        print(f"  质量评分:  {score:.3f}")
+    if qr.get("retries", 0) > 0:
+        print(f"  重试次数:  {qr['retries']}")
 
 
 if __name__ == "__main__":
