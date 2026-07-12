@@ -256,3 +256,30 @@ class TestGenerateGalleryHtml:
 
         assert "负向" not in html  # 无负向时不显示区块
         assert "a girl in classroom" in html  # prompt 仍显示
+
+    def test_parts_displayed(self):
+        """质检逐部位分数应在 gallery 中显示。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._sample_result()
+            # 创建真实候选图让 gallery 渲染卡片而非错误占位
+            for i, c in enumerate(result["candidates"]):
+                img_path = Path(tmp) / f"candidate_{i}.png"
+                img_path.write_text("fake-png")
+                c["image"] = str(img_path)
+                # 添加逐部位分
+                c["inspect"]["scores"]["脸"] = 1.0
+                c["inspect"]["scores"]["手"] = 0.2
+            result["candidates"][1]["inspect"]["scores"]["模糊"] = 1.0
+            result["candidates"][1]["inspect"]["scores"]["左眼"] = 0.5
+            # 让最优指向一个真实的图
+            result["best"]["image"] = result["candidates"][0]["image"]
+
+            path = _generate_gallery_html(result, tmp)
+            html = Path(path).read_text(encoding="utf-8")
+
+        assert "Face" in html
+        assert "Hand" in html
+        assert "Blur" in html
+        # 分数字符出现
+        assert "1.0" in html
+        assert "0.2" in html

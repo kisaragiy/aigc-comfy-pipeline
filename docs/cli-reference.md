@@ -949,8 +949,8 @@ usage: python -m agents workshop create [-h] [--count COUNT] [--style STYLE]
   --gallery GALLERY  候选画廊输出目录（默认仅 --output 时自动生成到 <output>/gallery/）
                       Gallery 按综合分降序排列，显示负向提示词 + 引擎推测信息 + 排名标签
   --seed SEED        起始种子（0=随机，固定种子可复现结果）
-  --open             生成后自动打开最优图
-  --negative NEGATIVE
+  --open               生成后打开 Gallery 页面（优先）或最优图
+  --negative NEGATIVE   负向提示词（不设置时使用风格预设默认值）
                         负向提示词（不设置时使用风格预设默认值 + 自动 NL 检测）
                          自动检测: "不要模糊"→blurry, "别崩手"→bad hands, "太暗"→dark...
   --verbose          详细信息

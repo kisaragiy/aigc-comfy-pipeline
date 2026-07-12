@@ -503,7 +503,7 @@ def _workshop_create(args: list[str]) -> None:
     parser.add_argument("--output", default=None, help="结果输出目录（保存 metadata.json + best.png）")
     parser.add_argument("--gallery", default=None, help="候选画廊输出目录（生成 index.html 可浏览所有候选图）")
     parser.add_argument("--seed", type=int, default=0, help="起始种子（自动递增，0=随机）")
-    parser.add_argument("--open", action="store_true", help="生成后自动打开最优图")
+    parser.add_argument("--open", action="store_true", help="生成后打开 Gallery 页面（优先）或最优图")
     parser.add_argument("--negative", default=None, help="负向提示词（不设置时使用风格预设默认值）")
     parser.add_argument("--verbose", action="store_true", help="详细信息")
     parsed = parser.parse_args(args)
@@ -622,11 +622,20 @@ def _workshop_create(args: list[str]) -> None:
         print(f"\n⚠️ 部分候选生成失败（ComfyUI 可能不稳定）")
 
     if parsed.open and best and best.get("image"):
-        img_path = best["image"]
-        if Path(img_path).is_file():
+        # 优先打开 gallery（完整上下文），否则打开最优图
+        gallery_path = None
+        if gallery_dir:
+            gp = Path(gallery_dir) / "index.html"
+            if gp.is_file():
+                gallery_path = str(gp)
+        if gallery_path:
             import os
-            os.startfile(img_path)
-            print(f"\n📂 已打开: {img_path}")
+            os.startfile(gallery_path)
+            print(f"\n📂 已打开 Gallery: {gallery_path}")
+        elif Path(best["image"]).is_file():
+            import os
+            os.startfile(best["image"])
+            print(f"\n📂 已打开: {best['image']}")
 
 
 def _workshop_engine(args: list[str]) -> None:
