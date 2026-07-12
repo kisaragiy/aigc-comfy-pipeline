@@ -931,7 +931,7 @@ usage: python -m agents workshop create [-h] [--count COUNT] [--style STYLE]
                                         [--no-inspect] [--preview] [--ollama]
                                         [--output OUTPUT] [--gallery GALLERY]
                                         [--seed SEED] [--open] [--negative NEGATIVE]
-                                        [--verbose]
+                                        [--verbose] [--clean]
                                         nl_text [nl_text ...]
 
 参数:
@@ -954,6 +954,12 @@ usage: python -m agents workshop create [-h] [--count COUNT] [--style STYLE]
                         负向提示词（不设置时使用风格预设默认值 + 自动 NL 检测）
                          自动检测: "不要模糊"→blurry, "别崩手"→bad hands, "太暗"→dark...
   --verbose          详细信息
+  --clean            生成前清理输出目录旧文件（删除 *.png/*.json/*.html/gallery/）
+
+Gallery 特性:
+  - 键盘导航: ← → 切换候选，ESC 关闭
+  - 下载按钮: Lightbox 右上角 ⬇ 下载当前图片
+  - 逐部位质检: Face/L-Eye/R-Eye/Hand/Foot/Blur 彩色标签
 
 示例:
   python -m agents workshop create "银发少女校服教室窗边逆光" --count 6
