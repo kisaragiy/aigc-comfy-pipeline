@@ -1,6 +1,6 @@
 # CLI 参考文档
 
-> 自动生成于 2026-07-12 19:13
+> 自动生成于 2026-07-12 21:11
 
 AIGC ComfyUI Pipeline v?
 
@@ -201,7 +201,8 @@ usage: go_flux.py [-h] [--raw] [--negative NEGATIVE] [--seed SEED]
                   [--steps STEPS] [--cfg CFG] [--width WIDTH]
                   [--height HEIGHT] [--model {9b,4b}] [--lora LORA]
                   [--lora-strength LORA_STRENGTH] [--sampler SAMPLER]
-                  [--scheduler SCHEDULER] [--prefix PREFIX]
+                  [--scheduler SCHEDULER] [--prefix PREFIX] [--preset PRESET]
+                  [--min-score MIN_SCORE] [--retry RETRY] [--no-validate]
                   [prompt]
 
 Flux.2 Klein 文生图 — 程序化构建工作流（9B/4B，支持 LoRA）
@@ -214,18 +215,191 @@ options:
   --raw                 跳过 Ollama，prompt 作正向提示词
   --negative NEGATIVE   负向提示词
   --seed SEED           随机种子（-1 自动）
-  --steps STEPS         采样步数
-  --cfg CFG             CFG 引导强度
+  --steps STEPS         采样步数（预设自动）
+  --cfg CFG             CFG 引导强度（预设自动）
   --width WIDTH         输出宽度
   --height HEIGHT       输出高度
   --model {9b,4b}       模型变体
   --lora LORA           LoRA 权重文件名
   --lora-strength LORA_STRENGTH
                         LoRA 权重
-  --sampler SAMPLER     采样器
+  --sampler SAMPLER     采样器（预设自动）
   --scheduler SCHEDULER
-                        调度器
+                        调度器（预设自动）
   --prefix PREFIX       输出文件名前缀
+  --preset PRESET       质量预设（anime/photoreal 等）
+  --min-score MIN_SCORE
+                        最低 CLIP 评分（≤0 跳过验证）
+  --retry RETRY         质量不合格时最大重试次数
+  --no-validate         跳过质量验证
+```
+
+---
+
+## `control`
+
+ControlNet 引导生图（depth/openpose/softedge/tile/inpaint/lineart）
+
+```
+usage: go_control.py [-h] --ref REF
+                     [--type {depth,openpose,softedge,tile,inpaint,lineart}]
+                     [--strength STRENGTH] [--negative NEGATIVE] [--seed SEED]
+                     [--steps STEPS] [--cfg CFG] [--width WIDTH]
+                     [--height HEIGHT] [--raw] [--sampler SAMPLER]
+                     [--scheduler SCHEDULER] [--lora LORA]
+                     [--lora-strength LORA_STRENGTH] [--prefix PREFIX]
+                     [--preset PRESET] [--min-score MIN_SCORE] [--retry RETRY]
+                     [--no-validate]
+                     [prompt]
+
+ControlNet 引导生图（Depth/OpenPose/SoftEdge/Tile/Inpaint/LineArt）
+
+positional arguments:
+  prompt                画面描述
+
+options:
+  -h, --help            show this help message and exit
+  --ref REF             参考图文件名（ComfyUI/input/ 下）
+  --type {depth,openpose,softedge,tile,inpaint,lineart}
+                        ControlNet 类型
+  --strength STRENGTH   ControlNet 强度
+  --negative NEGATIVE   负向提示词
+  --seed SEED
+  --steps STEPS         采样步数（预设自动）
+  --cfg CFG             CFG 引导强度（预设自动）
+  --width WIDTH
+  --height HEIGHT
+  --raw                 跳过 Ollama
+  --sampler SAMPLER     采样器（预设自动）
+  --scheduler SCHEDULER
+                        调度器（预设自动）
+  --lora LORA           LoRA 权重文件名
+  --lora-strength LORA_STRENGTH
+  --prefix PREFIX
+  --preset PRESET       质量预设（anime/photoreal 等）
+  --min-score MIN_SCORE
+                        最低 CLIP 评分（≤0 跳过验证）
+  --retry RETRY         质量不合格时最大重试次数
+  --no-validate         跳过质量验证
+```
+
+---
+
+## `video`
+
+Wan2.2 视频生成（Text-to-Video / I2V，帧数/帧率/分辨率控制）
+
+```
+usage: go_video.py [-h] [--ref REF] [--frames FRAMES] [--fps FPS]
+                   [--width WIDTH] [--height HEIGHT] [--steps STEPS]
+                   [--cfg CFG] [--seed SEED] [--negative NEGATIVE] [--raw]
+                   [--prefix PREFIX] [--denoise DENOISE] [--sampler SAMPLER]
+                   [--scheduler SCHEDULER] [--timeout TIMEOUT]
+                   [--preset {quality,balanced,fast,cinematic,quick}]
+                   [prompt]
+
+Wan2.2 视频生成（Text-to-Video / Image-to-Video）
+
+positional arguments:
+  prompt                画面描述
+
+options:
+  -h, --help            show this help message and exit
+  --ref REF             参考图（I2V 模式，文件名）
+  --frames FRAMES       总帧数（预设自动）
+  --fps FPS             帧率（预设自动）
+  --width WIDTH         视频宽度（预设自动）
+  --height HEIGHT       视频高度（预设自动）
+  --steps STEPS         采样步数（预设自动）
+  --cfg CFG             CFG 强度（预设自动）
+  --seed SEED
+  --negative NEGATIVE   负向提示词
+  --raw                 跳过 Ollama
+  --prefix PREFIX       输出文件名前缀
+  --denoise DENOISE     去噪强度（I2V 默认 0.85，T2V 固定 1.0）
+  --sampler SAMPLER     采样器名称（预设自动）
+  --scheduler SCHEDULER
+                        调度器名称（预设自动）
+  --timeout TIMEOUT     等待出图超时秒数（默认 1800=30 分钟）
+  --preset {quality,balanced,fast,cinematic,quick}
+                        视频预设（quality/balanced/fast/cinematic）
+```
+
+---
+
+## `validate`
+
+出图质量评估（CLIP score / 崩脸检测 / 图像质量）
+
+```
+usage: go_validate.py [-h] --image IMAGE [--prompt PROMPT] [--verbose]
+                      [--json]
+
+出图质量评估
+
+options:
+  -h, --help       show this help message and exit
+  --image IMAGE    图片路径
+  --prompt PROMPT  提示词（用于 CLIP 评分）
+  --verbose        详细输出
+  --json           JSON 输出
+```
+
+---
+
+## `abtest`
+
+Prompt A/B 对比测试（同 seed 控制变量）
+
+```
+usage: go_abtest.py [-h] --prompts PROMPTS PROMPTS [--seed SEED]
+                    [--model {9b,4b}] [--lora LORA]
+                    [--lora-strength LORA_STRENGTH] [--steps STEPS]
+                    [--cfg CFG] [--raw] [--dry-run]
+
+A/B 测试 — Prompt A vs B 同 seed 对比
+
+options:
+  -h, --help            show this help message and exit
+  --prompts PROMPTS PROMPTS
+                        两个 prompt（A vs B）
+  --seed SEED
+  --model {9b,4b}
+  --lora LORA
+  --lora-strength LORA_STRENGTH
+  --steps STEPS
+  --cfg CFG
+  --raw
+  --dry-run
+```
+
+---
+
+## `bestof`
+
+多 seed 自动挑优（CLIP 评分排名）
+
+```
+usage: go_abtest.py [-h] [--count COUNT] [--model {9b,4b}] [--lora LORA]
+                    [--lora-strength LORA_STRENGTH] [--steps STEPS]
+                    [--cfg CFG] [--raw] [--dry-run]
+                    prompt
+
+Best of N — 多 seed 自动挑优
+
+positional arguments:
+  prompt                画面描述
+
+options:
+  -h, --help            show this help message and exit
+  --count COUNT         生成张数
+  --model {9b,4b}
+  --lora LORA
+  --lora-strength LORA_STRENGTH
+  --steps STEPS
+  --cfg CFG
+  --raw
+  --dry-run
 ```
 
 ---
@@ -350,7 +524,7 @@ options:
 
 ## `gallery`
 
-输出画廊（HTML 产出展示）
+输出画廊（HTML 产出展示，支持视频）
 
 ```
 usage: go_gallery.py [-h] [--output OUTPUT] [--serve] [--port PORT]
@@ -362,6 +536,22 @@ options:
   --output OUTPUT  输出 HTML 路径（默认 outputs/gallery.html）
   --serve          启动 HTTP 服务（浏览器实时查看）
   --port PORT      HTTP 服务端口（默认 8765）
+```
+
+---
+
+## `serve`
+
+REST API 服务（FastAPI，异步作业队列，支持图像/视频）
+
+```
+usage: go_serve.py [-h] [--port PORT]
+
+REST API 服务（FastAPI）
+
+options:
+  -h, --help   show this help message and exit
+  --port PORT  端口
 ```
 
 ---
@@ -409,11 +599,17 @@ options:
 ```
 名称                                       节点    API    类型
 ----------------------------------------------------------------------
-Flux.2+Klein+身份一致性引导+单图工作流                   2 ❌      
-galgame_heroine_gacha_sdxl                   2 ❌      
-galgame_heroine_knives_lora_sdxl             2 ❌      
+Flux.2+Klein+身份一致性引导+单图工作流                   0 ❌      
+flux_klein_lora                             14 ✅      CFGGuider, CLIPLoader, CLIPTextEncode ... (+11)
+flux_klein_txt2img                          13 ✅      CFGGuider, CLIPLoader, CLIPTextEncode ... (+10)
+galgame_heroine_gacha_sdxl                   0 ❌      
+galgame_heroine_knives_lora_sdxl             0 ❌      
+sdxl_lora                                    8 ✅      CLIPTextEncode, CheckpointLoaderSimple, EmptyLatentImage ... (+4)
+sdxl_lora_ipadapter                         10 ✅      CLIPTextEncode, CheckpointLoaderSimple, EmptyLatentImage ... (+6)
+sdxl_multi_char                              9 ✅      CLIPTextEncode, CheckpointLoaderSimple, EmptyLatentImage ... (+4)
+sdxl_txt2img                                 7 ✅      CLIPTextEncode, CheckpointLoaderSimple, EmptyLatentImage ... (+3)
 workflow_knives_lora_sdxl                    8 ✅      CLIPTextEncode, CheckpointLoaderSimple, EmptyLatentImage ... (+4)
-workflow_knives_lora_sdxl_ipadapter          2 ❌      
+workflow_knives_lora_sdxl_ipadapter          0 ❌      
 workflow                                     7 ✅      CLIPTextEncode, CheckpointLoaderSimple, EmptyLatentImage ... (+3)
 workflow_caster_lora_sdxl                    8 ✅      CLIPTextEncode, CheckpointLoaderSimple, EmptyLatentImage ... (+4)
 workflow_multi_char_lora_sdxl               11 ✅      CLIPTextEncode, CheckpointLoaderSimple, EmptyLatentImage ... (+6)
@@ -450,7 +646,7 @@ workflow_multi_char_lora_sdxl               11 ✅      CLIPTextEncode, Checkpoi
 模型管理（list / info / check / download）
 
 ```
-用法: python -m agents models list [category]|info <name>|check <workflow_name>|download <url>
+用法: python -m agents models list [category]|info <name>|check <workflow_name>|check video|download <url>
 ```
 
 ### `models list`

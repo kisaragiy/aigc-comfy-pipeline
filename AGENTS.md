@@ -10,8 +10,8 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.33.0** — 当前：Output 视频感知 + 视频参数对齐
-- V0.32.0 — 上一版：视频管线完整化（Gallery + Serve + Queue）
+- **V0.34.0** — 当前：模型完整性检查（含视频模型）+ CLI 文档同步
+- V0.33.0 — 上一版：Output 视频感知 + 视频参数对齐
 - V0.27.0 — A/B 测试
 - V0.26.0 — Prompt 兜底 + 质量验证
 - V0.25.0 — Docker 部署
@@ -37,7 +37,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 - V0.5.0 — LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
 - V0.0.XXX — 小修
 
-## 当前版本：V0.33.0
+## 当前版本：V0.34.0
 
 ## 核心能力
 
@@ -83,7 +83,9 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 | 视频 API | `go_serve.py /api/video` | `POST /api/video` | 异步视频作业（T2V/I2V + preset + timeout） |
 | 队列智能感知 | `go_queue.py list` | `python -m agents queue list` | 自动区分 image/video 任务类型 |
 | Output 视频感知 | `output_manager.py` | `python -m agents outputs list` | images/videos 分开统计，show 显示文件列表 |
-| 视频参数对齐 | `go_video.py --sampler --scheduler` | `python -m agents video "..." --sampler dpmpp_2m` | KSampler 参数可自定义，预设含 sampler/scheduler |
+|| 视频参数对齐 | `go_video.py --sampler --scheduler` | `python -m agents video "..." --sampler dpmpp_2m` | KSampler 参数可自定义，预设含 sampler/scheduler |
+|| 视频模型检查 | `model_manager.check_video_models()` | `python -m agents models check video` | Wan2.2 三件套完整性 + 文件大小健康检查 |
+|| CLI 文档同步 | `scripts/gen_cli_docs.py` | `python scripts/gen_cli_docs.py` | 22 个命令自动生成参考文档 |
 
 ## 项目结构
 
@@ -297,6 +299,10 @@ metadata.json 包含完整的生成参数，面试时打开即可证明工程化
 - [ ] `python -m agents serve --help` API 服务器帮助
 - [ ] `python -m agents flux --preset nonexistent --dry-run "test"` 未知预设友好降级
 - [ ] `python -m agents gallery` 无产出时友好提示
+- [ ] `python -m agents models check video` 显示 Wan2.2 三件套状态
+- [ ] `python -m agents models check video` 模型缺失时友好提示
+- [ ] `python -m agents models check video` 文件过小时警告损坏风险
+- [ ] `python scripts/gen_cli_docs.py` 生成 22 个命令的参考文档
 - [ ] gallery 渲染 .mp4 视频为 `<video>` 标签而非 `<img>`
 - [ ] gallery stats 显示 `N videos` 当有视频时
 - [ ] `POST /api/video` 返回 job_id + status
