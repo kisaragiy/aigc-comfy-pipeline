@@ -110,3 +110,68 @@ class TestBatchSummary:
             {"path": "a.png", "result": {"status": "error", "parts": {"脸": {"status": "unknown"}}}},
         ]
         assert self._aggregate(results) == {}
+
+
+# ── inspect JSON 输出 ─────────────────────
+
+class TestInspectJson:
+    """测试 inspect_image 返回 JSON 可序列化。"""
+
+    def test_inspect_result_is_json_serializable(self):
+        """inspect_image 的返回结果可以 JSON 序列化。"""
+        import json
+        result = {
+            "status": "ok",
+            "summary": "全部位正常",
+            "parts": {"脸": {"status": "ok", "detail": "1 张人脸", "confidence": 0.9, "count": 1}},
+            "scores": {"脸": 1.0, "overall": 1.0},
+            "issues": [],
+        }
+        s = json.dumps(result, ensure_ascii=False, indent=2)
+        assert '"status": "ok"' in s
+        assert '"脸"' in s
+        assert '"overall": 1.0' in s
+
+    def test_inspect_json_issues_structure(self):
+        """有问题的质检结果 JSON 包含 issues 字段。"""
+        import json
+        result = {
+            "status": "issues_found",
+            "summary": "[脸:崩了] [手:ok]",
+            "parts": {
+                "脸": {"status": "崩了", "detail": "模糊", "confidence": 0.0, "count": 0},
+                "手": {"status": "ok", "detail": "2 只手", "count": 2},
+            },
+            "scores": {"脸": 0.0, "手": 1.0, "overall": 0.5},
+            "issues": ["脸崩了: 模糊"],
+        }
+        s = json.dumps(result, ensure_ascii=False, indent=2)
+        assert '"脸"' in s
+        assert '"崩了"' in s
+        assert '"手"' in s
+        assert len(json.loads(s)["issues"]) == 1
+
+    @pytest.mark.slow
+    def test_inspect_json_via_cli_png(self):
+        """通过 CLI python -m agents workshop inspect 加 --json 输出 JSON。"""
+        import subprocess
+        import tempfile
+        import cv2
+        import numpy as np
+
+        with tempfile.TemporaryDirectory() as tmp:
+            img_path = Path(tmp) / "test.png"
+            cv2.imencode(".png", np.ones((200, 200, 3), dtype=np.uint8) * 200)[1].tofile(str(img_path))
+
+            result = subprocess.run(
+                [sys.executable, "-m", "agents", "workshop", "inspect", str(img_path), "--json"],
+                capture_output=True, text=True, cwd=Path(__file__).resolve().parent.parent,
+            )
+            assert result.returncode == 0, f"stderr: {result.stderr}"
+            import json
+            data = json.loads(result.stdout)
+            assert "path" in data
+            assert "result" in data
+            assert "status" in data["result"]
+            assert "parts" in data["result"]
+            assert "scores" in data["result"]

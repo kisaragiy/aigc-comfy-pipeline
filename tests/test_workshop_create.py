@@ -283,3 +283,50 @@ class TestGenerateGalleryHtml:
         # 分数字符出现
         assert "1.0" in html
         assert "0.2" in html
+
+    def test_gallery_keyboard_nav_js_array(self):
+        """Gallery HTML 包含键盘导航所需的 JS images 数组。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._sample_result()
+            for i, c in enumerate(result["candidates"]):
+                img_path = Path(tmp) / f"candidate_{i}.png"
+                img_path.write_text("fake-png")
+                c["image"] = str(img_path)
+            result["best"]["image"] = result["candidates"][0]["image"]
+            path = _generate_gallery_html(result, tmp)
+            html = Path(path).read_text(encoding="utf-8")
+        assert "var images = [" in html
+        assert "candidate_00.png" in html
+        assert "candidate_01.png" in html
+
+    def test_gallery_openmodal_uses_index(self):
+        """卡片 onclick 使用 openModal(N) 而非 openModal(this.src)。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._sample_result()
+            for i, c in enumerate(result["candidates"]):
+                img_path = Path(tmp) / f"candidate_{i}.png"
+                img_path.write_text("fake-png")
+                c["image"] = str(img_path)
+            result["best"]["image"] = result["candidates"][0]["image"]
+            path = _generate_gallery_html(result, tmp)
+            html = Path(path).read_text(encoding="utf-8")
+        assert "openModal(0)" in html or "openModal(1)" in html
+        assert "openModal(this.src)" not in html
+
+    def test_gallery_keyboard_handlers(self):
+        """Gallery 包含键盘事件处理代码。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._sample_result()
+            for i, c in enumerate(result["candidates"]):
+                img_path = Path(tmp) / f"candidate_{i}.png"
+                img_path.write_text("fake-png")
+                c["image"] = str(img_path)
+            result["best"]["image"] = result["candidates"][0]["image"]
+            path = _generate_gallery_html(result, tmp)
+            html = Path(path).read_text(encoding="utf-8")
+        assert "ArrowLeft" in html
+        assert "ArrowRight" in html
+        assert "Escape" in html
+        assert "keydown" in html
+        assert "modal-counter" in html
+        assert "currentIdx" in html

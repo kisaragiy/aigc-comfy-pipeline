@@ -997,22 +997,25 @@ usage: python -m agents workshop engine [-h] [--style STYLE] [--ollama]
 逐部位质检报告：`[脸:ok] [左眼:ok] [右眼:ok] [手:正常] [脚:ok] [模糊:正常]`
 
 ```text
-usage: python -m agents workshop inspect [-h] [--verbose] [--annotate] [--open] image_path
+|usage: python -m agents workshop inspect [-h] [--verbose] [--annotate] [--open] [--json] image_path
 
 参数:
   --verbose    详细信息（各部位置信度等）
   --annotate   生成标注图（绘制质检结果到图片上，保存为 <图片名>_annotated.png）
   --open       生成后自动打开标注图（仅 --annotate 时有效）
+  --json       以 JSON 格式输出结构化的质检结果（适合管道/程序处理）
 
 示例:
   python -m agents workshop inspect output/001.png
   python -m agents workshop inspect output/001.png --verbose
   python -m agents workshop inspect output/001.png --annotate     # 质检 + 视觉标注
   python -m agents workshop inspect output/001.png --annotate --open  # 质检 + 标注 + 打开
+  python -m agents workshop inspect output/001.png --json         # JSON 输出
   python -m agents workshop inspect ./outputs/                    # 目录全部图片
   python -m agents workshop inspect "outputs/*.png"               # 通配符
 
 批量模式额外输出：失败原因聚合（⚠️ 脸: 2张 · ⚠️ 手: 1张）
+批量模式 --json：输出 JSON 数组 [{path, result}, ...]
 ```
 
 ### `workshop manga`

@@ -731,6 +731,8 @@ def _workshop_inspect(args: list[str]) -> None:
                         help="生成标注图（绘制质检结果到图片上）")
     parser.add_argument("--open", action="store_true",
                         help="生成后自动打开标注图（仅 --annotate 时有效）")
+    parser.add_argument("--json", action="store_true",
+                        help="以 JSON 格式输出质检结果（更适合程序处理）")
     parsed = parser.parse_args(args)
 
     from workshop.inspect import inspect_image, format_report, annotate_image
@@ -761,14 +763,26 @@ def _workshop_inspect(args: list[str]) -> None:
     results: list[dict[str, object]] = []
     total = len(paths)
     for i, fp in enumerate(paths):
-        if not parsed.verbose:
+        if not parsed.verbose and not parsed.json:
             print(f"\r  [{i+1}/{total}] 质检中 {Path(fp).name}...", end="", flush=True)
         result = inspect_image(fp, verbose=parsed.verbose)
         results.append({"path": fp, "result": result})
 
-    print()  # 换行
+    if not parsed.json:
+        print()  # 换行
 
     # 输出
+    if parsed.json:
+        import json as _json
+        if total == 1:
+            _json.dump({"path": results[0]["path"], "result": results[0]["result"]},
+                       sys.stdout, ensure_ascii=False, indent=2)
+        else:
+            _json.dump([{"path": r["path"], "result": r["result"]} for r in results],
+                       sys.stdout, ensure_ascii=False, indent=2)
+        print()
+        return
+
     if total == 1:
         report = format_report(results[0]["result"])
         print(report)
