@@ -932,7 +932,8 @@ usage: python -m agents workshop create [-h] [--count COUNT] [--style STYLE]
                                         [--output OUTPUT] [--gallery GALLERY]
                                         [--seed SEED] [--open] [--negative NEGATIVE]
                                         [--verbose] [--clean]
-                                        nl_text [nl_text ...]
+                                        [--batch-file BATCH_FILE]
+                                        [nl_text ...]
 
 参数:
   --count COUNT      生成候选数（默认: 4）
@@ -955,6 +956,10 @@ usage: python -m agents workshop create [-h] [--count COUNT] [--style STYLE]
                          自动检测: "不要模糊"→blurry, "别崩手"→bad hands, "太暗"→dark...
   --verbose          详细信息
   --clean            生成前清理输出目录旧文件（删除 *.png/*.json/*.html/gallery/）
+
+  --batch-file PATH  批量文件路径（每行一条 prompt，空行和 # 注释行跳过）
+                     批量模式下自动为每条 prompt 创建独立子目录（<编号>_<slug>/）
+                     生成 batch_metadata.json 汇总结果
 
 Gallery 特性:
   - 键盘导航: ← → 切换候选，ESC 关闭

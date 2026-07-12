@@ -572,3 +572,162 @@ def _summarize_inspect(ins: dict[str, Any]) -> dict[str, Any]:
         "summary": ins.get("summary", ""),
         "overall": ins.get("scores", {}).get("overall", 0),
     }
+
+
+def _make_slug(text: str, max_len: int = 16) -> str:
+    """从文本中提取短 slug（用于子目录名）。"""
+    import re
+    cleaned = re.sub(r'[\\/:*?"<>|]', "", text).strip()
+    # 取前 max_len 个字符
+    return cleaned[:max_len] or "prompt"
+
+
+def create_batch(
+    prompts_file: str,
+    *,
+    dry_run: bool = False,
+    count: int = 4,
+    style_hint: str | None = None,
+    ref_path: str | None = None,
+    preset: str | None = None,
+    min_score: float = 0.0,
+    retry: int = 0,
+    no_validate: bool = False,
+    inspect: bool = True,
+    seed: int = 0,
+    negative_prompt: str = "",
+    use_ollama: bool = False,
+    output_dir: str | None = None,
+    verbose: bool = False,
+) -> list[dict[str, Any]]:
+    """从文本文件批量执行多条 prompt 的完整创作管线。
+
+    Args:
+        prompts_file: 文件路径，每行一条 prompt（空行和 # 注释行跳过）
+        其余参数同 create_from_nl，共享给每条 prompt。
+
+    Returns:
+        每条 prompt 的结果列表（含 prompt_text + error 字段）。
+    """
+    # 1. 解析文件
+    fp = Path(prompts_file)
+    if not fp.is_file():
+        print(f"❌ 批量文件不存在: {prompts_file}")
+        return []
+
+    lines = fp.read_text(encoding="utf-8").splitlines()
+    prompts = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        prompts.append(stripped)
+
+    if not prompts:
+        print("❌ 批量文件中没有有效的 prompt")
+        return []
+
+    total = len(prompts)
+    print(f"\n{'='*60}")
+    print(f"📦 批量管线: {total} 条 prompt")
+    print(f"{'='*60}")
+
+    # 2. 准备输出目录
+    batch_root = Path(output_dir) if output_dir else Path.cwd() / "_batch_output"
+    batch_root.mkdir(parents=True, exist_ok=True)
+
+    results: list[dict[str, Any]] = []
+    ok_count = 0
+    fail_count = 0
+
+    for idx, prompt_text in enumerate(prompts, start=1):
+        slug = _make_slug(prompt_text)
+        sub_dir = str(batch_root / f"{idx:03d}_{slug}")
+        print(f"\n[{idx}/{total}] 📝 {prompt_text[:60]}{'...' if len(prompt_text) > 60 else ''}")
+        print(f"      ┗ 📁 {sub_dir}")
+
+        try:
+            result = create_from_nl(
+                prompt_text,
+                count=count,
+                style_hint=style_hint,
+                ref_path=ref_path,
+                preset=preset,
+                min_score=min_score,
+                retry=retry,
+                no_validate=no_validate,
+                inspect=inspect,
+                dry_run=dry_run,
+                seed=seed,
+                negative_prompt=negative_prompt,
+                use_ollama=use_ollama,
+                output_dir=sub_dir,
+                verbose=verbose,
+            )
+
+            has_error = result.get("error") or result.get("had_errors")
+            status = "❌" if has_error else "✅"
+            ok_count += 0 if has_error else 1
+            fail_count += 1 if has_error else 0
+
+            best = result.get("best", {})
+            best_seed = best.get("seed", "?")
+            best_score = best.get("score", -1)
+            score_str = f"score={best_score:.2f}" if best_score >= 0 else "score=?"
+            candidates = result.get("candidates", [])
+            print(f"      ┗ {status} best=seed={best_seed} {score_str}  |  候选 {len(candidates)} 张")
+
+            result["prompt_text"] = prompt_text
+            result["output_dir"] = sub_dir
+            results.append(result)
+
+        except Exception as exc:
+            fail_count += 1
+            print(f"      ┗ ❌ 异常: {exc}")
+            results.append({
+                "prompt_text": prompt_text,
+                "error": str(exc),
+                "best": {},
+                "candidates": [],
+            })
+
+    # 3. 批量汇总
+    print(f"\n{'='*60}")
+    print(f"📊 批量汇总: {total} 条 | ✅ {ok_count} 成功 | ❌ {fail_count} 失败")
+    for idx, (prompt_text, r) in enumerate(zip(prompts, results), start=1):
+        has_err = r.get("error") or r.get("had_errors")
+        best = r.get("best", {})
+        seed = best.get("seed", "?")
+        score = best.get("score", -1)
+        score_s = f"score={score:.2f}" if score >= 0 else "score=?"
+        print(f"  [{idx}/{total}] {'✅' if not has_err else '❌'} {prompt_text[:50]} → seed={seed} {score_s}")
+    print(f"{'='*60}\n")
+
+    # 4. 保存批量元数据
+    batch_meta = {
+        "created_at": datetime.now().isoformat(timespec="seconds"),
+        "total": total,
+        "success": ok_count,
+        "fail": fail_count,
+        "prompts": [
+            {
+                "text": r.get("prompt_text", ""),
+                "output_dir": r.get("output_dir", ""),
+                "best_seed": r.get("best", {}).get("seed", 0),
+                "best_score": r.get("best", {}).get("score", -1),
+                "error": r.get("error"),
+            }
+            for r in results
+        ],
+    }
+    (batch_root / "batch_metadata.json").write_text(
+        json.dumps(batch_meta, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    print(f"  📁 批量元数据: {batch_root / 'batch_metadata.json'}")
+
+    # 5. 注册到产出管理系统（仅成功的）
+    for r in results:
+        if not r.get("error") and not r.get("had_errors"):
+            _register_output(r)
+
+    return results
