@@ -10,8 +10,9 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.24.0** — 当前：视频生成管线（Wan2.2）
-- V0.23.0 — 上一版：ControlNet 能力补齐
+- **V0.25.0** — 当前：Docker 部署
+- V0.24.0 — 上一版：视频生成管线（Wan2.2）
+- V0.23.0 — ControlNet 能力补齐
 - V0.22.0 — 工作流重建工程
 - V0.21.0 — CLI 文档自动生成
 - V0.20.0 — 一键诊断修复 (doctor)
@@ -32,7 +33,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 - V0.5.0 — LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
 - V0.0.XXX — 小修
 
-## 当前版本：V0.24.0
+## 当前版本：V0.25.0
 
 ## 核心能力
 
@@ -63,6 +64,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 | 高质量工作流 | `workflows/*.json` | `python scripts/build_workflows.py` | 6 个 API 格式工作流，带 _meta 元数据 |
 | ControlNet | `go_control.py` | `python -m agents control` | depth/openpose/softedge/tile/inpaint/lineart 引导生图 |
 | 视频生成 | `go_video.py` | `python -m agents video` | Wan2.2 T2V/I2V，帧数/帧率/分辨率控制 |
+| Docker 部署 | `Dockerfile` + `docker-compose.yml` | `docker-compose up` | 三服务容器化（GPU 直通） |
 
 ## 项目结构
 
@@ -254,3 +256,5 @@ metadata.json 包含完整的生成参数，面试时打开即可证明工程化
 - [ ] `python -m agents control "test" --ref test.png --type depth --dry-run` 跳过提交
 - [ ] `python -m agents video --help` 显示视频参数
 - [ ] `python -m agents video "test" --frames 25 --dry-run` 跳过提交
+- [ ] `docker build -t aigc-pipeline .` 构建成功
+- [ ] `docker run --rm aigc-pipeline --help` 显示帮助
