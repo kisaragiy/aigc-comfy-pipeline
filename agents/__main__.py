@@ -7,6 +7,7 @@ Usage:
     python -m agents ipa [options] [prompt]
     python -m agents multi [options] [prompt]
     python -m agents outputs list|show <id>|clean [--days N]
+    python -m agents workflow list|show <name>|schema <name>|check <name>
     python -m agents check
     python -m agents --version
 """
@@ -46,6 +47,107 @@ def _run_check() -> None:
         f"  Ollama  ({comfy_utils.DEFAULT_OLLAMA_URL}): "
         f"{'✅' if ollama_ok else '❌ 未连接（将自动降级到原始输入模式）'}"
     )
+
+
+def _run_workflow() -> None:
+    """Handle 'workflow list|show|schema|check' subcommands."""
+    from agents.workflow_manager import (
+        check_deps,
+        extract_schema,
+        find_workflow,
+        get_workflow_path,
+        list_workflows,
+        show_graph,
+    )
+
+    if len(sys.argv) < 3:
+        _show_workflow_help()
+        return
+
+    action = sys.argv[2]
+
+    if action == "list":
+        wfs = list_workflows()
+        if not wfs:
+            print("未找到 workflow 文件。")
+            return
+        print(f"\n{'名称':40s} {'节点':5s} {'API':5s}  类型")
+        print("-" * 70)
+        for w in wfs:
+            api = "✅" if w["is_api_format"] else "❌"
+            types = ", ".join(w["class_types"][:3])
+            if len(w["class_types"]) > 3:
+                types += f" ... (+{len(w['class_types'])-3})"
+            print(f"{w['name']:40s} {w['node_count']:5d} {api:5s}  {types}")
+
+    elif action == "show":
+        if len(sys.argv) < 4:
+            print("用法: python -m agents workflow show <name>")
+            return
+        name = sys.argv[3]
+        wf = find_workflow(name)
+        if wf is None:
+            print(f"未找到 workflow: {name}")
+            return
+        path = get_workflow_path(name)
+        print(f"\nWorkflow: {name}")
+        print(f"路径:     {path}")
+        print()
+        print("节点图:")
+        print(show_graph(wf))
+
+    elif action == "schema":
+        if len(sys.argv) < 4:
+            print("用法: python -m agents workflow schema <name>")
+            return
+        name = sys.argv[3]
+        wf = find_workflow(name)
+        if wf is None:
+            print(f"未找到 workflow: {name}")
+            return
+        schema = extract_schema(wf)
+        print(f"\nWorkflow: {name}")
+        print(f"参数数:   {schema['parameter_count']}")
+        print(f"节点数:   {schema['node_count']}")
+        print(f"有提示词: {schema['has_prompt']}")
+        print(f"有 Seed:  {schema['has_seed']}")
+        print(f"有 Steps: {schema['has_steps']}")
+        print(f"有 CFG:   {schema['has_cfg']}")
+        print(f"有 LoRA:  {schema['has_lora']}")
+        print(f"有 Checkpoint: {schema['has_checkpoint']}")
+        print()
+        print("可控参数:")
+        for p in schema["parameters"]:
+            print(f"  [{p['node_id']}] {p['class_type']}.{p['input_name']} ({p['category']})")
+
+    elif action == "check":
+        if len(sys.argv) < 4:
+            print("用法: python -m agents workflow check <name>")
+            return
+        name = sys.argv[3]
+        wf = find_workflow(name)
+        if wf is None:
+            print(f"未找到 workflow: {name}")
+            return
+        result = check_deps(wf)
+        if not result.get("comfy_online"):
+            print("ComfyUI 未运行，无法检查依赖。")
+            print("请先启动 ComfyUI 再运行: python -m agents check")
+            return
+        if result["all_nodes_ok"]:
+            print(f"✅ 所有 {result['total_nodes']} 个节点依赖满足。")
+        else:
+            print(f"❌ 缺少 {len(result['missing_nodes'])} 个节点:")
+            for ct in result["missing_nodes"]:
+                print(f"   - {ct}")
+            print("处理: 使用 ComfyUI Manager 或 `comfy node install` 安装对应自定义节点。")
+
+    else:
+        _show_workflow_help()
+
+
+def _show_workflow_help() -> None:
+    print("用法: python -m agents workflow list|show <name>|schema <name>|check <name>")
 
 
 def _run_outputs() -> None:
@@ -145,6 +247,10 @@ def main() -> None:
         _run_outputs()
         return
 
+    if command == "workflow":
+        _run_workflow()
+        return
+
     script_map = {
         "run": "run.py",
         "lora": "go_knives_lora.py",
@@ -191,6 +297,7 @@ def _show_help() -> None:
         ("ipa", "IPAdapter 锁脸文生图（参考图驱动面部一致性）"),
         ("multi", "多角色 LoRA 同图（Knives + Caster + FaceDetailer）"),
         ("check", "环境检查（ComfyUI / Ollama 连通性）"),
+        ("workflow", "工作流模板管理（list / show / schema / check）"),
         ("outputs", "产出管理（list / show / clean）"),
     ]:
         print(f"  {name:12s}  {desc}")
