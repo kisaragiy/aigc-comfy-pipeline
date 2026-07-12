@@ -10,7 +10,7 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.53.0** — 当前：Manga CLI 角色动态定义 + 分镜多角色支持<br>　　　　　　Manga `--char "名:服饰:发型:特征"` 支持 1~4 角色动态分镜<br>　　　　　　`_template_storyboard` 根据角色数自适应生成 2~6 个镜<br>　　　　　　`_ollama_generate_storyboard` 角色定义优雅输出 + 多角色提示<br>　　　　　　版本 0.53.0<br>　　　　　　
+- **V0.54.0** — 当前：Create 实时进度 + 候选 Gallery 画廊<br>　　　　　　workshop create 生成进度始终显示 (seed/score/✅❌)<br>　　　　　　`--gallery <dir>` 生成全候选 HTML 画廊 (含评分/质检/🏆最优) <br>　　　　　　版本 0.54.0<br>　　　　　　
 - **V0.48.0** — 上一版：serve API 升级（新增 control/sweep/abtest/bestof 端点）<br>　　　　　　`POST /api/control` — ControlNet 条件生图，ref/type/model，走 generate_with_quality <br>　　　　　　`POST /api/sweep` — 参数网格扫描，grid/type，走 generate_with_quality <br>　　　　　　`POST /api/abtest` — A/B 双 Prompt 对比，prompts[2]，走 generate_with_quality <br>　　　　　　`POST /api/bestof` — Best of N 多轮择优，count/prompt，走 generate_with_quality<br>　　　　　　API 版本升至 0.48.0，新增 4 个后台异步端点 + quality 门禁全覆盖
 - **V0.47.0** — 上一版：AB Test / Best of N 升级 generate_with_quality + 质量门禁<br>　　　　　　`python -m agents abtest --prompts "A" "B" --preset anime --min-score 0.2` <br>　　　　　　`python -m agents bestof "prompt" --count 4 --retry 2 --min-score 0.25` <br>　　　　　　替换直调 `build_flux_workflow` 为 `generate_with_quality`，新增 `--preset`/`--min-score`/`--retry`/`--no-validate`
 - **V0.46.0** — 上一版：gallery 新增全屏/幻灯片/键盘导航<br>　　　　　　点击图片全屏 Lightbox，← → 翻页，缩略图条，Esc 关闭
@@ -50,7 +50,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 - V0.5.0 — LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
 - V0.0.XXX — 小修
 
-## 当前版本：V0.53.0
+## 当前版本：V0.54.0
 
 ## 核心能力
 

@@ -929,15 +929,31 @@ usage: python -m agents workshop create [-h] [--count COUNT] [--style STYLE]
                                         [--ref REF] [--preset PRESET]
                                         [--min-score MIN_SCORE] [--retry RETRY]
                                         [--no-inspect] [--preview] [--ollama]
-                                        [--output OUTPUT] [--verbose]
+                                        [--output OUTPUT] [--gallery GALLERY]
+                                        [--verbose]
                                         nl_text [nl_text ...]
 
+参数:
+  --count COUNT      生成候选数（默认: 4）
+  --style STYLE      画风提示 (anime/photoreal/cg/...)
+  --ref REF          参考图路径（角色特征分析）
+  --preset PRESET    质量预设 (quality/balanced/fast/...)
+  --min-score SCORE  最低 CLIP 分
+  --retry RETRY      失败重试次数
+  --no-inspect       跳过质检
+  --preview          预览模式（跳过生成）
+  --ollama           使用 Ollama 优化 prompt
+  --output OUTPUT    结果输出目录（保存 metadata.json + best.png）
+  --gallery GALLERY  候选画廊输出目录（生成 index.html 可浏览所有候选图）
+  --verbose          详细信息
+
 示例:
-  python -m agents workshop create "银发少女校服教室窗边逆光" --count 6 --inspect
+  python -m agents workshop create "银发少女校服教室窗边逆光" --count 6
   python -m agents workshop create "prompt" --style anime --ref ref.png
-  python -m agents workshop create "prompt" --preview  # 仅预览 prompt，不提交
-  python -m agents workshop create "prompt" --ollama  # 使用 Ollama 增强 prompt
-  python -m agents workshop create "prompt" --output ./my_create  # 保存结果
+  python -m agents workshop create "prompt" --preview  # 仅预览 prompt
+  python -m agents workshop create "prompt" --ollama  # 使用 Ollama 增强
+  python -m agents workshop create "prompt" --output ./result  # 保存最优
+  python -m agents workshop create "prompt" --gallery ./gallery  # 所有候选 HTML 画廊
 ```
 
 ### `workshop engine`
