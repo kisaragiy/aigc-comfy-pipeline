@@ -195,16 +195,24 @@ def main() -> None:
     parser.add_argument("--raw", action="store_true", help="跳过 Ollama，prompt 作正向提示词")
     parser.add_argument("--negative", default="", help="负向提示词")
     parser.add_argument("--seed", type=int, default=-1, help="随机种子（-1 自动）")
-    parser.add_argument("--steps", type=int, default=20, help="采样步数")
-    parser.add_argument("--cfg", type=float, default=1.0, help="CFG 引导强度")
+    parser.add_argument("--steps", type=int, default=None, help="采样步数（预设自动）")
+    parser.add_argument("--cfg", type=float, default=None, help="CFG 引导强度（预设自动）")
     parser.add_argument("--width", type=int, default=1024, help="输出宽度")
     parser.add_argument("--height", type=int, default=1024, help="输出高度")
     parser.add_argument("--model", choices=["9b", "4b"], default="9b", help="模型变体")
     parser.add_argument("--lora", default=None, help="LoRA 权重文件名")
     parser.add_argument("--lora-strength", type=float, default=1.0, help="LoRA 权重")
-    parser.add_argument("--sampler", default="euler", help="采样器")
-    parser.add_argument("--scheduler", default="normal", help="调度器")
+    parser.add_argument("--sampler", default=None, help="采样器（预设自动）")
+    parser.add_argument("--scheduler", default=None, help="调度器（预设自动）")
     parser.add_argument("--prefix", default="flux_klein", help="输出文件名前缀")
+    parser.add_argument("--preset", choices=["quality", "balanced", "fast", "portrait"],
+                        default=None, help="质量预设")
+    parser.add_argument("--min-score", type=float, default=0.0,
+                        help="最低 CLIP 评分（≤0 跳过验证）")
+    parser.add_argument("--retry", type=int, default=0,
+                        help="质量不合格时最大重试次数")
+    parser.add_argument("--no-validate", action="store_true",
+                        help="跳过质量验证")
     args = parser.parse_args()
 
     user = args.prompt
@@ -221,10 +229,14 @@ def main() -> None:
         positive = optimize_prompt(user)
         print(f"[info] 优化后提示词: {positive[:300]}...")
 
-    # 构建工作流
-    wf, seed_actual = build_flux_workflow(
-        prompt=positive,
-        negative_prompt=args.negative,
+    # 使用质量预设 + 自动门禁
+    from comfy_utils import generate_with_quality
+
+    qr = generate_with_quality(
+        build_flux_workflow, positive,
+        min_score=args.min_score if not args.no_validate else 0.0,
+        max_retries=args.retry,
+        preset=args.preset,
         seed=args.seed,
         steps=args.steps,
         cfg=args.cfg,
@@ -236,28 +248,31 @@ def main() -> None:
         sampler=args.sampler,
         scheduler=args.scheduler,
         filename_prefix=args.prefix,
+        negative_prompt=args.negative,
     )
 
-    # 提交
-    try:
-        result = comfy_post_prompt(wf, prompt_url=COMFY_URL)
-    except RuntimeError as exc:
-        print(exc, file=sys.stderr)
-        sys.exit(1)
+    prompt_id = qr.get("prompt_id", "")
+    seed_actual = qr.get("seed", 0)
+    images = qr.get("images", [])
 
-    prompt_id = result.get("prompt_id", "")
-
-    if prompt_id and prompt_id != "dry-run":
+    if images:
         from output_manager import save_workflow_outputs
         from comfy_utils import comfy_base_url
 
-        save_workflow_outputs(prompt_id, comfy_base_url(COMFY_URL), "flux", {
-            "prompt": positive,
-            "seed": seed_actual,
-            "model": args.model,
-            "lora": args.lora,
-            "lora_strength": args.lora_strength,
-        })
+        save_workflow_outputs(
+            qr.get("prompt_id", "?"),
+            comfy_base_url(COMFY_URL),
+            "flux",
+            {
+                "prompt": positive,
+                "seed": seed_actual,
+                "model": args.model,
+                "lora": args.lora,
+                "lora_strength": args.lora_strength,
+                "score": qr.get("score"),
+                "retries": qr.get("retries", 0),
+            },
+        )
 
     print(f"\n====================")
     print(f"Flux.2 Klein ({args.model}) 已提交")
@@ -266,7 +281,12 @@ def main() -> None:
     print(f"  seed:      {seed_actual}")
     if args.lora:
         print(f"  LoRA:      {args.lora} (strength={args.lora_strength})")
-    print(f"  节点数:    {len(wf)}")
+    score = qr.get("score")
+    if score is not None:
+        print(f"  CLIP 评分: {score:.3f}")
+    retries = qr.get("retries", 0)
+    if retries > 0:
+        print(f"  重试次数:  {retries}")
     print(f"  正向:      {positive[:200]}")
 
 
