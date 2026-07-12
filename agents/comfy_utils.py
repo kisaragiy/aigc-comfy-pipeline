@@ -81,6 +81,60 @@ def ollama_generate_or_fallback(
         return fallback if fallback is not None else prompt
 
 
+SIX_DIMENSION_TEMPLATE = """\
+你是一个 SDXL / Flux 提示词工程师。按六维度构图法将用户描述转为英文 danbooru 标签。
+输出格式：一段逗号分隔的英文标签，不要编号、不要解释、不要引号。
+
+六维架构：
+[画风定位] 画风、渲染风格
+[主体细节] 角色名、外貌、服装、表情、姿势、神态
+[环境氛围] 背景、天气、季节、时间、微粒
+[光影魔法] 光源方向、体积光、反射、色彩
+[镜头语言] 景别、焦距、机位、角度
+[质量修饰] masterpiece, best quality, ultra detailed, 8k, cinematic lighting
+
+用户描述：{user_input}
+
+处理规则：
+- 如果用户提到角色名（knives/caster），自动追加对应触发词和发色瞳色标签
+- 每个维度至少 2-3 个标签
+- 角色优先使用动漫/anime 画风
+- 颜色要具体（如"深红"而非"红色"）
+- 材质要明确（如"丝绸质地"而非"漂亮衣服"）
+- 光线必须标注方向
+"""
+
+
+def optimize_prompt(
+    user_input: str,
+    *,
+    url: str | None = None,
+    model: str | None = None,
+    timeout: float = 120,
+) -> str:
+    """六维度构图法优化提示词。
+
+    使用 Ollama 将用户自然语言描述转为结构化英文 danbooru 标签。
+    若 Ollama 不可用，返回模板化的基础提示词。
+
+    Args:
+        user_input: 中文自然语言描述
+        url: Ollama URL
+        model: Ollama 模型名
+        timeout: 超时秒数
+
+    Returns:
+        优化后的英文提示词标签串
+    """
+    prompt = SIX_DIMENSION_TEMPLATE.format(user_input=user_input)
+    try:
+        return ollama_generate(prompt, url=url, model=model, timeout=timeout)
+    except (RuntimeError, requests.RequestException) as exc:
+        print(f"[warn] optimize_prompt Ollama 不可用: {exc}", file=sys.stderr)
+        # 基础降级：将用户输入作为 raw prompt
+        return user_input
+
+
 def ollama_generate(
     prompt: str,
     *,
