@@ -503,6 +503,7 @@ def _workshop_create(args: list[str]) -> None:
     parser.add_argument("--preview", action="store_true", help="预览模式（跳过生成）")
     parser.add_argument("--ollama", action="store_true", help="使用 Ollama 优化 prompt")
     parser.add_argument("--output", default=None, help="结果输出目录（保存 metadata.json + best.png）")
+    parser.add_argument("--gallery", default=None, help="候选画廊输出目录（生成 index.html 可浏览所有候选图）")
     parser.add_argument("--verbose", action="store_true", help="详细信息")
     parsed = parser.parse_args(args)
 
@@ -526,6 +527,7 @@ def _workshop_create(args: list[str]) -> None:
         use_ollama=parsed.ollama,
         output_dir=parsed.output,
         verbose=parsed.verbose,
+        gallery_dir=parsed.gallery,
     )
 
     if parsed.preview:

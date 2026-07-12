@@ -51,6 +51,7 @@ def create_from_nl(
     use_ollama: bool = False,
     output_dir: str | None = None,
     verbose: bool = False,
+    gallery_dir: str | None = None,
 ) -> dict[str, Any]:
     """自然语言描述 → 生成多张候选 → 质检排序 → 返回最优。
 
@@ -129,8 +130,7 @@ def create_from_nl(
 
     for i in range(count):
         s = seed + i if seed > 0 else -1
-        if verbose:
-            print(f"\n[{i+1}/{count}] seed={s}...")
+        print(f"\r  [{i+1}/{count}] 生成中 seed={s}...", end="", flush=True)
 
         try:
             qr = generate_with_quality(
@@ -144,8 +144,7 @@ def create_from_nl(
             )
         except Exception as exc:
             had_errors = True
-            if verbose:
-                print(f"   ❌ 生成失败: {exc}")
+            print(f"\r  [{i+1}/{count}] ❌ seed={s}: {exc}")
             candidates.append({
                 "seed": s,
                 "image": "",
@@ -171,13 +170,16 @@ def create_from_nl(
         }
         candidates.append(candidate)
 
-        if verbose:
-            print(f"   score={candidate['score']} | {'✅' if image_path else '❌无图片'} {image_path}")
+        score_str = f"score={candidate['score']:.2f}" if candidate['score'] >= 0 else "score=?"
+        img_tag = "✅" if image_path else "❌"
+        print(f"\r  [{i+1}/{count}] {img_tag} seed={candidate['seed']} {score_str}  ")
 
     # 4. 逐张质检
     if inspect and candidates:
         if verbose:
-            print(f"\n🔍 质检 {len(candidates)} 张...")
+            print(f"  🔍 质检 {len(candidates)} 张...")
+        else:
+            print()
         for c in candidates:
             if c.get("error"):
                 c["inspect"] = {"status": "error", "error": c["error"]}
@@ -217,6 +219,13 @@ def create_from_nl(
 
     _maybe_save_output(result, output_dir)
     _register_output(result)  # 自动注册到产出管理系统
+
+    # 生成 gallery HTML
+    if gallery_dir and result.get("candidates"):
+        gallery_path = _generate_gallery_html(result, gallery_dir)
+        if gallery_path:
+            print(f"  🖼️  Gallery: {gallery_path}")
+
     return result
 
 
@@ -273,6 +282,107 @@ def _register_output(result: dict[str, Any]) -> None:
         save_run("workshop-create", [img_path], metadata)
     except Exception:
         pass  # output_manager 不可用时静默跳过
+
+
+def _generate_gallery_html(result: dict[str, Any], output_dir: str) -> str:
+    """生成全候选 HTML 画廊（self-contained），返回输出路径。"""
+    out = Path(output_dir)
+    out.mkdir(parents=True, exist_ok=True)
+
+    candidates = result.get("candidates", [])
+    best_img = result.get("best", {}).get("image", "")
+
+    # 复制所有候选图到 gallery 目录
+    images: list[dict[str, Any]] = []
+    for i, c in enumerate(candidates):
+        src = c.get("image", "")
+        if not src or not Path(src).is_file():
+            images.append({"file": "", "error": True, "seed": c.get("seed", "?")})
+            continue
+        ext = Path(src).suffix or ".png"
+        dest = out / f"candidate_{i:02d}{ext}"
+        try:
+            import shutil
+            shutil.copy2(src, str(dest))
+        except Exception:
+            pass
+        is_best = (src == best_img)
+        ins = c.get("inspect", {})
+        images.append({
+            "file": dest.name,
+            "seed": c.get("seed", "?"),
+            "score": c.get("score", -1),
+            "summary": ins.get("summary", ""),
+            "overall": ins.get("scores", {}).get("overall", 0) if ins else 0,
+            "best": is_best,
+            "error": False,
+        })
+
+    # 组装 HTML
+    prompt_escaped = result.get("prompt", "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    summary = result.get("inspection_summary", "")
+    rows_html = ""
+    for img in images:
+        if img.get("error"):
+            rows_html += f"""
+<div class="card error">
+  <div class="img-placeholder">❌ seed={img['seed']}</div>
+  <div class="info">seed: {img['seed']} <span class="badge error-badge">ERROR</span></div>
+</div>"""
+            continue
+        best_class = " best" if img.get("best") else ""
+        score_tag = f"<span class='score'>CLIP: {img['score']:.2f}</span>" if img.get("score", -1) >= 0 else ""
+        summary_tag = f"<span class='summary'>{img['summary']}</span>" if img.get("summary") else ""
+        overall_tag = f"<span class='overall'>综合: {img.get('overall', 0):.2f}</span>" if img.get('overall', 0) > 0 else ""
+        best_badge = " <span class='badge best-badge'>🏆 最优</span>" if img.get("best") else ""
+        rows_html += f"""
+<div class="card{best_class}">
+  <img src="{img['file']}" loading="lazy" onclick="openModal(this.src)" />
+  <div class="info">seed: {img['seed']} {score_tag} {overall_tag} {summary_tag}{best_badge}</div>
+</div>"""
+
+    html = f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><title>创作工坊 · Gallery</title>
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{background:#1a1a2e;color:#eee;font-family:system-ui,sans-serif;padding:20px}}
+h1{{font-size:1.5rem;margin-bottom:8px;color:#e8a87c}}
+.prompt{{color:#999;font-size:.85rem;margin-bottom:20px;padding:10px;background:#16213e;border-radius:8px;word-break:break-all}}
+.summary-row{{margin-bottom:16px;font-size:.9rem;color:#aaa}}
+.grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}}
+.card{{background:#16213e;border-radius:10px;overflow:hidden;border:2px solid transparent;transition:transform .15s}}
+.card:hover{{transform:translateY(-2px)}}
+.card.best{{border-color:#e8a87c;box-shadow:0 0 12px rgba(232,168,124,.3)}}
+.card img{{width:100%;height:auto;display:block;cursor:pointer}}
+.card.error{{padding:20px;text-align:center;color:#666}}
+.img-placeholder{{font-size:2rem;padding:40px 0;color:#555}}
+.info{{padding:8px 10px;font-size:.8rem;display:flex;flex-wrap:wrap;gap:4px;align-items:center}}
+.score{{color:#7ec8e3}}
+.overall{{color:#a8e6cf}}
+.summary{{color:#d4a5a5}}
+.badge{{font-size:.7rem;padding:2px 6px;border-radius:4px}}
+.best-badge{{background:#e8a87c33;color:#e8a87c}}
+.error-badge{{background:#ff444433;color:#ff4444}}
+/* modal */
+#modal{{display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.9);cursor:zoom-out;align-items:center;justify-content:center}}
+#modal.show{{display:flex}}
+#modal img{{max-width:95vw;max-height:95vh;object-fit:contain;border-radius:4px}}
+</style></head>
+<body>
+<h1>🖼️ 创作工坊 · Gallery</h1>
+<div class="prompt">{prompt_escaped}</div>
+<div class="summary-row">{f'质检: {summary}' if summary else ''} · 共 {len(images)} 张</div>
+<div class="grid">{rows_html}</div>
+<div id="modal" onclick="this.classList.remove('show')"><img id="modal-img" src="" alt=""/></div>
+<script>
+function openModal(src){{document.getElementById('modal-img').src=src;document.getElementById('modal').classList.add('show')}}
+</script>
+</body></html>"""
+
+    gallery_file = out / "index.html"
+    gallery_file.write_text(html, encoding="utf-8")
+    return str(gallery_file.resolve())
 
 
 def _summarize_inspect(ins: dict[str, Any]) -> dict[str, Any]:
