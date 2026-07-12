@@ -10,8 +10,9 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.27.0** — 当前：A/B 测试
-- V0.26.0 — 上一版：Prompt 兜底 + 质量验证
+- **V0.28.0** — 当前：API 服务化
+- V0.27.0 — 上一版：A/B 测试
+- V0.26.0 — Prompt 兜底 + 质量验证
 - V0.25.0 — Docker 部署
 - V0.24.0 — 视频生成管线（Wan2.2）
 - V0.23.0 — ControlNet 能力补齐
@@ -35,7 +36,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 - V0.5.0 — LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
 - V0.0.XXX — 小修
 
-## 当前版本：V0.27.0
+## 当前版本：V0.28.0
 
 ## 核心能力
 
@@ -71,6 +72,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 | 质量验证 | `go_validate.py` | `python -m agents validate` | CLIP score + 崩脸检测 + 图像质量 |
 | A/B 测试 | `go_abtest.py` | `python -m agents abtest` | 同 seed prompt 对比 |
 | Best of N | `go_abtest.py` | `python -m agents bestof` | 多 seed 自动挑优 + 排名 |
+| API 服务 | `go_serve.py` | `python -m agents serve` | FastAPI REST API，异步作业队列 |
 
 ## 项目结构
 
@@ -96,6 +98,7 @@ agents/                    # Python 编排脚本（产品）
   go_video.py               #   Wan2.2 视频生成
   go_validate.py            #   出图质量验证
   go_abtest.py              #   A/B 测试 + Best of N
+  go_serve.py               #   REST API 服务
   go_knives_lora.py        #   角色 LoRA 文生图（主力脚本）
   go_knives_ipadapter.py   #   IPAdapter 锁脸（复用 go_knives_lora 的构建函数）
   go_multi_char_lora.py    #   多角色同框
