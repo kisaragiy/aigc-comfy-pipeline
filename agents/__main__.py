@@ -19,6 +19,7 @@ Usage:
     python -m agents validate --image <path> [--prompt "text"]
     python -m agents abtest --prompts "A" "B" [--seed N]
     python -m agents bestof <prompt> --count N
+    python -m agents serve [--port PORT]
     python -m agents outputs list|show <id>|clean [--days N]
     python -m agents workflow list|show <name>|schema <name>|check <name>
     python -m agents models list [category]|info <name>|check <workflow_name>
@@ -386,6 +387,7 @@ def main() -> None:
         "validate": "go_validate.py",
         "abtest": "go_abtest.py",
         "bestof": "go_abtest.py",
+        "serve": "go_serve.py",
     }
 
     if command not in script_map:
@@ -436,6 +438,8 @@ def main() -> None:
             from agents.go_abtest import main_abtest as target_main
         elif command == "bestof":
             from agents.go_abtest import main_bestof as target_main
+        elif command == "serve":
+            from agents.go_serve import main as target_main
         else:
             raise ValueError(f"Unknown command: {command}")
         target_main()
@@ -465,6 +469,7 @@ def _show_help() -> None:
         ("validate", "出图质量评估（CLIP score / 崩脸检测）"),
         ("abtest", "Prompt A/B 对比测试（同 seed 控制变量）"),
         ("bestof", "多 seed 自动挑优（CLIP 评分排名）"),
+        ("serve", "REST API 服务（FastAPI，异步作业队列）"),
         ("check", "环境检查（ComfyUI / Ollama 连通性）"),
         ("workflow", "工作流模板管理（list / show / schema / check）"),
         ("models", "模型管理（list / info / check）"),
