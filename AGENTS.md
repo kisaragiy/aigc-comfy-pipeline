@@ -10,13 +10,14 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.8.0** — 当前：工作流模板管理 + 依赖检查
-- V0.7.0 — 上一版：管线健壮性 + 验证（健康检查、Ollama 自动降级、dry-run）
+- **V0.9.0** — 当前：模型管理（列表/查询/依赖检查）
+- V0.8.0 — 上一版：工作流模板管理 + 依赖检查
+- V0.7.0 — 管线健壮性 + 验证（健康检查、Ollama 自动降级、dry-run）
 - V0.6.0 — 统一 CLI + 输出管理
 - V0.5.0 — LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
-- V0.0.XXX — 小修：bug fix、依赖更新、文档补全、参数调整
+- V0.0.XXX — 小修
 
-## 当前版本：V0.8.0
+## 当前版本：V0.9.0
 
 ## 核心能力
 
@@ -33,6 +34,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 | Flux.2 Klein 身份一致性 | agents 脚本加载 workflows/JSON | — | 身份引导 + 单图工作流 |
 | Prompt 优化 | `comfy_utils.optimize_prompt()` | — | 六维度构图法转为结构化英文 tag |
 | 工作流管理 | `workflow_manager.py` | `python -m agents workflow` | 模板扫描、参数 schema 提取、节点依赖检查 |
+| 模型管理 | `model_manager.py` | `python -m agents models` | 列出已安装模型、查询详情、workflow 模型检查 |
 
 ## 项目结构
 
@@ -44,6 +46,7 @@ agents/                    # Python 编排脚本（产品）
   comfy_utils.py           #   共享工具库（ComfyUI API / Ollama / 图片等待）
   output_manager.py        #   产出管理（结构化元数据）
   workflow_manager.py      #   工作流模板管理（扫描/schema/检查）
+  model_manager.py         #   模型管理（列表/查询/依赖检查）
   go_knives_lora.py        #   角色 LoRA 文生图（主力脚本）
   go_knives_ipadapter.py   #   IPAdapter 锁脸（复用 go_knives_lora 的构建函数）
   go_multi_char_lora.py    #   多角色同框
@@ -174,3 +177,6 @@ metadata.json 包含完整的生成参数，面试时打开即可证明工程化
 - [ ] `python -m agents workflow show <name>` 显示节点连接图
 - [ ] `python -m agents workflow schema <name>` 提取可控参数
 - [ ] `python -m agents workflow check <name>` ComfyUI 离线时友好提示
+- [ ] `python -m agents models list` 按类型分组列出模型
+- [ ] `python -m agents models info <name>` 显示模型详情
+- [ ] `python -m agents models check <workflow>` 检查模型依赖

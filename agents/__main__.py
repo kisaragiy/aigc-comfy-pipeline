@@ -8,6 +8,7 @@ Usage:
     python -m agents multi [options] [prompt]
     python -m agents outputs list|show <id>|clean [--days N]
     python -m agents workflow list|show <name>|schema <name>|check <name>
+    python -m agents models list [category]|info <name>|check <workflow_name>
     python -m agents check
     python -m agents --version
 """
@@ -150,6 +151,87 @@ def _show_workflow_help() -> None:
     print("用法: python -m agents workflow list|show <name>|schema <name>|check <name>")
 
 
+def _run_models() -> None:
+    """Handle 'models list|info|check' subcommands."""
+    from agents.model_manager import check_workflow_models, get_model_info, list_models
+    from agents.workflow_manager import find_workflow
+
+    if len(sys.argv) < 3:
+        _show_models_help()
+        return
+
+    action = sys.argv[2]
+
+    if action == "list":
+        category = sys.argv[3] if len(sys.argv) > 3 else None
+        models = list_models(category)
+        if not models:
+            msg = f"未找到 {category} 模型。" if category else "未找到模型。"
+            print(msg)
+            print("处理: 确认 ComfyUI 已安装模型到 COMFY_ROOT/models/ 目录下。")
+            return
+
+        if category:
+            print(f"\n{category} 模型 ({len(models)} 个):")
+            for m in models:
+                print(f"  {m['name']:45s} {m['size_mb']:>6.1f}MB")
+        else:
+            by_cat: dict[str, list] = {}
+            for m in models:
+                by_cat.setdefault(m["category"], []).append(m)
+            print(f"\n共 {len(models)} 个模型:\n")
+            for cat in sorted(by_cat):
+                items = by_cat[cat]
+                print(f"  📁 {cat} ({len(items)}):")
+                for m in items:
+                    print(f"    {m['name']:45s} {m['size_mb']:>6.1f}MB")
+                print()
+
+    elif action == "info":
+        if len(sys.argv) < 4:
+            print("用法: python -m agents models info <name>")
+            return
+        name = sys.argv[3]
+        info = get_model_info(name)
+        if info is None:
+            print(f"未找到模型: {name}")
+            return
+        print(f"\n名称:     {info['name']}")
+        print(f"类型:     {info['category']}")
+        print(f"子目录:   {info['subdir']}")
+        print(f"大小:     {info['size_mb']} MB")
+        print(f"修改:     {info['modified']}")
+        print(f"路径:     {info['path']}")
+
+    elif action == "check":
+        if len(sys.argv) < 4:
+            print("用法: python -m agents models check <workflow_name>")
+            return
+        wf_name = sys.argv[3]
+        wf = find_workflow(wf_name)
+        if wf is None:
+            print(f"未找到 workflow: {wf_name}")
+            return
+        result = check_workflow_models(wf)
+        print(f"\nWorkflow: {wf_name}")
+        if result["all_found"]:
+            print(f"✅ 所有 {result['total_refs']} 个模型引用已安装。")
+        else:
+            print(f"❌ 缺少 {len(result['missing'])} 个模型:")
+            for m in result["missing"]:
+                print(f"   - [{m['category']}] {m['value']}")
+            print("\n已安装的模型:")
+            for m in result["found"]:
+                print(f"   ✅ [{m['category']}] {m['value']}")
+
+    else:
+        _show_models_help()
+
+
+def _show_models_help() -> None:
+    print("用法: python -m agents models list [category]|info <name>|check <workflow_name>")
+
+
 def _run_outputs() -> None:
     """Handle 'outputs list|show|clean' subcommands."""
     from agents.output_manager import clean_runs, list_runs, show_run
@@ -251,6 +333,10 @@ def main() -> None:
         _run_workflow()
         return
 
+    if command == "models":
+        _run_models()
+        return
+
     script_map = {
         "run": "run.py",
         "lora": "go_knives_lora.py",
@@ -298,6 +384,7 @@ def _show_help() -> None:
         ("multi", "多角色 LoRA 同图（Knives + Caster + FaceDetailer）"),
         ("check", "环境检查（ComfyUI / Ollama 连通性）"),
         ("workflow", "工作流模板管理（list / show / schema / check）"),
+        ("models", "模型管理（list / info / check）"),
         ("outputs", "产出管理（list / show / clean）"),
     ]:
         print(f"  {name:12s}  {desc}")
