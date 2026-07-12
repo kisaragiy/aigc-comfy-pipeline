@@ -14,6 +14,7 @@ Usage:
     python -m agents queue list|clear|interrupt|free
     python -m agents gallery [--output FILE] [--serve]
     python -m agents doctor [--fix] [--json]
+    python -m agents control --ref <image> --type depth|openpose|... [options] [prompt]
     python -m agents outputs list|show <id>|clean [--days N]
     python -m agents workflow list|show <name>|schema <name>|check <name>
     python -m agents models list [category]|info <name>|check <workflow_name>
@@ -376,6 +377,7 @@ def main() -> None:
         "queue": "go_queue.py",
         "gallery": "go_gallery.py",
         "doctor": "go_doctor.py",
+        "control": "go_control.py",
     }
 
     if command not in script_map:
@@ -416,6 +418,8 @@ def main() -> None:
             from agents.go_gallery import main as target_main
         elif command == "doctor":
             from agents.go_doctor import main as target_main
+        elif command == "control":
+            from agents.go_control import main as target_main
         else:
             raise ValueError(f"Unknown command: {command}")
         target_main()
@@ -440,6 +444,7 @@ def _show_help() -> None:
         ("queue", "ComfyUI 队列管理（list/clear/interrupt/free）"),
         ("gallery", "输出画廊（HTML 产出展示）"),
         ("doctor", "一键诊断修复（环境/依赖/模型检查）"),
+        ("control", "ControlNet 引导生图（depth/openpose/softedge/tile）"),
         ("check", "环境检查（ComfyUI / Ollama 连通性）"),
         ("workflow", "工作流模板管理（list / show / schema / check）"),
         ("models", "模型管理（list / info / check）"),
