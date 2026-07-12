@@ -512,3 +512,78 @@ def _compute_scores(parts: dict[str, Any]) -> dict[str, float]:
 
     scores["overall"] = round(total / count, 3) if count > 0 else 0.0
     return scores
+
+
+def annotate_image(image_path: str, result: dict[str, Any]) -> str:
+    """在图片上绘制质检标注，返回标注后的图片路径。
+
+    标注内容:
+      - 左上角: 综合分 + 状态
+      - 各部位分数文本
+      - 底边: 红色/绿色边框表示整体状态
+
+    Args:
+        image_path: 原图路径
+        result: inspect_image() 的返回值
+
+    Returns:
+        标注图片的绝对路径（<原文件名>_annotated.png）
+    """
+    import cv2
+    import numpy as np
+
+    path = Path(image_path)
+    if not path.is_file():
+        return ""
+    img = cv2.imdecode(np.fromfile(str(path), dtype=np.uint8), cv2.IMREAD_COLOR)
+    if img is None:
+        return ""
+
+    h, w = img.shape[:2]
+    # 缩小字体/间距适应小图
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = min(w, h) / 600.0  # 自适应
+    font_scale = max(0.4, min(font_scale, 0.8))
+    thickness = max(1, int(font_scale * 1.5))
+    gap = int(20 * font_scale * 1.5)
+
+    parts = result.get("parts", {})
+    scores = result.get("scores", {})
+    status = result.get("status", "?")
+    overall = scores.get("overall", 0)
+
+    # 状态颜色
+    ok = status == "ok"
+    color = (0, 200, 0) if ok else (0, 0, 200)  # BGR: 绿=ok, 红=issues
+    dark_bg = (30, 30, 30)
+
+    # 左上信息区: 半透明背景
+    info_y = gap
+    cv2.rectangle(img, (4, 4), (int(w * 0.45), info_y + 20 + len(parts) * gap), dark_bg, -1)
+    cv2.putText(img, f"OVERALL: {overall:.2f}  [{status}]", (8, info_y + 12),
+                font, font_scale, color, thickness)
+
+    # 各部位分数
+    part_names = {"脸": "Face", "左眼": "L-Eye", "右眼": "R-Eye", "手": "Hand",
+                  "脚": "Foot", "模糊": "Blur"}
+    for i, (part, info) in enumerate(parts.items()):
+        pname = part_names.get(part, part[:6])
+        s = info.get("status", "?")
+        is_ok = s in ("ok", "正常")
+        is_bad = s in ("崩了", "模糊", "异常")
+        c = (0, 200, 0) if is_ok else (0, 0, 200) if is_bad else (200, 200, 0)
+        y = info_y + 20 + (i + 1) * gap
+        cv2.putText(img, f"{pname}: {s}", (8, y), font, font_scale * 0.85, c, thickness)
+
+    # 底边状态条: 整体边框
+    bar_h = max(6, int(h * 0.02))
+    cv2.rectangle(img, (0, h - bar_h), (w, h), color, -1)
+    # 覆盖部分边框色块: 左绿右红混合显示
+    mid_x = int(w * overall)
+    bar_color = (0, int(200 * overall), int(200 * (1 - overall)))
+    cv2.rectangle(img, (0, h - bar_h), (mid_x, h), bar_color, -1)
+
+    # 标注文件名: path_stem_annotated.png
+    out_path = path.parent / f"{path.stem}_annotated.png"
+    cv2.imencode(".png", img)[1].tofile(str(out_path))
+    return str(out_path.resolve())
