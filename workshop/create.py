@@ -216,6 +216,7 @@ def create_from_nl(
     }
 
     _maybe_save_output(result, output_dir)
+    _register_output(result)  # 自动注册到产出管理系统
     return result
 
 
@@ -252,6 +253,26 @@ def _maybe_save_output(result: dict[str, Any], output_dir: str | None) -> None:
     (out / "metadata.json").write_text(
         json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8"
     )
+
+
+def _register_output(result: dict[str, Any]) -> None:
+    """将 create 结果自动注册到 output_manager（支持 python -m agents outputs list 查看）。"""
+    best = result.get("best", {})
+    img_path = best.get("image", "")
+    if not img_path or not Path(img_path).is_file():
+        return
+
+    try:
+        from agents.output_manager import save_run
+
+        metadata = {
+            "prompt": result.get("prompt", ""),
+            "inspection_summary": result.get("inspection_summary", ""),
+            "candidates": len(result.get("candidates", [])),
+        }
+        save_run("workshop-create", [img_path], metadata)
+    except Exception:
+        pass  # output_manager 不可用时静默跳过
 
 
 def _summarize_inspect(ins: dict[str, Any]) -> dict[str, Any]:
