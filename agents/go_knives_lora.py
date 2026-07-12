@@ -26,7 +26,7 @@ from comfy_utils import (
     bootstrap_agents_path,
     comfy_base_url,
     comfy_post_prompt,
-    ollama_generate,
+    ollama_generate_or_fallback,
     resolve_comfy_root,
     wait_images,
 )
@@ -120,7 +120,7 @@ def call_llm_outfit(user_text: str, char: dict[str, Any]) -> str:
         f"不要输出 {char['llm_skip']} 等（程序会自动加）。\n"
         "服装要具体（材质、颜色、款式），便于换装。\n"
     )
-    text = ollama_generate(f"{system}\n\n用户描述：{user_text}")
+    text = ollama_generate_or_fallback(f"{system}\n\n用户描述：{user_text}", fallback=user_text)
     return ", ".join(part.strip() for part in text.replace("\n", ",").split(",") if part.strip())
 
 
@@ -269,11 +269,7 @@ def main() -> None:
     elif args.raw:
         positive = build_positive(user, char, args.pose, sdxl=use_sdxl)
     else:
-        try:
-            positive = build_positive(call_llm_outfit(user, char), char, args.pose, sdxl=use_sdxl)
-        except RuntimeError as exc:
-            print(exc, file=sys.stderr)
-            sys.exit(1)
+        positive = build_positive(call_llm_outfit(user, char), char, args.pose, sdxl=use_sdxl)
 
     negative = args.negative or default_negative(char, use_sdxl)
     use_portrait = use_sdxl and not args.full_body

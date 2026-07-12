@@ -1,5 +1,4 @@
 """ComfyUI / Ollama 共用工具（agents 目录内脚本复用）。"""
-
 from __future__ import annotations
 
 import os
@@ -14,6 +13,9 @@ AGENTS_DIR = Path(__file__).resolve().parent
 DEFAULT_COMFY_URL = os.environ.get("COMFY_URL", "http://127.0.0.1:8188/prompt")
 DEFAULT_OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434/api/generate")
 DEFAULT_OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen3:14b")
+
+# Dry-run 标志：设为 True 时 comfy_post_prompt / wait_images 跳过真正提交
+DRY_RUN = False
 
 
 def bootstrap_agents_path() -> Path:
@@ -40,6 +42,43 @@ def resolve_comfy_root() -> Path:
         if candidate.is_dir():
             return candidate.resolve()
     return Path(r"C:\DrawingLive\comfyUI")
+
+
+def check_comfy_health(prompt_url: str | None = None) -> bool:
+    """Check if ComfyUI is reachable and ready. Returns True if healthy."""
+    base = comfy_base_url(prompt_url)
+    try:
+        r = requests.get(f"{base}/queue", timeout=5)
+        return r.status_code == 200
+    except requests.RequestException:
+        return False
+
+
+def check_ollama_health(url: str | None = None) -> bool:
+    """Check if Ollama is reachable. Returns True if healthy."""
+    ollama_url = url or DEFAULT_OLLAMA_URL
+    base = ollama_url.rstrip("/api/generate").rstrip("/")
+    try:
+        r = requests.get(f"{base}/api/tags", timeout=5)
+        return r.status_code == 200
+    except requests.RequestException:
+        return False
+
+
+def ollama_generate_or_fallback(
+    prompt: str,
+    *,
+    url: str | None = None,
+    model: str | None = None,
+    timeout: float = 120,
+    fallback: str | None = None,
+) -> str:
+    """尝试 Ollama 生成，不可用时 warn + 返回 fallback/原始 prompt。"""
+    try:
+        return ollama_generate(prompt, url=url, model=model, timeout=timeout)
+    except (RuntimeError, requests.RequestException) as exc:
+        print(f"[warn] Ollama 不可用，使用原始输入。{exc}", file=sys.stderr)
+        return fallback if fallback is not None else prompt
 
 
 def ollama_generate(
@@ -77,6 +116,10 @@ def comfy_post_prompt(
     prompt_url: str | None = None,
     timeout: float = 60,
 ) -> dict:
+    # Dry-run 模式：跳过真实提交
+    if DRY_RUN:
+        print("[dry-run] 跳过 ComfyUI 提交（参数已就绪）")
+        return {"prompt_id": "dry-run"}
     url = prompt_url or DEFAULT_COMFY_URL
     try:
         r = requests.post(
@@ -116,6 +159,10 @@ def wait_images(
     base: str,
     timeout_s: float = 900.0,
 ) -> list[tuple[str, str]]:
+    if prompt_id == "dry-run":
+        if __debug__:
+            print("[dry-run] 跳过等待出图")
+        return []
     deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
         try:

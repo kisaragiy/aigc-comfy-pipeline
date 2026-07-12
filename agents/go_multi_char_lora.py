@@ -19,7 +19,7 @@ import sys
 import uuid
 from pathlib import Path
 
-from comfy_utils import AGENTS_DIR, bootstrap_agents_path, comfy_post_prompt, ollama_generate
+from comfy_utils import AGENTS_DIR, bootstrap_agents_path, comfy_post_prompt, ollama_generate_or_fallback
 
 bootstrap_agents_path()
 
@@ -52,7 +52,7 @@ def call_llm_scene(user_text: str) -> str:
         "每人用括号权重如 (knives, silver hair, ...:1.2) 与 (caster, pink hair, blue eyes, ...:1.2)。\n"
         "不要解释，不要编号。保留 knives/caster 触发词与发色瞳色约束。\n"
     )
-    text = ollama_generate(f"{system}\n\n用户描述：{user_text}").strip().replace("\n", ", ")
+    text = ollama_generate_or_fallback(f"{system}\n\n用户描述：{user_text}", fallback=user_text).strip().replace("\n", ", ")
     if not text.lower().startswith("masterpiece"):
         text = "masterpiece, best quality, ultra detailed, " + text
     return text
@@ -95,11 +95,7 @@ def main() -> None:
     elif args.raw:
         positive = user
     else:
-        try:
-            positive = call_llm_scene(user)
-        except RuntimeError as exc:
-            print(exc, file=sys.stderr)
-            sys.exit(1)
+        positive = call_llm_scene(user)
 
     negative = args.negative or DEFAULT_NEGATIVE
     use_fd = not args.no_face_detail
