@@ -10,7 +10,8 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.36.0** — 当前：视频批量生成 + 参数扫描视频支持 + Gallery 增强筛选对比
+- **V0.37.0** — 当前：视频后处理工具 + 视频预览模式
+- **V0.36.0** — 视频批量生成 + 参数扫描视频支持 + Gallery 增强筛选对比
 - **V0.35.0** — 模型下载增强（含视频模型预设）+ 模型缓存刷新
 - V0.34.0 — 上一版：模型完整性检查（含视频模型）+ CLI 文档同步
 - V0.27.0 — A/B 测试
@@ -38,7 +39,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 - V0.5.0 — LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
 - V0.0.XXX — 小修
 
-## 当前版本：V0.35.0
+## 当前版本：V0.37.0
 
 ## 核心能力
 
@@ -87,9 +88,12 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 || 视频参数对齐 | `go_video.py --sampler --scheduler` | `python -m agents video "..." --sampler dpmpp_2m` | KSampler 参数可自定义，预设含 sampler/scheduler |
 || 视频模型检查 | `model_manager.check_video_models()` | `python -m agents models check video` | Wan2.2 三件套完整性 + 文件大小健康检查 |
 || CLI 文档同步 | `scripts/gen_cli_docs.py` | `python scripts/gen_cli_docs.py` | 22 个命令自动生成参考文档 |
-|| 视频模型下载 | `model_download.download_video_models()` | `python -m agents models download video` | Wan2.2 三件套一键下载（HF 镜像预设） |
-|| 模型缓存刷新 | `model_manager.refresh_cache()` | `python -m agents models refresh` | 清除扫描缓存，新增模型后不用重启 |
-|| 列表实时扫描 | `list_models(no_cache=True)` | `python -m agents models list --no-cache` | 跳过缓存直接扫描磁盘 |
+||| 视频模型下载 | `model_download.download_video_models()` | `python -m agents models download video` | Wan2.2 三件套一键下载（HF 镜像预设） |
+||| 模型缓存刷新 | `model_manager.refresh_cache()` | `python -m agents models refresh` | 清除扫描缓存，新增模型后不用重启 |
+||| 列表实时扫描 | `list_models(no_cache=True)` | `python -m agents models list --no-cache` | 跳过缓存直接扫描磁盘 |
+||| 视频预览模式 | `go_video.py --preview` | `python -m agents video "..." --preview` | 快速预览(25帧/480p/15步/CFG5)，自动打印正式命令 |
+|| 视频后处理 | `go_video_process.py` | `python -m agents video-process` | GIF/裁剪/变速/拼接，支持运行ID和链式操作 |
+|| Gallery 类型筛选 | `go_gallery.py --type` | `python -m agents gallery --type video` | 按 image/video 过滤，JS 对比视图 + 排序 |
 
 ## 项目结构
 
@@ -113,6 +117,7 @@ agents/                    # Python 编排脚本（产品）
   go_doctor.py              #   一键诊断修复
   go_control.py             #   ControlNet 引导生图
   go_video.py               #   Wan2.2 视频生成
+  go_video_process.py        #   视频后处理（GIF/裁剪/变速/拼接）
   go_validate.py            #   出图质量验证
   go_abtest.py              #   A/B 测试 + Best of N
   go_serve.py               #   REST API 服务

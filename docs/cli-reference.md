@@ -1,6 +1,6 @@
 # CLI 参考文档
 
-> 自动生成于 2026-07-12 21:25
+> 自动生成于 2026-07-12 21:30
 
 AIGC ComfyUI Pipeline v?
 
@@ -295,7 +295,7 @@ options:
 
 ## `video`
 
-Wan2.2 视频生成（Text-to-Video / I2V，帧数/帧率/分辨率控制）
+Wan2.2 视频生成（T2V/I2V + 批量 + 预览）
 
 ```
 usage: go_video.py [-h] [--ref REF] [--frames FRAMES] [--fps FPS]
@@ -304,7 +304,7 @@ usage: go_video.py [-h] [--ref REF] [--frames FRAMES] [--fps FPS]
                    [--prefix PREFIX] [--denoise DENOISE] [--sampler SAMPLER]
                    [--scheduler SCHEDULER] [--timeout TIMEOUT]
                    [--preset {quality,balanced,fast,cinematic,quick}]
-                   [--count COUNT]
+                   [--count COUNT] [--preview]
                    [prompt]
 
 Wan2.2 视频生成（Text-to-Video / Image-to-Video）
@@ -333,6 +333,38 @@ options:
   --preset {quality,balanced,fast,cinematic,quick}
                         视频预设（quality/balanced/fast/cinematic）
   --count COUNT         批量生成数量（不同 seed，默认 1）
+  --preview             快速预览模式（低帧数/低分辨率/低步数/低CFG）
+```
+
+---
+
+## `video-process`
+
+视频后处理（GIF/裁剪/变速/拼接）
+
+```
+usage: go_video_process.py [-h] [--to-gif] [--trim TRIM] [--speed SPEED]
+                           [--concat] [--output OUTPUT] [--recent]
+                           [--run-id RUN_ID] [--gif-fps GIF_FPS]
+                           [--scale SCALE]
+                           [inputs ...]
+
+视频后处理 — GIF / 裁剪 / 变速 / 拼接
+
+positional arguments:
+  inputs             输入文件路径或运行 ID
+
+options:
+  -h, --help         show this help message and exit
+  --to-gif           转换为 GIF
+  --trim TRIM        裁剪片段: START-END (如 00:05-00:15)
+  --speed SPEED      变速系数: 0.5=慢放, 2.0=快放
+  --concat           拼接模式（所有 inputs 拼接为一个视频）
+  --output OUTPUT    输出文件路径
+  --recent           使用 outputs/ 中最新视频
+  --run-id RUN_ID    使用指定运行 ID 的视频
+  --gif-fps GIF_FPS  GIF 帧率（默认 10）
+  --scale SCALE      缩放目标（如 480:-1, 320:240）
 ```
 
 ---

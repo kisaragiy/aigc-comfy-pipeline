@@ -16,6 +16,7 @@ Usage:
     python -m agents doctor [--fix] [--json]
     python -m agents control --ref <image> --type depth|openpose|... [options] [prompt]
     python -m agents video [--frames N] [--fps N] [options] [prompt]
+    python -m agents video-process <file> [--to-gif] [--trim ...] [--speed ...]
     python -m agents validate --image <path> [--prompt "text"]
     python -m agents abtest --prompts "A" "B" [--seed N]
     python -m agents bestof <prompt> --count N
@@ -426,6 +427,7 @@ def main() -> None:
         "doctor": "go_doctor.py",
         "control": "go_control.py",
         "video": "go_video.py",
+        "video-process": "go_video_process.py",
         "validate": "go_validate.py",
         "abtest": "go_abtest.py",
         "bestof": "go_abtest.py",
@@ -474,6 +476,8 @@ def main() -> None:
             from agents.go_control import main as target_main
         elif command == "video":
             from agents.go_video import main as target_main
+        elif command == "video-process":
+            from agents.go_video_process import main as target_main
         elif command == "validate":
             from agents.go_validate import main as target_main
         elif command == "abtest":
@@ -507,7 +511,8 @@ def _show_help() -> None:
         ("gallery", "输出画廊（HTML 产出展示）"),
         ("doctor", "一键诊断修复（环境/依赖/模型检查）"),
         ("control", "ControlNet 引导生图（depth/openpose/softedge/tile）"),
-        ("video", "Wan2.2 视频生成（Text-to-Video / I2V）"),
+        ("video", "Wan2.2 视频生成（T2V/I2V + 批量 + 预览）"),
+        ("video-process", "视频后处理（GIF / 裁剪 / 变速 / 拼接）"),
         ("validate", "出图质量评估（CLIP score / 崩脸检测）"),
         ("abtest", "Prompt A/B 对比测试（同 seed 控制变量）"),
         ("bestof", "多 seed 自动挑优（CLIP 评分排名）"),
