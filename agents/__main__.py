@@ -504,6 +504,7 @@ def _workshop_create(args: list[str]) -> None:
     parser.add_argument("--ollama", action="store_true", help="使用 Ollama 优化 prompt")
     parser.add_argument("--output", default=None, help="结果输出目录（保存 metadata.json + best.png）")
     parser.add_argument("--gallery", default=None, help="候选画廊输出目录（生成 index.html 可浏览所有候选图）")
+    parser.add_argument("--seed", type=int, default=0, help="起始种子（自动递增，0=随机）")
     parser.add_argument("--verbose", action="store_true", help="详细信息")
     parsed = parser.parse_args(args)
 
@@ -524,6 +525,7 @@ def _workshop_create(args: list[str]) -> None:
         retry=parsed.retry,
         inspect=not parsed.no_inspect,
         dry_run=parsed.preview,
+        seed=parsed.seed,
         use_ollama=parsed.ollama,
         output_dir=parsed.output,
         verbose=parsed.verbose,
@@ -716,6 +718,8 @@ def _workshop_manga(args: list[str]) -> None:
                         help='角色定义 (可重复): "名:服饰:发型:特征" 例：--char "Knives:白校服:银发:猫耳红瞳"')
     parser.add_argument("--script-file", default=None,
                         help="从文件读取剧本（替代命令行参数）")
+    parser.add_argument("--output", default=None,
+                        help="输出目录（保存拼页 + 逐格图 + metadata.json）")
     parsed = parser.parse_args(args)
 
     script = ""
@@ -772,9 +776,47 @@ def _workshop_manga(args: list[str]) -> None:
     print("\n🖼️  逐格生图...")
     results = generate_panels(panels, dry_run=parsed.preview)
 
-    print("\n📄 拼页...")
-    output = assemble_page(results)
-    print(f"✅ 漫画页: {output}")
+    # 处理 --output
+    if parsed.output:
+        from agents.comfy_utils import resolve_comfy_root
+        out_dir = Path(parsed.output)
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        # 逐一复制逐格图
+        panel_paths = {}
+        for i, r in enumerate(results):
+            img_path = None
+            for sub, name in r.get("images", []):
+                p = resolve_comfy_root() / "output" / sub / name
+                if p.is_file():
+                    img_path = p
+                    break
+            if img_path:
+                dest = out_dir / f"panel_{i:02d}_{r['shot']}.png"
+                import shutil
+                shutil.copy2(str(img_path), str(dest))
+                panel_paths[r["shot"]] = str(dest)
+
+        print(f"\n📄 拼页 → {out_dir / 'manga_page.png'}...")
+        output = assemble_page(results, output_path=str(out_dir / "manga_page.png"))
+
+        # 保存 metadata.json
+        meta = {
+            "脚本": script,
+            "角色": chars,
+            "风格": parsed.style,
+            "layout": parsed.layout,
+            "逐格图": panel_paths,
+            "拼页": output,
+        }
+        with open(out_dir / "metadata.json", "w", encoding="utf-8") as f:
+            import json
+            json.dump(meta, f, ensure_ascii=False, indent=2)
+        print(f"📋 metadata.json 已保存")
+    else:
+        print("\n📄 拼页...")
+        output = assemble_page(results)
+        print(f"✅ 漫画页: {output}")
 
 
 def main() -> None:
