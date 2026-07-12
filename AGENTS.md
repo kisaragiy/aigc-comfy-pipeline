@@ -10,8 +10,8 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.29.0** — 当前：质量预设 + 自动门禁
-- V0.28.0 — 上一版：API 服务化
+- **V0.30.0** — 当前：API 质量统一 + 视频预设
+- V0.29.0 — 上一版：质量预设 + 自动门禁
 - V0.27.0 — A/B 测试
 - V0.26.0 — Prompt 兜底 + 质量验证
 - V0.25.0 — Docker 部署
@@ -37,7 +37,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 - V0.5.0 — LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
 - V0.0.XXX — 小修
 
-## 当前版本：V0.29.0
+## 当前版本：V0.30.0
 
 ## 核心能力
 
@@ -73,8 +73,9 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 | 质量验证 | `go_validate.py` | `python -m agents validate` | CLIP score + 崩脸检测 + 图像质量 |
 | A/B 测试 | `go_abtest.py` | `python -m agents abtest` | 同 seed prompt 对比 |
 | Best of N | `go_abtest.py` | `python -m agents bestof` | 多 seed 自动挑优 + 排名 |
-| API 服务 | `go_serve.py` | `python -m agents serve` | FastAPI REST API，异步作业队列 |
+| API 服务 | `go_serve.py` | `python -m agents serve` | FastAPI REST API，异步作业队列，flux 支持预设/门禁 |
 | 质量预设 | `comfy_utils.QUALITY_PRESETS` | `--preset quality|fast|portrait` | 优选参数组合，环境变量 AIGC_PRESET |
+| 视频预设 | `comfy_utils.VIDEO_PRESETS` | `--preset quality|fast|cinematic` | 视频专用预设，环境变量 AIGC_VIDEO_PRESET |
 | 自动门禁 | `comfy_utils.generate_with_quality()` | `--min-score 0.25 --retry 3` | 出图验证 + 不合格自动重试 |
 
 ## 项目结构
@@ -278,3 +279,5 @@ metadata.json 包含完整的生成参数，面试时打开即可证明工程化
 - [ ] `docker run --rm aigc-pipeline --help` 显示帮助
 - [ ] `python -m agents flux --preset quality --dry-run "test"` 质量预设
 - [ ] `python -m agents flux --raw --dry-run "test" --min-score 0.25 --retry 2` 自动门禁
+- [ ] `python -m agents video --preset fast --help` 视频预设帮助
+- [ ] `python -m agents serve --help` API 服务器帮助

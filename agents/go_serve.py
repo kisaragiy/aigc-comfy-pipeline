@@ -27,38 +27,38 @@ jobs: dict[str, dict[str, Any]] = {}
 
 
 def _run_flux(job_id: str, params: dict) -> None:
-    """后台执行 Flux 作业。"""
-    from comfy_utils import comfy_base_url, comfy_post_prompt, resolve_comfy_root, wait_images
+    """后台执行 Flux 作业（质量预设 + 自动门禁）。"""
+    from comfy_utils import generate_with_quality, resolve_comfy_root
     from go_flux import build_flux_workflow
-    from output_manager import save_workflow_outputs
 
     try:
         prompt = params.get("prompt", "")
         if not prompt:
             raise ValueError("prompt is required")
 
-        wf, seed = build_flux_workflow(
-            prompt=prompt,
-            steps=params.get("steps", 20),
-            cfg=params.get("cfg", 1.0),
+        qr = generate_with_quality(
+            build_flux_workflow, prompt,
+            preset=params.get("preset"),
+            min_score=params.get("min_score", 0.0),
+            max_retries=params.get("retry", 0),
+            no_validate=params.get("no_validate", False),
+            seed=params.get("seed", -1),
+            steps=params.get("steps"),
+            cfg=params.get("cfg"),
             width=params.get("width", 1024),
             height=params.get("height", 1024),
             model_variant=params.get("model", "9b"),
             lora_name=params.get("lora"),
             lora_strength=params.get("lora_strength", 1.0),
+            sampler=params.get("sampler"),
+            scheduler=params.get("scheduler"),
+            filename_prefix=params.get("prefix", "api_flux"),
         )
-        result = comfy_post_prompt(wf)
-        pid = result.get("prompt_id", "")
-        if not pid:
-            raise RuntimeError("ComfyUI did not return prompt_id")
 
-        jobs[job_id]["prompt_id"] = pid
-        base = comfy_base_url()
-        images = wait_images(pid, base)
-
+        seed = qr["seed"]
         comfy_root = resolve_comfy_root()
         image_urls = []
-        for sub, name in images:
+        for sub, name in qr.get("images", []):
             path = (comfy_root / "output" / sub / name).resolve()
             if path.is_file():
                 image_urls.append(f"/outputs/{name}")
@@ -67,9 +67,11 @@ def _run_flux(job_id: str, params: dict) -> None:
         jobs[job_id]["result"] = {
             "seed": seed,
             "images": image_urls,
+            "score": qr.get("score", -1),
+            "retries": qr.get("retries", 0),
             "params": {
                 "prompt": prompt,
-                "steps": params.get("steps", 20),
+                "preset": params.get("preset"),
                 "model": params.get("model", "9b"),
                 "lora": params.get("lora"),
             },
@@ -146,7 +148,7 @@ except ImportError:
 
 if _HAS_FASTAPI:
 
-    app = FastAPI(title="AIGC Pipeline API", version="0.28.0")
+    app = FastAPI(title="AIGC Pipeline API", version="0.30.0")
 
     @app.post("/api/flux")
     async def api_flux(params: dict, background: BackgroundTasks):
@@ -231,13 +233,13 @@ def main() -> None:
         sys.exit(1)
 
     port = args.port or int(os.environ.get("PORT", 8765))
-    print(f"🚀 AIGC Pipeline API")
+    print(f"🚀 AIGC Pipeline API v0.30.0")
     print(f"   地址: http://127.0.0.1:{port}")
     print(f"   文档: http://127.0.0.1:{port}/docs")
     print(f"   健康: http://127.0.0.1:{port}/api/health")
     print()
     print(f"   可用端点:")
-    print(f"     POST /api/flux   — Flux.2 Klein 文生图")
+    print(f"     POST /api/flux   — Flux.2 Klein 文生图（支持 preset/min_score/retry）")
     print(f"     POST /api/lora   — SDXL LoRA 文生图")
     print(f"     GET  /api/jobs   — 作业列表")
     print(f"     GET  /api/health — 健康检查")

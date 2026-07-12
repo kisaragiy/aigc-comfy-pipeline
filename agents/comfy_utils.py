@@ -297,21 +297,45 @@ QUALITY_PRESETS: dict[str, dict[str, Any]] = {
                  "sampler": "dpmpp_2m", "scheduler": "karras"},
 }
 
+VIDEO_PRESETS: dict[str, dict[str, Any]] = {
+    "quality": {"frames": 81, "fps": 25, "width": 1024, "height": 1024,
+                "steps": 40, "cfg": 7.0},
+    "balanced": {"frames": 49, "fps": 20, "width": 848, "height": 480,
+                 "steps": 30, "cfg": 7.0},
+    "fast": {"frames": 25, "fps": 15, "width": 512, "height": 288,
+             "steps": 20, "cfg": 5.0},
+    "cinematic": {"frames": 81, "fps": 24, "width": 1280, "height": 720,
+                  "steps": 40, "cfg": 8.0},
+}
 
-def apply_preset(params: dict[str, Any], preset: str | None = None) -> dict[str, Any]:
-    """应用质量预设到参数。用户显式指定的参数优先。"""
-    name = preset or os.environ.get("AIGC_PRESET", "balanced")
-    if name not in QUALITY_PRESETS:
-        print(f"[warn] 未知预设 '{name}'，使用 balanced", file=sys.stderr)
-        name = "balanced"
 
-    result = dict(QUALITY_PRESETS[name])
+def apply_preset(params: dict[str, Any], preset: str | None = None,
+                 presets: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
+    """应用预设到参数。用户显式指定的参数优先。
+
+    Args:
+        params: 用户参数（显式值覆盖预设）
+        preset: 预设名称；None 使用 AIGC_PRESET 环境变量
+        presets: 预设表；None 使用 QUALITY_PRESETS
+
+    Returns:
+        合并后的参数字典
+    """
+    table = presets if presets is not None else QUALITY_PRESETS
+    env_key = "AIGC_VIDEO_PRESET" if presets is not None else "AIGC_PRESET"
+    fallback = "balanced" if "balanced" in table else next(iter(table))
+    name = preset or os.environ.get(env_key, fallback)
+    if name not in table:
+        fallback_name = next(iter(table))
+        print(f"[warn] 未知预设 '{name}'，使用 {fallback_name}", file=sys.stderr)
+        name = fallback_name
+
+    result = dict(table[name])
     for k, v in params.items():
         if v is not None and k not in ("preset", "min_score", "retry", "no_validate"):
             result[k] = v
 
-    print(f"[info] 质量预设: {name} → steps={result.get('steps')}, cfg={result.get('cfg')}, "
-          f"sampler={result.get('sampler')}")
+    print(f"[info] 预设 {name} → {result}")
     return result
 
 
