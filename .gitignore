@@ -29,6 +29,7 @@ outputs/*
 
 # 测试残留工件
 \[aout]*
+atempo=*
 
 # IDE
 .idea/

@@ -1,6 +1,6 @@
 # CLI 参考文档
 
-> 自动生成于 2026-07-12 22:34
+> 自动生成于 2026-07-12 23:00
 
 AIGC ComfyUI Pipeline v?
 
@@ -11,15 +11,17 @@ AIGC ComfyUI Pipeline v?
 一句话提交 ComfyUI 文生图（自然语言 → Ollama → 出图）
 
 ```
-usage: run.py [-h] [--raw] [--video] [--ref REF] [--frames FRAMES] [--fps FPS]
-              [--steps STEPS] [--cfg CFG] [--width WIDTH] [--height HEIGHT]
-              [--seed SEED] [--negative NEGATIVE] [--denoise DENOISE]
-              [--sampler SAMPLER] [--scheduler SCHEDULER]
-              [--preset {quality,balanced,fast,cinematic,quick}]
-              [--timeout TIMEOUT]
+usage: run.py [-h] [--raw] [--negative NEGATIVE] [--seed SEED] [--steps STEPS]
+              [--cfg CFG] [--width WIDTH] [--height HEIGHT]
+              [--sampler SAMPLER] [--scheduler SCHEDULER] [--preset PRESET]
+              [--timeout TIMEOUT] [--model {9b,4b}] [--lora LORA]
+              [--lora-strength LORA_STRENGTH] [--prefix PREFIX]
+              [--min-score MIN_SCORE] [--retry RETRY] [--no-validate]
+              [--video] [--ref REF] [--frames FRAMES] [--fps FPS]
+              [--denoise DENOISE]
               [prompt]
 
-一句话提交 ComfyUI 文生图（默认经 Ollama 转写为英文提示词）。用 --video 切换为视频生成模式。
+一句话提交 ComfyUI 文生图（默认经 Ollama 转写为英文提示词）。 用 --video 切换为视频生成模式。
 
 positional arguments:
   prompt                一句话画面描述；省略时从标准输入读取
@@ -27,23 +29,31 @@ positional arguments:
 options:
   -h, --help            show this help message and exit
   --raw                 跳过 Ollama，将输入整段作为正向提示词
-  --video               视频生成模式（Wan2.2 T2V/I2V）
-  --ref REF             参考图（视频 I2V 模式，提供时自动启用）
-  --frames FRAMES       视频总帧数（默认 49）
-  --fps FPS             视频帧率（默认 15）
-  --steps STEPS         采样步数
-  --cfg CFG             CFG 强度
-  --width WIDTH         视频宽度
-  --height HEIGHT       视频高度
-  --seed SEED           随机种子
   --negative NEGATIVE   负向提示词
-  --denoise DENOISE     去噪强度（I2V 默认 0.85）
+  --seed SEED           随机种子（-1 自动）
+  --steps STEPS         采样步数（预设自动）
+  --cfg CFG             CFG 引导强度
+  --width WIDTH         输出宽度
+  --height HEIGHT       输出高度
   --sampler SAMPLER     采样器名称
   --scheduler SCHEDULER
                         调度器名称
-  --preset {quality,balanced,fast,cinematic,quick}
-                        视频预设（quality/balanced/fast/cinematic）
+  --preset PRESET       质量/视频预设名（自动匹配）
   --timeout TIMEOUT     等待超时秒数
+  --model {9b,4b}       Flux 模型变体（仅图片模式）
+  --lora LORA           LoRA 权重文件名（仅图片模式）
+  --lora-strength LORA_STRENGTH
+                        LoRA 权重强度
+  --prefix PREFIX       输出文件名前缀（图片模式）
+  --min-score MIN_SCORE
+                        最低 CLIP 评分（≤0 跳过验证）
+  --retry RETRY         质量不合格时最大重试次数
+  --no-validate         跳过质量验证
+  --video               视频生成模式（Wan2.2）
+  --ref REF             参考图路径（I2V 模式）
+  --frames FRAMES       视频总帧数（默认 49）
+  --fps FPS             视频帧率（默认 15）
+  --denoise DENOISE     去噪强度（I2V 默认 0.85）
 ```
 
 ---
