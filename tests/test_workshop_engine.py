@@ -11,6 +11,7 @@ from workshop.engine.engine import (
     _clean_subject,
     _detect_composition,
     _detect_lighting,
+    _detect_negative,
     _detect_style,
     _extract_keywords,
     _template_fallback,
@@ -302,3 +303,94 @@ class TestListPresets:
     def test_lighting_count(self):
         lightings = list_presets()["lighting"]
         assert len(lightings) >= 10  # 至少有 10+ 种光照类型
+
+
+# ── _detect_negative ─────────────────────────────────────
+
+class TestDetectNegative:
+    def test_no_negative(self):
+        assert _detect_negative("银发少女站在窗前") == ""
+
+    def test_empty(self):
+        assert _detect_negative("") == ""
+        assert _detect_negative("  ") == ""
+
+    def test_blurry_direct(self):
+        result = _detect_negative("模糊背景少女")
+        assert "blurry" in result
+
+    def test_不要_pattern(self):
+        result = _detect_negative("不要模糊背景")
+        assert "blurry" in result
+
+    def test_别_pattern(self):
+        result = _detect_negative("别崩手")
+        assert "bad hands" in result
+
+    def test_没有_pattern(self):
+        result = _detect_negative("没有水印")
+        assert "watermark" in result
+
+    def test_不能有_pattern(self):
+        result = _detect_negative("不能有文字")
+        assert "text" in result
+
+    def test_排除_pattern(self):
+        result = _detect_negative("排除噪点")
+        assert "noise" in result
+
+    def test_bad_hands(self):
+        result = _detect_negative("崩手")
+        assert "bad hands" in result
+
+    def test_bad_face(self):
+        result = _detect_negative("崩脸")
+        assert "bad face" in result
+
+    def test_watermark(self):
+        result = _detect_negative("不要水印不要签名")
+        assert "watermark" in result
+        assert "signature" in result  # both map to same tag
+        # 去重，只出现一次
+        assert result.count("watermark") == 1
+
+    def test_text(self):
+        result = _detect_negative("没有文字")
+        assert "text" in result
+
+    def test_too_dark(self):
+        result = _detect_negative("太暗了")
+        assert "dark" in result
+        assert "underexposed" in result
+
+    def test_too_bright(self):
+        result = _detect_negative("太亮了")
+        assert "overexposed" in result
+
+    def test_chromatic_aberration(self):
+        result = _detect_negative("紫边严重")
+        assert "chromatic" in result
+
+    def test_ghosting(self):
+        result = _detect_negative("鬼影")
+        assert "ghosting" in result
+
+    def test_multiple_negatives(self):
+        result = _detect_negative("不要模糊背景，别崩手，排除水印")
+        assert "blurry" in result
+        assert "bad hands" in result
+        assert "watermark" in result
+
+    def test_no_double_count(self):
+        """同一关键词在句式和直匹配中只出现一次。"""
+        result = _detect_negative("不要模糊背景，模糊")
+        assert result.count("blurry") == 1
+
+    def test_pattern_and_standalone(self):
+        result = _detect_negative("不要崩手")
+        assert result.count("bad hands") == 1
+
+    def test_keyword_within_no_pattern(self):
+        """直接在文本中的关键词（无句式）也被检测。"""
+        result = _detect_negative("这张图太模糊了")
+        assert "blurry" in result

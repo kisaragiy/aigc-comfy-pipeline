@@ -118,6 +118,17 @@ def create_from_nl(
         if verbose and negative_prompt:
             print(f"  ⛔ 负向: {negative_prompt[:80]}...")
 
+    # 2c. 自动从 NL 文本检测负向关键词（追加到现有负向）
+    from workshop.engine.engine import _detect_negative
+    auto_neg = _detect_negative(nl_text)
+    if auto_neg:
+        if negative_prompt:
+            negative_prompt += ", " + auto_neg
+        else:
+            negative_prompt = auto_neg
+        if verbose:
+            print(f"  🔍 自动负向: {auto_neg[:80]}")
+
     if dry_run:
         candidate_list = []
         for i in range(count):
@@ -126,6 +137,7 @@ def create_from_nl(
 
         result = {
             "prompt": final_prompt,
+            "negative_prompt": negative_prompt,
             "best": candidate_list[0] if candidate_list else {},
             "candidates": candidate_list,
             "dry_run": True,

@@ -93,6 +93,23 @@ LIGHTING_PRESETS: dict[str, str] = {
     "体积光": "volumetric lighting, god rays, light beams through fog, crepuscular rays",
 }
 
+# ── 负向提示词检测库 ──────────────────────────────────────
+
+NEGATIVE_KEYWORDS: dict[str, str] = {
+    "模糊": "blurry, out of focus, soft focus",
+    "崩手": "bad hands, deformed hands, extra fingers, missing fingers",
+    "崩脸": "bad face, deformed face, asymmetric face",
+    "畸变": "deformed, distorted, twisted, warped",
+    "鬼影": "ghosting, double image, artifacts",
+    "噪点": "noise, grainy, noisy",
+    "水印": "watermark, signature",
+    "签名": "watermark, signature",
+    "文字": "text, letters, words, typography",
+    "太暗": "dark, underexposed, shadowy, low light",
+    "太亮": "overexposed, blown out, too bright, washed out",
+    "紫边": "chromatic aberration, purple fringing",
+}
+
 STYLE_KEYWORDS: dict[str, str] = {
     "赛博朋克": "cyberpunk, futuristic city, neon lights, holographic displays, rain soaked streets, high tech low life",
     "蒸汽波": "vaporwave, retro 80s aesthetic, neon grids, purple and pink palette, synthwave",
@@ -441,6 +458,56 @@ def _detect_lighting(text: str) -> str:
         if cn_key in text:
             return en_val
     return "soft natural lighting, diffused illumination"
+
+
+# ── 负向提示词自动检测 ────────────────────────────────────
+
+_NEGATIVE_PATTERNS: list[str] = [
+    r"不要(.*?)(?:[，。、！？；：\s]|$)",
+    r"别(.*?)(?:[，。、！？；：\s]|$)",
+    r"没有(.*?)(?:[，。、！？；：\s]|$)",
+    r"不能有(.*?)(?:[，。、！？；：\s]|$)",
+    r"排除(.*?)(?:[，。、！？；：\s]|$)",
+]
+
+
+def _detect_negative(text: str) -> str:
+    """从自然语言描述中自动提取负向提示词。
+
+    支持:
+      - "不要模糊背景" / "别崩手" / "没有文字" 等句式 → 匹配关键词库
+      - "模糊" / "崩手" / "水印" 等直接关键词 → 映射英文负向词
+
+    Returns:
+        逗号分隔的英文负向 tag，无匹配返回 ""
+    """
+    if not text or not text.strip():
+        return ""
+
+    parts: list[str] = []
+    found_cn: set[str] = set()
+    found_en: set[str] = set()
+
+    # 1. 句式匹配：提取 "不要X" 等结构中的关键词
+    for pat in _NEGATIVE_PATTERNS:
+        for match in re.finditer(pat, text):
+            term = match.group(1).strip()
+            if not term:
+                continue
+            for cn_kw, en_tag in NEGATIVE_KEYWORDS.items():
+                if cn_kw in term and cn_kw not in found_cn and en_tag not in found_en:
+                    parts.append(en_tag)
+                    found_cn.add(cn_kw)
+                    found_en.add(en_tag)
+
+    # 2. 直接关键词匹配（句式未覆盖的）
+    for cn_kw, en_tag in NEGATIVE_KEYWORDS.items():
+        if cn_kw in text and cn_kw not in found_cn and en_tag not in found_en:
+            parts.append(en_tag)
+            found_cn.add(cn_kw)
+            found_en.add(en_tag)
+
+    return ", ".join(parts)
 
 
 def _extract_keywords(text: str) -> list[str]:

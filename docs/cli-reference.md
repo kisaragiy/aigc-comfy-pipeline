@@ -949,7 +949,8 @@ usage: python -m agents workshop create [-h] [--count COUNT] [--style STYLE]
   --seed SEED        起始种子（0=随机，固定种子可复现结果）
   --open             生成后自动打开最优图
   --negative NEGATIVE
-                        负向提示词（不设置时使用风格预设默认值）
+                        负向提示词（不设置时使用风格预设默认值 + 自动 NL 检测）
+                         自动检测: "不要模糊"→blurry, "别崩手"→bad hands, "太暗"→dark...
   --verbose          详细信息
 
 示例:
@@ -972,18 +973,20 @@ usage: python -m agents workshop create [-h] [--count COUNT] [--style STYLE]
 
 ```text
 usage: python -m agents workshop engine [-h] [--style STYLE] [--ollama]
-                                        [--list-presets]
+                                        [--ref REF] [--list-presets]
                                         nl_text [nl_text ...]
 
 参数:
   --style STYLE    画风提示 (anime/photoreal/cg/...)
   --ollama         使用 Ollama 增强 prompt
+  --ref REF        参考图路径（测试角色/画风特征分析）
   --list-presets   列出全部预设
 
 示例:
   python -m agents workshop engine "赛博朋克少女，霓虹雨夜"
   python -m agents workshop engine "古风少女竹林抚琴" --style photoreal
   python -m agents workshop engine "银发少女" --ollama  # 对比模板 vs Ollama
+  python -m agents workshop engine "银发少女校服" --ref ref.png  # 测试参考图分析
   python -m agents workshop engine --list-presets  # 列出全部预设
 ```
 
