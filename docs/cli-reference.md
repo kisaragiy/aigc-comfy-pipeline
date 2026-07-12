@@ -1,6 +1,6 @@
 # CLI 参考文档
 
-> 自动生成于 2026-07-13 00:24
+> 自动生成于 2026-07-13 00:29
 
 AIGC ComfyUI Pipeline v?
 
@@ -472,22 +472,27 @@ Prompt A/B 对比测试（同 seed 控制变量）
 usage: go_abtest.py [-h] --prompts PROMPTS PROMPTS [--seed SEED]
                     [--model {9b,4b}] [--lora LORA]
                     [--lora-strength LORA_STRENGTH] [--steps STEPS]
-                    [--cfg CFG] [--raw] [--dry-run]
+                    [--cfg CFG] [--raw] [--preset PRESET]
+                    [--min-score MIN_SCORE] [--retry RETRY] [--no-validate]
 
-A/B 测试 — Prompt A vs B 同 seed 对比
+A/B 测试 — Prompt A vs B 同 seed 对比（走质量门禁）
 
 options:
   -h, --help            show this help message and exit
   --prompts PROMPTS PROMPTS
                         两个 prompt（A vs B）
-  --seed SEED
+  --seed SEED           统一 seed（-1=随机）
   --model {9b,4b}
   --lora LORA
   --lora-strength LORA_STRENGTH
   --steps STEPS
   --cfg CFG
   --raw
-  --dry-run
+  --preset PRESET       质量预设 (quality/balanced/fast/portrait/anime/photoreal)
+  --min-score MIN_SCORE
+                        CLIP 评分阈值（0=跳过验证）
+  --retry RETRY         不合格时最大重试次数
+  --no-validate         强制跳过质量验证
 ```
 
 ---
@@ -499,10 +504,11 @@ options:
 ```
 usage: go_abtest.py [-h] [--count COUNT] [--model {9b,4b}] [--lora LORA]
                     [--lora-strength LORA_STRENGTH] [--steps STEPS]
-                    [--cfg CFG] [--raw] [--dry-run]
+                    [--cfg CFG] [--raw] [--preset PRESET]
+                    [--min-score MIN_SCORE] [--retry RETRY] [--no-validate]
                     prompt
 
-Best of N — 多 seed 自动挑优
+Best of N — 多 seed 自动挑优（走质量门禁）
 
 positional arguments:
   prompt                画面描述
@@ -516,7 +522,11 @@ options:
   --steps STEPS
   --cfg CFG
   --raw
-  --dry-run
+  --preset PRESET       质量预设 (quality/balanced/fast/portrait/anime/photoreal)
+  --min-score MIN_SCORE
+                        CLIP 评分阈值（0=跳过验证）
+  --retry RETRY         不合格时最大重试次数
+  --no-validate         强制跳过质量验证
 ```
 
 ---

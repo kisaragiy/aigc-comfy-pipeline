@@ -10,7 +10,9 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.44.0** — 当前：control 升级 Flux + 双架构支持（--model 9b / 4b / sdxl）<br>　　　　　　`python -m agents control \"prompt\" --ref x.png --type depth --model 9b` <br>　　　　　　`python -m agents control \"prompt\" --ref x.png --type openpose --model sdxl` <br>　　　　　　Flux 模式 16 节点 + ControlNetApply 注入，SDXL 模式保持 10 节点原版，`--preset`/`--seed`/`--min-score`/`--retry` 全部可用
+- **V0.47.0** — 当前：AB Test / Best of N 升级 generate_with_quality + 质量门禁<br>　　　　　　`python -m agents abtest --prompts "A" "B" --preset anime --min-score 0.2` <br>　　　　　　`python -m agents bestof "prompt" --count 4 --retry 2 --min-score 0.25` <br>　　　　　　替换直调 `build_flux_workflow` 为 `generate_with_quality`，新增 `--preset`/`--min-score`/`--retry`/`--no-validate`
+- **V0.46.0** — 上一版：gallery 新增全屏/幻灯片/键盘导航<br>　　　　　　点击图片全屏 Lightbox，← → 翻页，缩略图条，Esc 关闭
+- **V0.45.0** — 上一版：video-process 新增帧提取 (--extract-frames --every / --count)
 - **V0.43.0** — 上一版：sweep 升级 quality（generate_with_quality + --preset + 门禁）<br>　　　　　　`python -m agents sweep --grid '{\"steps\":[20,30]}' --preset anime --min-score 0.2` <br>　　　　　　`python -m agents sweep --type video --grid '{\"frames\":[49,81]}'` <br>　　　　　　图片/视频均走质量门禁，新增 `--preset`/`--seed`/`--min-score`/`--retry`/`--no-validate`
 - **V0.42.0** — 上一版：测试覆盖 run.py（30 项）+ outputs 内联预览（--images/--open）<br>　　　　　　`python -m agents outputs list --images` 显示首文件名预览 <br>　　　　　　`python -m agents outputs show <id> --open` 打开产出目录 <br>　　　　　　测试总数 89 → 119 项
 - **V0.41.0** — 上一版：lora/ipa/multi 升级 Flux + 模型管理增强<br>　　　　　　`python -m agents lora/ipa/multi` 增加 `--preset`/`--seed`/`--min-score`/`--retry` <br>　　　　　　`python -m agents models list --disk` 显示磁盘占用 <br>　　　　　　`python -m agents models prune [--force]` 清理孤立模型
@@ -46,7 +48,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 - V0.5.0 — LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
 - V0.0.XXX — 小修
 
-## 当前版本：V0.44.0
+## 当前版本：V0.47.0
 
 ## 核心能力
 
@@ -80,8 +82,8 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 | Docker 部署 | `Dockerfile` + `docker-compose.yml` | `docker-compose up` | 三服务容器化（GPU 直通） |
 | Prompt 兜底 | `comfy_utils._fallback_prompt()` | 内置 | Ollama 不可用时模板拼接英文 tag |
 | 质量验证 | `go_validate.py` | `python -m agents validate` | CLIP score + 崩脸检测 + 图像质量 |
-| A/B 测试 | `go_abtest.py` | `python -m agents abtest` | 同 seed prompt 对比 |
-| Best of N | `go_abtest.py` | `python -m agents bestof` | 多 seed 自动挑优 + 排名 |
+|| A/B 测试 | `go_abtest.py` | `python -m agents abtest` | 同 seed prompt 对比，**走 generate_with_quality**，支持 `--preset`/`--min-score`/`--retry` |
+|| Best of N | `go_abtest.py` | `python -m agents bestof` | 多 seed 自动挑优 + 排名，**质量门禁 + --preset** |
 | API 服务 | `go_serve.py` | `python -m agents serve` | FastAPI REST API，异步作业队列，flux 支持预设/门禁 |
 | 质量预设 | `comfy_utils.QUALITY_PRESETS` | `--preset quality|fast|portrait` | 优选参数组合，环境变量 AIGC_PRESET |
 | 视频预设 | `comfy_utils.VIDEO_PRESETS` | `--preset quality|fast|cinematic` | 视频专用预设，环境变量 AIGC_VIDEO_PRESET |
