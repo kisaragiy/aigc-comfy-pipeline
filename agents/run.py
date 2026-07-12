@@ -56,10 +56,21 @@ def main():
     workflow["3"]["inputs"]["seed"] = random.randint(1, 999999999)
 
     try:
-        comfy_post_prompt(workflow, prompt_url=COMFY_URL)
+        result = comfy_post_prompt(workflow, prompt_url=COMFY_URL)
     except RuntimeError as exc:
         print(exc, file=sys.stderr)
         sys.exit(1)
+
+    prompt_id = result.get("prompt_id", "")
+    if prompt_id and prompt_id != "dry-run":
+        from output_manager import save_workflow_outputs
+        from comfy_utils import comfy_base_url
+
+        save_workflow_outputs(prompt_id, comfy_base_url(COMFY_URL), "run", {
+            "prompt": positive_prompt,
+            "negative": negative_prompt,
+            "seed": workflow["3"]["inputs"]["seed"],
+        })
 
     print("\n====================")
     print("已向 ComfyUI 提交任务")

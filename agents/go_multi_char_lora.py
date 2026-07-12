@@ -123,10 +123,23 @@ def main() -> None:
         wf["9"]["inputs"]["images"] = ["8", 0]
 
     try:
-        comfy_post_prompt(wf, prompt_url=COMFY_URL)
+        result = comfy_post_prompt(wf, prompt_url=COMFY_URL)
     except RuntimeError as exc:
         print(exc, file=sys.stderr)
         sys.exit(1)
+
+    prompt_id = result.get("prompt_id", "")
+    if prompt_id and prompt_id != "dry-run":
+        from output_manager import save_workflow_outputs
+        from comfy_utils import comfy_base_url
+
+        save_workflow_outputs(prompt_id, comfy_base_url(COMFY_URL), "multi", {
+            "prompt": positive,
+            "negative": negative,
+            "knives_lora": args.knives_lora,
+            "caster_lora": args.caster_lora,
+            "face_detailer": use_fd,
+        })
 
     print("\n已提交多角色 LoRA 生图")
     print("正向：", positive[:500], "..." if len(positive) > 500 else "")

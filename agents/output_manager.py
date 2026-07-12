@@ -120,3 +120,52 @@ def clean_runs(days: int = 30) -> int:
             shutil.rmtree(entry, ignore_errors=True)
             removed += 1
     return removed
+
+
+def save_workflow_outputs(
+    prompt_id: str,
+    comfy_base: str,
+    command: str,
+    metadata_extra: dict | None = None,
+) -> str | None:
+    """等待 ComfyUI 出图 → 保存到 outputs/。
+
+    从 comfy_utils 取 wait_images() 和 resolve_comfy_root()。
+    在 dry-run 模式下 prompt_id="dry-run" 时跳过等待。
+
+    Args:
+        prompt_id: comfy_post_prompt 返回的 prompt_id
+        comfy_base: ComfyUI 基础 URL
+        command: 命令名（run/lora/ipa/multi/flux）
+        metadata_extra: 附加元数据（prompt/seed/params 等）
+
+    Returns:
+        run_id 或 None
+    """
+    from comfy_utils import resolve_comfy_root, wait_images
+
+    if prompt_id == "dry-run":
+        return None
+
+    try:
+        images = wait_images(prompt_id, comfy_base)
+    except (TimeoutError, RuntimeError) as exc:
+        print(f"[warn] 等待出图失败: {exc}", file=sys.stderr)
+        return None
+
+    if not images:
+        return None
+
+    comfy_root = resolve_comfy_root()
+    image_paths: list[str] = []
+    for sub, name in images:
+        path = (comfy_root / "output" / sub / name).resolve()
+        if path.is_file():
+            image_paths.append(str(path))
+
+    if not image_paths:
+        return None
+
+    meta = dict(metadata_extra or {})
+    meta["prompt_id"] = prompt_id
+    return save_run(command, image_paths, meta)

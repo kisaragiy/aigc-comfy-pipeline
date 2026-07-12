@@ -245,7 +245,19 @@ def main() -> None:
         print(exc, file=sys.stderr)
         sys.exit(1)
 
-    prompt_id = result.get("prompt_id", "?")
+    prompt_id = result.get("prompt_id", "")
+
+    if prompt_id and prompt_id != "dry-run":
+        from output_manager import save_workflow_outputs
+        from comfy_utils import comfy_base_url
+
+        save_workflow_outputs(prompt_id, comfy_base_url(COMFY_URL), "flux", {
+            "prompt": positive,
+            "seed": seed_actual,
+            "model": args.model,
+            "lora": args.lora,
+            "lora_strength": args.lora_strength,
+        })
 
     print(f"\n====================")
     print(f"Flux.2 Klein ({args.model}) 已提交")
