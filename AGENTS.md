@@ -10,8 +10,9 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.25.0** — 当前：Docker 部署
-- V0.24.0 — 上一版：视频生成管线（Wan2.2）
+- **V0.26.0** — 当前：Prompt 兜底 + 质量验证
+- V0.25.0 — 上一版：Docker 部署
+- V0.24.0 — 视频生成管线（Wan2.2）
 - V0.23.0 — ControlNet 能力补齐
 - V0.22.0 — 工作流重建工程
 - V0.21.0 — CLI 文档自动生成
@@ -33,7 +34,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 - V0.5.0 — LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
 - V0.0.XXX — 小修
 
-## 当前版本：V0.25.0
+## 当前版本：V0.26.0
 
 ## 核心能力
 
@@ -65,6 +66,8 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 | ControlNet | `go_control.py` | `python -m agents control` | depth/openpose/softedge/tile/inpaint/lineart 引导生图 |
 | 视频生成 | `go_video.py` | `python -m agents video` | Wan2.2 T2V/I2V，帧数/帧率/分辨率控制 |
 | Docker 部署 | `Dockerfile` + `docker-compose.yml` | `docker-compose up` | 三服务容器化（GPU 直通） |
+| Prompt 兜底 | `comfy_utils._fallback_prompt()` | 内置 | Ollama 不可用时模板拼接英文 tag |
+| 质量验证 | `go_validate.py` | `python -m agents validate` | CLIP score + 崩脸检测 + 图像质量 |
 
 ## 项目结构
 
@@ -88,6 +91,7 @@ agents/                    # Python 编排脚本（产品）
   go_doctor.py              #   一键诊断修复
   go_control.py             #   ControlNet 引导生图
   go_video.py               #   Wan2.2 视频生成
+  go_validate.py            #   出图质量验证
   go_knives_lora.py        #   角色 LoRA 文生图（主力脚本）
   go_knives_ipadapter.py   #   IPAdapter 锁脸（复用 go_knives_lora 的构建函数）
   go_multi_char_lora.py    #   多角色同框
@@ -256,5 +260,7 @@ metadata.json 包含完整的生成参数，面试时打开即可证明工程化
 - [ ] `python -m agents control "test" --ref test.png --type depth --dry-run` 跳过提交
 - [ ] `python -m agents video --help` 显示视频参数
 - [ ] `python -m agents video "test" --frames 25 --dry-run` 跳过提交
+- [ ] 无 Ollama 时 `python -m agents flux --dry-run "画个女孩子"` 使用模板兜底
+- [ ] `python -m agents validate --image fake.png --prompt "test"` 友好提示
 - [ ] `docker build -t aigc-pipeline .` 构建成功
 - [ ] `docker run --rm aigc-pipeline --help` 显示帮助
