@@ -628,7 +628,7 @@ def _workshop_inspect(args: list[str]) -> None:
 
 
 def _workshop_manga(args: list[str]) -> None:
-    """python -m agents workshop manga <script_text> [--characters ...]"""
+    """python -m agents workshop manga <script_text> [options]"""
     import argparse
 
     parser = argparse.ArgumentParser(description="漫画/分镜生成")
@@ -636,6 +636,8 @@ def _workshop_manga(args: list[str]) -> None:
     parser.add_argument("--style", default="anime", help="画风")
     parser.add_argument("--preview", action="store_true", help="预览")
     parser.add_argument("--layout", default="auto", help="拼页布局 (auto/4koma)")
+    parser.add_argument("--char", action="append", default=None,
+                        help='角色定义 (可重复): "名:服饰:发型:特征" 例：--char "Knives:白校服:银发:猫耳红瞳"')
     parsed = parser.parse_args(args)
 
     script = " ".join(parsed.script_text) if parsed.script_text else ""
@@ -645,11 +647,29 @@ def _workshop_manga(args: list[str]) -> None:
 
     from workshop.manga import script_to_storyboard, storyboard_to_prompts, generate_panels, assemble_page
 
-    # 角色定义
-    chars = {"Knives": {"服饰": "白色校服", "发型": "银白长发", "特征": "猫耳, 红瞳"},
-             "Caster": {"服饰": "黑色连衣裙", "发型": "粉色短发", "特征": "蓝瞳"}}
+    # 解析角色定义
+    if parsed.char:
+        chars = {}
+        for c in parsed.char:
+            parts = [p.strip() for p in c.split(":")]
+            name = parts[0]
+            chars[name] = {
+                "服饰": parts[1] if len(parts) > 1 else "",
+                "发型": parts[2] if len(parts) > 2 else "",
+                "特征": parts[3] if len(parts) > 3 else "",
+            }
+    else:
+        chars = {
+            "Knives": {"服饰": "白色校服", "发型": "银白长发", "特征": "猫耳, 红瞳"},
+            "Caster": {"服饰": "黑色连衣裙", "发型": "粉色短发", "特征": "蓝瞳"},
+        }
 
+    char_names = list(chars.keys())
     print(f"📖 剧本: {script}")
+    print(f"👤 角色 ({len(chars)}):")
+    for name, info in chars.items():
+        print(f"   {name}: {info.get('服饰','?')} / {info.get('发型','?')} / {info.get('特征','?')}")
+
     print("\n📋 生成分镜表...")
     storyboard = script_to_storyboard(script, characters=chars, ollama_available=False)
     for shot in storyboard:

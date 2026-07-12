@@ -356,8 +356,9 @@ def _ollama_generate_storyboard(
     from agents.comfy_utils import ollama_generate
 
     # 角色定义注入
-    char_a = list(characters.keys())[0] if characters else "A"
-    char_b = list(characters.keys())[1] if len(characters) > 1 else "B"
+    char_names = list(characters.keys())
+    char_a = char_names[0] if char_names else "A"
+    char_b = char_names[1] if len(char_names) > 1 else "B"
 
     full_prompt = _STORYBOARD_TEMPLATE.format(
         script_text=script_text,
@@ -367,7 +368,11 @@ def _ollama_generate_storyboard(
     if characters:
         full_prompt += f"\n\n角色定义:\n"
         for name, info in characters.items():
-            full_prompt += f"  {name}: {info}\n"
+            detail = ", ".join(v for v in info.values() if v)
+            full_prompt += f"  {name}: {detail}\n"
+        if len(char_names) > 2:
+            extra = ", ".join(char_names[2:])
+            full_prompt += f"\n提示：共有 {len(char_names)} 个角色（{extra}），请合理分配所有角色的出场镜号。\n"
 
     result = ollama_generate(full_prompt, url=url, model=model)
 
@@ -398,20 +403,42 @@ def _template_storyboard(
     script_text: str,
     characters: dict[str, dict[str, str]],
 ) -> list[dict[str, str]]:
-    """模板兜底分镜表。"""
-    char_a = list(characters.keys())[0] if characters else "角色A"
-    char_b = list(characters.keys())[1] if len(characters) > 1 else "角色B"
+    """模板兜底分镜表，支持 1~4 个角色动态生成。"""
+    names = list(characters.keys())
+    n = len(names)
 
-    shots = [
-        {"镜号": "S01", "人物": char_a, "场景": script_text, "景别": "全景",
+    # 动态基础镜：至少 2 个，至多 n+2 个
+    shots: list[dict[str, str]] = [
+        {"镜号": "S01", "人物": names[0] if n > 0 else "角色A",
+         "场景": script_text, "景别": "全景",
          "音频提示": "", "画面描述": f"定场镜头，展示场景", "台词": "", "备注": ""},
-        {"镜号": "S02", "人物": char_a, "场景": script_text, "景别": "中景",
-         "音频提示": "", "画面描述": f"{char_a} 在场景中", "台词": "", "备注": ""},
-        {"镜号": "S03", "人物": char_b, "场景": script_text, "景别": "过肩",
-         "音频提示": "", "画面描述": f"{char_b} 出现，与 {char_a} 互动", "台词": "", "备注": ""},
-        {"镜号": "S04", "人物": char_a, "场景": script_text, "景别": "特写",
-         "音频提示": "", "画面描述": f"{char_a} 表情特写", "台词": "", "备注": "情绪节点"},
+        {"镜号": "S02", "人物": names[0] if n > 0 else "角色A",
+         "场景": script_text, "景别": "中景",
+         "音频提示": "", "画面描述": f"{names[0] if n > 0 else '角色A'} 在场景中",
+         "台词": "", "备注": ""},
     ]
+
+    if n >= 2:
+        shots.append({"镜号": "S03", "人物": names[1], "场景": script_text, "景别": "过肩",
+                      "音频提示": "", "画面描述": f"{names[1]} 出现，与 {names[0]} 互动",
+                      "台词": "", "备注": ""})
+
+    if n >= 3:
+        shots.append({"镜号": f"S0{len(shots)+1}", "人物": names[2], "场景": script_text, "景别": "中景",
+                      "音频提示": "", "画面描述": f"{names[2]} 加入场景",
+                      "台词": "", "备注": "新角色登场"})
+
+    if n >= 4:
+        shots.append({"镜号": f"S0{len(shots)+1}", "人物": names[3], "场景": script_text, "景别": "全景",
+                      "音频提示": "", "画面描述": f"四人同框，{', '.join(names)}",
+                      "台词": "", "备注": "群像"})
+
+    # 特写结尾
+    last_char = names[min(1, n-1)]
+    shots.append({"镜号": f"S0{len(shots)+1}", "人物": last_char, "场景": script_text, "景别": "特写",
+                  "音频提示": "", "画面描述": f"{last_char} 表情特写",
+                  "台词": "", "备注": "情绪节点"})
+
     return shots
 
 

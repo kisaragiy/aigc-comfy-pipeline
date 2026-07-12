@@ -10,7 +10,7 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.52.0** — 当前：增强质检模块（OpenCV 降级链）+ 产出追踪<br>　　　　　　`go_validate._check_face()`: YOLO → OpenCV Haar cascade 多级降级<br>　　　　　　`go_validate._check_hand()`: YOLO → OpenCV 上半身检测降级<br>　　　　　　`workshop/inspect._yolo_face_check()`: 支持 cascade eye_count 传递<br>　　　　　　`workshop/create._register_output()`: 自动注册到 output_manager<br>　　　　　　`python -m agents outputs list` 可查看 workshop create 产出<br>　　　　　　版本 0.52.0<br>　　　　　　
+- **V0.53.0** — 当前：Manga CLI 角色动态定义 + 分镜多角色支持<br>　　　　　　Manga `--char "名:服饰:发型:特征"` 支持 1~4 角色动态分镜<br>　　　　　　`_template_storyboard` 根据角色数自适应生成 2~6 个镜<br>　　　　　　`_ollama_generate_storyboard` 角色定义优雅输出 + 多角色提示<br>　　　　　　版本 0.53.0<br>　　　　　　
 - **V0.48.0** — 上一版：serve API 升级（新增 control/sweep/abtest/bestof 端点）<br>　　　　　　`POST /api/control` — ControlNet 条件生图，ref/type/model，走 generate_with_quality <br>　　　　　　`POST /api/sweep` — 参数网格扫描，grid/type，走 generate_with_quality <br>　　　　　　`POST /api/abtest` — A/B 双 Prompt 对比，prompts[2]，走 generate_with_quality <br>　　　　　　`POST /api/bestof` — Best of N 多轮择优，count/prompt，走 generate_with_quality<br>　　　　　　API 版本升至 0.48.0，新增 4 个后台异步端点 + quality 门禁全覆盖
 - **V0.47.0** — 上一版：AB Test / Best of N 升级 generate_with_quality + 质量门禁<br>　　　　　　`python -m agents abtest --prompts "A" "B" --preset anime --min-score 0.2` <br>　　　　　　`python -m agents bestof "prompt" --count 4 --retry 2 --min-score 0.25` <br>　　　　　　替换直调 `build_flux_workflow` 为 `generate_with_quality`，新增 `--preset`/`--min-score`/`--retry`/`--no-validate`
 - **V0.46.0** — 上一版：gallery 新增全屏/幻灯片/键盘导航<br>　　　　　　点击图片全屏 Lightbox，← → 翻页，缩略图条，Esc 关闭
@@ -50,7 +50,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 - V0.5.0 — LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
 - V0.0.XXX — 小修
 
-## 当前版本：V0.52.0
+## 当前版本：V0.53.0
 
 ## 核心能力
 
@@ -81,6 +81,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 | 高质量工作流 | `workflows/*.json` | `python scripts/build_workflows.py` | 6 个 API 格式工作流，带 _meta 元数据 |
 | ControlNet | `go_control.py` | `python -m agents control` | depth/openpose/softedge/tile/inpaint/lineart 引导生图，**Flux/SDXL 双架构**，支持 --model 9b/4b/sdxl |
 | 视频生成 | `go_video.py` | `python -m agents video` | Wan2.2 T2V/I2V，帧数/帧率/分辨率控制 |
+| 创作工坊·漫画 | `workshop/manga/` | `python -m agents workshop manga` | 剧本→分镜→逐格生图→拼页，`--char` 动态角色 1~4 个 |
 | Docker 部署 | `Dockerfile` + `docker-compose.yml` | `docker-compose up` | 三服务容器化（GPU 直通） |
 | Prompt 兜底 | `comfy_utils._fallback_prompt()` | 内置 | Ollama 不可用时模板拼接英文 tag |
 | 质量验证 | `go_validate.py` | `python -m agents validate` | CLIP score + 崩脸检测 + 图像质量 |
