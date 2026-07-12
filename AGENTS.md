@@ -10,8 +10,9 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.12.0** — 当前：批量迭代 + 参数扫描
-- V0.11.0 — 上一版：输出管理深度集成（自动归档 + metadata）
+- **V0.13.0** — 当前：自动标图 + LoRA 训练闭环
+- V0.12.0 — 上一版：批量迭代 + 参数扫描
+- V0.11.0 — 输出管理深度集成（自动归档 + metadata）
 - V0.10.0 — Flux.2 Klein 原生 CLI
 - V0.9.0 — 模型管理（列表/查询/依赖检查）
 - V0.8.0 — 工作流模板管理 + 依赖检查
@@ -20,7 +21,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 - V0.5.0 — LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
 - V0.0.XXX — 小修
 
-## 当前版本：V0.12.0
+## 当前版本：V0.13.0
 
 ## 核心能力
 
@@ -40,6 +41,8 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 | 模型管理 | `model_manager.py` | `python -m agents models` | 列出已安装模型、查询详情、workflow 模型检查 |
 | Flux.2 Klein 生图 | `go_flux.py` | `python -m agents flux` | 程序化构建 Flux 工作流（9B/4B、LoRA 注入） |
 | 参数扫描 | `go_sweep.py` | `python -m agents sweep` | 网格参数迭代、自动对比拼图 |
+| 自动标图 | `go_caption.py` | `python -m agents caption` | Ollama VL 自动生成训练数据 .txt 标注 |
+| 训练编排 | `go_train.py` | `python -m agents train` | 数据验证 + AutoDL 训练命令生成 |
 
 ## 项目结构
 
@@ -54,6 +57,8 @@ agents/                    # Python 编排脚本（产品）
   model_manager.py         #   模型管理（列表/查询/依赖检查）
   go_flux.py               #   Flux.2 Klein 文生图
   go_sweep.py              #   参数网格扫描
+  go_caption.py             #   自动标图（Ollama VL）
+  go_train.py               #   训练编排（数据验证 + 命令生成）
   go_knives_lora.py        #   角色 LoRA 文生图（主力脚本）
   go_knives_ipadapter.py   #   IPAdapter 锁脸（复用 go_knives_lora 的构建函数）
   go_multi_char_lora.py    #   多角色同框
@@ -196,3 +201,7 @@ metadata.json 包含完整的生成参数，面试时打开即可证明工程化
 - [ ] `python -m agents sweep --help` 显示完整参数
 - [ ] `python -m agents sweep --grid '{"steps":[20,30]}' --dry-run "test"` 2 组合 + dry-run
 - [ ] `python -m agents sweep --grid '{"steps":[20,30],"cfg":[1.0,2.0]}' --dry-run "test"` 4 组合
+- [ ] `python -m agents caption --help` 显示完整参数
+- [ ] `python -m agents caption --dir <path> --trigger "Test" --dry-run` 预览模式
+- [ ] `python -m agents train --help` 显示完整参数
+- [ ] `python -m agents train --dir <path> --trigger "Test" --dry-run` 验证报告
