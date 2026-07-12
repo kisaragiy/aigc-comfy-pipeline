@@ -1,6 +1,6 @@
 # CLI 参考文档
 
-> 自动生成于 2026-07-12 23:00
+> 自动生成于 2026-07-12 23:10
 
 AIGC ComfyUI Pipeline v?
 
@@ -70,7 +70,9 @@ usage: go_knives_lora.py [-h] [--character {caster,knives}] [--outfit OUTFIT]
                          [--ckpt CKPT] [--width WIDTH] [--height HEIGHT]
                          [--steps STEPS] [--cfg CFG] [--prefix PREFIX]
                          [--sd15] [--portrait] [--no-portrait] [--full-body]
-                         [--count COUNT] [--out OUT]
+                         [--count COUNT] [--out OUT] [--seed SEED]
+                         [--preset PRESET] [--min-score MIN_SCORE]
+                         [--retry RETRY] [--no-validate]
                          [prompt]
 
 Closers 角色 LoRA 文生图（Knives / Caster，ComfyUI + 可选 Ollama）
@@ -102,6 +104,12 @@ options:
   --full-body
   --count COUNT         连续提交张数（>1 时等待并复制到 --out）
   --out OUT             批量出图复制目录（默认 C:\DrawingLive\ai生图草稿库）
+  --seed SEED           随机种子（-1 自动）
+  --preset PRESET       SDXL 质量预设（暂未实现）
+  --min-score MIN_SCORE
+                        最低 CLIP 评分（≤0 跳过验证）
+  --retry RETRY         质量不合格时最大重试次数
+  --no-validate         跳过质量验证
 ```
 
 ---
@@ -122,6 +130,9 @@ usage: go_knives_ipadapter.py [-h] [--outfit OUTFIT] [--pose POSE] [--raw]
                               [--ipa-weight IPA_WEIGHT] [--ipa-end IPA_END]
                               [--ipa-preset IPA_PRESET]
                               [--weight-type {standard,prompt is more important,style transfer}]
+                              [--seed SEED] [--preset PRESET]
+                              [--min-score MIN_SCORE] [--retry RETRY]
+                              [--no-validate]
                               [prompt]
 
 Knives SDXL LoRA + IPAdapter 锁脸文生图
@@ -156,6 +167,12 @@ options:
                         IPAdapterUnifiedLoader 预设
   --weight-type {standard,prompt is more important,style transfer}
                         IPAdapter 权重类型；改表情建议 prompt is more important
+  --seed SEED           随机种子（-1 自动）
+  --preset PRESET       SDXL 质量预设（暂未实现）
+  --min-score MIN_SCORE
+                        最低 CLIP 评分（≤0 跳过验证）
+  --retry RETRY         质量不合格时最大重试次数
+  --no-validate         跳过质量验证
 ```
 
 ---
@@ -171,6 +188,9 @@ usage: go_multi_char_lora.py [-h] [--raw] [--positive POSITIVE]
                              [--lora-strength LORA_STRENGTH] [--width WIDTH]
                              [--height HEIGHT] [--steps STEPS] [--cfg CFG]
                              [--prefix PREFIX] [--no-face-detail]
+                             [--seed SEED] [--preset PRESET]
+                             [--min-score MIN_SCORE] [--retry RETRY]
+                             [--no-validate]
                              [prompt]
 
 多角色 LoRA 同图（Knives + Caster + FaceDetailer）
@@ -192,6 +212,12 @@ options:
   --cfg CFG
   --prefix PREFIX
   --no-face-detail      保存 VAEDecode 结果，不用 FaceDetailer
+  --seed SEED           随机种子（-1 自动）
+  --preset PRESET       SDXL 质量预设（暂未实现）
+  --min-score MIN_SCORE
+                        最低 CLIP 评分（≤0 跳过验证）
+  --retry RETRY         质量不合格时最大重试次数
+  --no-validate         跳过质量验证
 ```
 
 ---
@@ -724,54 +750,61 @@ workflow_multi_char_lora_sdxl               11 ✅      CLIPTextEncode, Checkpoi
 模型管理（list / info / check / download）
 
 ```
-用法: python -m agents models list [category]|info <name>|check <workflow_name>|check video|download <url>|download video|refresh
+用法: python -m agents models list [category] [--disk]|info <name>|check <workflow_name>|check video|download <url>|download video|refresh|prune [--force]
 ```
 
 ### `models list`
 
 ```
-共 88 个模型:
+共 88 个模型 (合计 162190MB):
 
-  📁 animatediff (1):
-    mm_sdxl_v10_beta.ckpt                          906.1MB
+  📁 animatediff (1) :
+    mm_sdxl_v10_beta.ckpt                        
 
-  📁 checkpoint (10):
-    index.bin                                        0.2MB
-    postings.bin                                     0.1MB
-    base_sd15.safetensors                         4067.6MB
-    waiIllustriousSDXL_v160.safetensors           6616.6MB
-    anima-base-v1.0.safetensors                   3988.5MB
-    anima-preview.safetensors                     3988.5MB
-    anima-preview2.safetensors                    3988.5MB
-    anima-preview3-base.safetensors               3988.5MB
-    flux-2-klein-9b-fp8.safetensors               8996.1MB
-    wan2.2_ti2v_5B_fp16.safetensors               9536.4MB
+  📁 checkpoint (10) :
+    index.bin                                    
+    postings.bin                                 
+    base_sd15.safetensors                        
+    waiIllustriousSDXL_v160.safetensors          
+    anima-base-v1.0.safetensors                  
+    anima-preview.safetensors                    
+    anima-preview2.safetensors                   
+    anima-preview3-base.safetensors              
+    flux-2-klein-9b-fp8.safetensors              
+    wan2.2_ti2v_5B_fp16.safetensors              
 
-  📁 clip (9):
-    t5xxl_fp8_e4m3fn_scaled.safetensors           4918.4MB
-    clip-vit-large-patch14.safetensors            1631.3MB
-    mistral_3_small_flux2_fp8.safetensors         17199.2MB
-    qwen_3_06b_base.safetensors                   1136.9MB
-    qwen_3_8b_fp8mixed.safetensors                8263.4MB
-    sd_xl_base_1.0.safetensors                    6616.7MB
-    t5xxl_fp8_e4m3fn.safetensors                  4667.2MB
-    t5xxl_fp8_e4m3fn_scaled.safetensors           4918.4MB
-    umt5_xxl_fp8_e4m3fn_scaled.safetensors        6423.9MB
+  📁 clip (9) :
+    t5xxl_fp8_e4m3fn_scaled.safetensors          
+    clip-vit-large-patch14.safetensors           
+    mistral_3_small_flux2_fp8.safetensors        
+    qwen_3_06b_base.safetensors                  
+    qwen_3_8b_fp8mixed.safetensors               
+    sd_xl_base_1.0.safetensors                   
+    t5xxl_fp8_e4m3fn.safetensors                 
+    t5xxl_fp8_e4m3fn_scaled.safetensors          
+    umt5_xxl_fp8_e4m3fn_scaled.safetensors       
 
-  📁 controlnet (17):
-    control-lora-openposeXL2-rank256.safetensors   738.5MB
-    controlnet-depth-sdxl-1.0.safetensors         4772.3MB
-    controlnet-sd-xl-1.0-softedge-dexined.safetensors 4772.3MB
-    controlnet-tile-sdxl-1.0.safetensors          2386.2MB
-    controlnet_inpaint_sdxl1.safetensors          2386.2MB
-    diffusion_pytorch_model.safetensors           4772.3MB
-    dw-ll_ucoco.pth                                386.0MB
-    dw-ll_ucoco_384.pth                            388.0MB
-    dw-mm_ucoco.pth                                206.8MB
-    dw-ss_ucoco.pth                                 98.2MB
-    dw-tt_ucoco.pth                                 65.3MB
-    rtm-l_ucoco_256-95bb32f5_20230822.pth          128.0MB
-    rtm-x_ucoco_
+  📁 controlnet (17) :
+    control-lora-openposeXL2-rank256.safetensors 
+    controlnet-depth-sdxl-1.0.safetensors        
+    controlnet-sd-xl-1.0-softedge-dexined.safetensors
+    controlnet-tile-sdxl-1.0.safetensors         
+    controlnet_inpaint_sdxl1.safetensors         
+    diffusion_pytorch_model.safetensors          
+    dw-ll_ucoco.pth                              
+    dw-ll_ucoco_384.pth                          
+    dw-mm_ucoco.pth                              
+    dw-ss_ucoco.pth                              
+    dw-tt_ucoco.pth                              
+    rtm-l_ucoco_256-95bb32f5_20230822.pth        
+    rtm-x_ucoco_256-05f5bcb7_20230822.pth        
+    rtm-x_ucoco_384-f5b50679_20230822.pth        
+    Kataragi_lineartXL-lora128.safetensors       
+    noobaiXLControlnet_openposeModel.safetensors 
+    OpenPoseXL2.safetensors                      
+
+  📁 ipadapter (18) :
+    clip-vit-la
 ```
 
 ### `models info`

@@ -8,7 +8,6 @@ Knives SDXL：LoRA 身份 + IPAdapter PLUS FACE 锁脸/锁眼（Plan A）。
   python go_knives_ipadapter.py --ipa-weight 0.48 --portrait
   python go_knives_ipadapter.py --ref-image 2000028.png --raw 红色战斗服，战斗姿势
 """
-
 from __future__ import annotations
 
 import argparse
@@ -17,8 +16,9 @@ import os
 import random
 import sys
 from pathlib import Path
+from typing import Any
 
-from comfy_utils import AGENTS_DIR, bootstrap_agents_path, comfy_post_prompt
+from comfy_utils import AGENTS_DIR, bootstrap_agents_path, comfy_post_prompt, generate_with_quality
 
 bootstrap_agents_path()
 
@@ -41,14 +41,61 @@ COMFY_URL = os.environ.get("COMFY_URL", "http://127.0.0.1:8188/prompt")
 DEFAULT_REF = "knives_face_ref.png"
 
 
-def load_workflow() -> dict:
-    with open(WORKFLOW, "r", encoding="utf-8") as f:
-        return json.load(f)
+def build_ipa_workflow(
+    prompt: str,
+    *,
+    negative_prompt: str = "",
+    seed: int = -1,
+    steps: int | None = None,
+    cfg: float | None = None,
+    width: int | None = None,
+    height: int | None = None,
+    ref_image: str = DEFAULT_REF,
+    ipa_weight: float = 0.48,
+    ipa_end: float = 1.0,
+    ipa_preset: str = "PLUS FACE (portraits)",
+    weight_type: str = "prompt is more important",
+    lora_name: str = "knives_sdxl.safetensors",
+    lora_strength: float = 0.85,
+    portrait: bool = True,
+    ckpt: str | None = None,
+    filename_prefix: str = "knives_ipa_sdxl",
+    sampler: str | None = None,
+    scheduler: str | None = None,
+) -> tuple[dict[str, Any], int]:
+    """构建 SDXL + LoRA + IPAdapter 工作流。"""
+    template = json.loads(WORKFLOW.read_text(encoding="utf-8"))
+    wf = json.loads(json.dumps(template))
 
+    seed_actual = seed if seed != -1 else random.randint(1, 2**48 - 1)
+    strength = max(0.0, min(2.0, lora_strength))
 
-def submit(workflow: dict) -> str | None:
-    body = comfy_post_prompt(workflow, prompt_url=COMFY_URL)
-    return body.get("prompt_id")
+    wf["6"]["inputs"]["text"] = prompt
+    wf["7"]["inputs"]["text"] = negative_prompt
+    wf["10"]["inputs"]["image"] = ref_image
+    wf["11"]["inputs"]["weight"] = max(-1.0, min(3.0, ipa_weight))
+    wf["11"]["inputs"]["end_at"] = max(0.0, min(1.0, ipa_end))
+    wf["11"]["inputs"]["weight_type"] = weight_type
+    wf["20"]["inputs"]["preset"] = ipa_preset
+    wf["12"]["inputs"]["lora_name"] = lora_name
+    wf["12"]["inputs"]["strength_model"] = strength
+    wf["12"]["inputs"]["strength_clip"] = strength
+    wf["3"]["inputs"]["seed"] = seed_actual
+    wf["9"]["inputs"]["filename_prefix"] = filename_prefix
+    if ckpt:
+        wf["4"]["inputs"]["ckpt_name"] = ckpt
+    if portrait and width is None and height is None:
+        wf["5"]["inputs"]["width"] = DEFAULT_SDXL_WIDTH
+        wf["5"]["inputs"]["height"] = DEFAULT_SDXL_HEIGHT
+    if width is not None:
+        wf["5"]["inputs"]["width"] = width
+    if height is not None:
+        wf["5"]["inputs"]["height"] = height
+    if steps is not None:
+        wf["3"]["inputs"]["steps"] = steps
+    if cfg is not None:
+        wf["3"]["inputs"]["cfg"] = cfg
+    return wf, seed_actual
 
 
 def main() -> None:
@@ -100,6 +147,15 @@ def main() -> None:
         choices=["standard", "prompt is more important", "style transfer"],
         help="IPAdapter 权重类型；改表情建议 prompt is more important",
     )
+    # 质量门禁参数
+    parser.add_argument("--seed", type=int, default=-1, help="随机种子（-1 自动）")
+    parser.add_argument("--preset", default=None, help="SDXL 质量预设（暂未实现）")
+    parser.add_argument("--min-score", type=float, default=0.0,
+                        help="最低 CLIP 评分（≤0 跳过验证）")
+    parser.add_argument("--retry", type=int, default=0,
+                        help="质量不合格时最大重试次数")
+    parser.add_argument("--no-validate", action="store_true",
+                        help="跳过质量验证")
     args = parser.parse_args()
 
     user = args.prompt or ""
@@ -126,53 +182,58 @@ def main() -> None:
         positive = positive + ", " + DEFAULT_PORTRAIT_TAGS
 
     negative = args.negative or default_negative(_KNIVES, sdxl=True)
-    workflow = load_workflow()
 
-    workflow["6"]["inputs"]["text"] = positive
-    workflow["7"]["inputs"]["text"] = negative
-    workflow["10"]["inputs"]["image"] = args.ref_image
-    workflow["11"]["inputs"]["weight"] = max(-1.0, min(3.0, args.ipa_weight))
-    workflow["11"]["inputs"]["end_at"] = max(0.0, min(1.0, args.ipa_end))
-    workflow["11"]["inputs"]["weight_type"] = args.weight_type
-    workflow["20"]["inputs"]["preset"] = args.ipa_preset
+    qr = generate_with_quality(
+        lambda prompt, **kw: build_ipa_workflow(
+            prompt,
+            ref_image=args.ref_image,
+            ipa_weight=args.ipa_weight,
+            ipa_end=args.ipa_end,
+            ipa_preset=args.ipa_preset,
+            weight_type=args.weight_type,
+            lora_name=args.lora,
+            lora_strength=args.lora_strength,
+            portrait=use_portrait,
+            ckpt=args.ckpt,
+            filename_prefix=args.prefix or "knives_ipa_sdxl",
+            **{k: v for k, v in kw.items()
+               if k in ("seed", "steps", "cfg", "width", "height",
+                        "negative_prompt", "sampler", "scheduler")},
+        ),
+        positive,
+        min_score=args.min_score if not args.no_validate else 0.0,
+        max_retries=args.retry,
+        preset=args.preset,
+        seed=args.seed,
+        negative_prompt=negative,
+        steps=args.steps,
+        cfg=args.cfg,
+        width=args.width,
+        height=args.height,
+    )
 
-    strength = max(0.0, min(2.0, args.lora_strength or DEFAULT_SDXL_LORA_STRENGTH))
-    workflow["12"]["inputs"]["lora_name"] = args.lora
-    workflow["12"]["inputs"]["strength_model"] = strength
-    workflow["12"]["inputs"]["strength_clip"] = strength
-    workflow["3"]["inputs"]["seed"] = random.randint(1, 2**48 - 1)
-    workflow["9"]["inputs"]["filename_prefix"] = args.prefix or "knives_ipa_sdxl"
+    prompt_id = qr.get("prompt_id", "")
+    seed_actual = qr.get("seed", 0)
+    images = qr.get("images", [])
 
-    if args.ckpt:
-        workflow["4"]["inputs"]["ckpt_name"] = args.ckpt
-    if use_portrait and args.width is None and args.height is None:
-        workflow["5"]["inputs"]["width"] = DEFAULT_SDXL_WIDTH
-        workflow["5"]["inputs"]["height"] = DEFAULT_SDXL_HEIGHT
-    if args.width is not None:
-        workflow["5"]["inputs"]["width"] = args.width
-    if args.height is not None:
-        workflow["5"]["inputs"]["height"] = args.height
-    if args.steps is not None:
-        workflow["3"]["inputs"]["steps"] = args.steps
-    if args.cfg is not None:
-        workflow["3"]["inputs"]["cfg"] = args.cfg
-
-    try:
-        prompt_id = submit(workflow)
-    except RuntimeError as exc:
-        print(exc, file=sys.stderr)
-        sys.exit(1)
-
-    if prompt_id and prompt_id != "dry-run":
+    if images:
         from output_manager import save_workflow_outputs
         from comfy_utils import comfy_base_url
 
-        save_workflow_outputs(prompt_id, comfy_base_url(COMFY_URL), "ipa", {
-            "prompt": positive,
-            "reference": args.ref_image,
-            "ipa_weight": args.ipa_weight,
-            "lora": args.lora,
-        })
+        save_workflow_outputs(
+            prompt_id,
+            comfy_base_url(COMFY_URL),
+            "ipa",
+            {
+                "prompt": positive,
+                "reference": args.ref_image,
+                "ipa_weight": args.ipa_weight,
+                "lora": args.lora,
+                "seed": seed_actual,
+                "score": qr.get("score"),
+                "retries": qr.get("retries", 0),
+            },
+        )
 
     print("\n====================")
     print("已提交 Knives LoRA + IPAdapter")
@@ -180,7 +241,13 @@ def main() -> None:
     print("正向：", positive)
     print("参考图：", args.ref_image)
     print("IPAdapter：", args.ipa_preset, f"weight={args.ipa_weight}", f"type={args.weight_type}")
-    print("LoRA：", args.lora, f"strength={strength}")
+    print("LoRA：", args.lora, f"strength={max(0.0, min(2.0, args.lora_strength))}")
+    score = qr.get("score")
+    if score is not None:
+        print(f"  CLIP 评分: {score:.3f}")
+    retries = qr.get("retries", 0)
+    if retries > 0:
+        print(f"  重试次数:  {retries}")
 
 
 if __name__ == "__main__":
