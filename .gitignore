@@ -23,12 +23,9 @@ models/
 # 原始大图备份
 docs/samples/_source/
 
-# 生图输出
-*.png
-*.jpg
-*.jpeg
-*.webp
-*.bmp
+# 出图产出（自动生成）
+outputs/*
+!outputs/.gitkeep
 
 # IDE
 .idea/
