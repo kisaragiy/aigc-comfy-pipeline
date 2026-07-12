@@ -10,7 +10,8 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.60.0** — 当前：manga --sdxl + auto-gallery<br>　　　　　　`workshop manga --sdxl` 使用 SDXL 代替 Flux（更快/支持 LoRA）<br>　　　　　　`workshop create --output` 自动生成候选画廊（无需单独 --gallery）<br>　　　　　　auto-gallery 保存在 `<output>/gallery/`，仍可手动指定 --gallery<br>　　　　　　版本 0.60.0<br>
+- **V0.61.0** — 当前：workshop create --negative + 引擎单元测试<br>　　　　　　`workshop create \"描述\" --negative \"blurry, bad hands\"` 自定义负向提示词<br>　　　　　　未指定 `--negative` 时自动使用风格预设的默认负向词（如 anime=bad hands, photoreal=anime...）<br>　　　　　　引擎推测输出新增负向提示词显示<br>　　　　　　`tests/test_workshop_engine.py` 65 项测试覆盖 `_detect_style`/`_detect_composition`/`_detect_lighting`/`_extract_keywords`/`_clean_subject`/`_template_fallback`/`list_presets`<br>　　　　　　测试总数 119 → 184 项<br>　　　　　　版本 0.61.0<br>
+- **V0.60.0** — 上一版：manga --sdxl + auto-gallery<br>　　　　　　`workshop manga --sdxl` 使用 SDXL 代替 Flux（更快/支持 LoRA）<br>　　　　　　`workshop create --output` 自动生成候选画廊（无需单独 --gallery）<br>　　　　　　auto-gallery 保存在 `<output>/gallery/`，仍可手动指定 --gallery<br>　　　　　　版本 0.60.0<br>
 - **V0.59.0** — 上一版：create 引擎推测 + --open<br>　　　　　　`workshop create` 始终显示引擎推测（风格/构图/光照）<br>　　　　　　`workshop create --open` 生成后自动打开最优图<br>　　　　　　`os.startfile` 在默认图片查看器中打开<br>　　　　　　版本 0.59.0<br>
 - **V0.58.0** — 上一版：manga 重试 + create 排行榜<br>　　　　　　`workshop manga --retry N` 每格失败后重试（含递增延迟）<br>　　　　　　`generate_panels` 新增 `max_retries` 参数，空结果也触发重试<br>　　　　　　`workshop create` 输出候选排行榜 🥇🥈🥉（综合分/质检/CLIP）<br>　　　　　　版本 0.58.0<br>
 - **V0.57.0** — 上一版：create --seed + manga --output<br>　　　　　　`workshop create --seed N` 固定种子，可复现结果<br>　　　　　　`workshop manga --output DIR` 保存拼页+逐格图+metadata.json<br>　　　　　　manga 输出目录包含逐格 panel_*.png 和 metadata.json（剧本/角色/路径）<br>　　　　　　版本 0.57.0<br>
@@ -55,7 +56,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 - V0.5.0 — LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
 - V0.0.XXX — 小修
 
-## 当前版本：V0.60.0
+## 当前版本：V0.61.0
 
 ## 核心能力
 
@@ -81,7 +82,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 | 队列管理 | `go_queue.py` | `python -m agents queue` | 查看/清空/中断队列、释放显存 |
 | 产出画廊 | `go_gallery.py` | `python -m agents gallery` | HTML 产出展示、HTTP 服务模式 |
 | 一键诊断 | `go_doctor.py` | `python -m agents doctor` | 9 项环境检查 + 自动修复 |
-| 单元测试 | `tests/` | `pytest tests/` | 119 项测试覆盖核心模块 + 视频管线 + run.py 参数映射 |
+| 单元测试 | `tests/` | `pytest tests/` | 184 项测试覆盖核心模块 + 视频管线 + run.py 参数映射 + workshop 引擎 |
 | CLI 文档 | `docs/cli-reference.md` | `python scripts/gen_cli_docs.py` | 16 命令 + 子命令自动生成参考文档 |
 | 高质量工作流 | `workflows/*.json` | `python scripts/build_workflows.py` | 6 个 API 格式工作流，带 _meta 元数据 |
 | ControlNet | `go_control.py` | `python -m agents control` | depth/openpose/softedge/tile/inpaint/lineart 引导生图，**Flux/SDXL 双架构**，支持 --model 9b/4b/sdxl |

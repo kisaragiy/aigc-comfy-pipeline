@@ -46,6 +46,7 @@ def create_from_nl(
     retry: int = 0,
     no_validate: bool = False,
     inspect: bool = True,
+    negative_prompt: str = "",
     seed: int = -1,
     dry_run: bool = False,
     use_ollama: bool = False,
@@ -65,6 +66,7 @@ def create_from_nl(
         retry: 最大重试次数
         no_validate: 跳过 CLIP 验证
         inspect: 是否执行逐部位质检
+        negative_prompt: 负向提示词（不设置时使用风格预设默认值）
         seed: 起始种子（自动递增）
         dry_run: 预览模式
         use_ollama: 使用 Ollama 增强 prompt 生成
@@ -105,6 +107,17 @@ def create_from_nl(
     if verbose:
         print(f"📝 Prompt ({'Ollama' if ollama_avail else '模板'}): {final_prompt[:120]}...")
 
+    # 2b. 负向提示词：用户指定优先，否则使用风格预设默认值
+    if not negative_prompt:
+        from workshop.engine.engine import _detect_style, STYLE_PRESETS
+        detected = _detect_style(nl_text, style_hint)
+        style_neg = STYLE_PRESETS.get(detected, {}).get("negative", "")
+        # Ollama 路径的 negative 由模型自行处理，模板路径用预设
+        if style_neg and not ollama_avail:
+            negative_prompt = style_neg
+        if verbose and negative_prompt:
+            print(f"  ⛔ 负向: {negative_prompt[:80]}...")
+
     if dry_run:
         candidate_list = []
         for i in range(count):
@@ -140,6 +153,7 @@ def create_from_nl(
                 max_retries=retry,
                 no_validate=no_validate,
                 seed=s,
+                negative_prompt=negative_prompt,
                 filename_prefix=f"create_{i:02d}",
             )
         except Exception as exc:
@@ -211,6 +225,7 @@ def create_from_nl(
 
     result = {
         "prompt": final_prompt,
+        "negative_prompt": negative_prompt,
         "best": best,
         "candidates": candidates,
         "inspection_summary": summary,
@@ -241,6 +256,7 @@ def _maybe_save_output(result: dict[str, Any], output_dir: str | None) -> None:
     meta = {
         "created_at": datetime.now().isoformat(timespec="seconds"),
         "prompt": result.get("prompt", ""),
+        "negative_prompt": result.get("negative_prompt", ""),
         "inspection_summary": result.get("inspection_summary", ""),
         "best": {
             "seed": result.get("best", {}).get("seed", 0),

@@ -506,6 +506,7 @@ def _workshop_create(args: list[str]) -> None:
     parser.add_argument("--gallery", default=None, help="候选画廊输出目录（生成 index.html 可浏览所有候选图）")
     parser.add_argument("--seed", type=int, default=0, help="起始种子（自动递增，0=随机）")
     parser.add_argument("--open", action="store_true", help="生成后自动打开最优图")
+    parser.add_argument("--negative", default=None, help="负向提示词（不设置时使用风格预设默认值）")
     parser.add_argument("--verbose", action="store_true", help="详细信息")
     parsed = parser.parse_args(args)
 
@@ -532,6 +533,7 @@ def _workshop_create(args: list[str]) -> None:
         inspect=not parsed.no_inspect,
         dry_run=parsed.preview,
         seed=parsed.seed,
+        negative_prompt=parsed.negative or "",
         use_ollama=parsed.ollama,
         output_dir=parsed.output,
         verbose=parsed.verbose,
@@ -551,6 +553,8 @@ def _workshop_create(args: list[str]) -> None:
 
     print(f"\n{'='*50}")
     print(f"📝 最终 Prompt: {result['prompt']}")
+    if result.get("negative_prompt"):
+        print(f"  ⛔ 负向: {result['negative_prompt'][:80]}...")
     if parsed.ollama:
         print(f"  (Ollama 增强)")
     print(f"  候选: {len(result['candidates'])} 张")
@@ -560,7 +564,9 @@ def _workshop_create(args: list[str]) -> None:
     detected_style = _detect_style(nl_text, parsed.style)
     detected_comp = _detect_composition(nl_text)
     detected_light = _detect_lighting(nl_text)
-    print(f"\n📋 引擎推测: 风格={detected_style} | 构图={detected_comp[:30]}... | 光照={detected_light[:30]}...")
+    neg_display = result.get("negative_prompt", "")
+    neg_suffix = f" | 负向={neg_display[:40]}..." if neg_display else ""
+    print(f"\n📋 引擎推测: 风格={detected_style} | 构图={detected_comp[:30]}... | 光照={detected_light[:30]}...{neg_suffix}")
 
     best = result.get("best", {})
     if best and best.get("image"):
