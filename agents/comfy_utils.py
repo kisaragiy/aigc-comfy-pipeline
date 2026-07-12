@@ -105,6 +105,51 @@ SIX_DIMENSION_TEMPLATE = """\
 """
 
 
+def _fallback_prompt(user_input: str) -> str:
+    """Ollama 不可用时的模板兜底。关键词匹配 → 英文 tag 模板。"""
+    quality = "masterpiece, best quality, ultra detailed, 8k"
+    base_style = "anime style, anime coloring, anime artwork"
+    camera = "cowboy shot, upper body, looking at viewer"
+    lighting = "soft lighting, natural light"
+    bg = "detailed background"
+
+    # 关键词 → 参数覆盖
+    keywords = {
+        "风景": {"camera": "wide shot, landscape, scenery, cityscape"},
+        "山水": {"camera": "wide shot, landscape, scenery, mountains"},
+        "城市": {"camera": "wide shot, cityscape, urban",
+                "lighting": "neon lighting, street lights"},
+        "夜景": {"lighting": "moonlight, night lighting, dark atmosphere",
+                "camera": "night scene, wide shot"},
+        "赛博朋克": {"style": "cyberpunk, futuristic, neon",
+                  "lighting": "neon lighting, holographic, colorful lights"},
+        "全身": {"camera": "full body, standing, dynamic pose"},
+        "半身": {"camera": "upper body, cowboy shot, waist up"},
+        "特写": {"camera": "close-up, face focus, extreme close-up, detailed face"},
+        "战斗": {"style": "action scene, dynamic action, battle",
+                "camera": "dynamic angle, action pose, mid-air"},
+        "海边": {"bg": "beach, ocean, seaside, waves, sand, sunset"},
+        "教室": {"bg": "classroom, desk, blackboard, school interior"},
+        "校服": {"style": "school uniform, casual, student"},
+        "战斗": {"style": "action, dynamic pose, battle ready"},
+        "微笑": {"camera": "smiling, gentle smile, happy expression"},
+        "少女": {"style": "bishoujo, cute girl, anime girl"},
+    }
+
+    for kw, overrides in keywords.items():
+        if kw in user_input:
+            if "camera" in overrides:
+                camera = overrides["camera"]
+            if "lighting" in overrides:
+                lighting = overrides["lighting"]
+            if "bg" in overrides:
+                bg = overrides["bg"]
+            if "style" in overrides:
+                base_style = overrides["style"]
+
+    return f"{quality}, {base_style}, {user_input}, {camera}, {bg}, {lighting}"
+
+
 def optimize_prompt(
     user_input: str,
     *,
@@ -130,9 +175,8 @@ def optimize_prompt(
     try:
         return ollama_generate(prompt, url=url, model=model, timeout=timeout)
     except (RuntimeError, requests.RequestException) as exc:
-        print(f"[warn] optimize_prompt Ollama 不可用: {exc}", file=sys.stderr)
-        # 基础降级：将用户输入作为 raw prompt
-        return user_input
+        print(f"[warn] Ollama 不可用，使用模板兜底: {exc}", file=sys.stderr)
+        return _fallback_prompt(user_input)
 
 
 def ollama_generate(
