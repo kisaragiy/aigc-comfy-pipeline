@@ -7,6 +7,7 @@ Usage:
     python -m agents ipa [options] [prompt]
     python -m agents multi [options] [prompt]
     python -m agents flux [--model 9b|4b] [--lora <name>] [options] [prompt]
+    python -m agents sweep --grid '{"steps":[20,30],"cfg":[1.0,2.0]}' [options] [prompt]
     python -m agents outputs list|show <id>|clean [--days N]
     python -m agents workflow list|show <name>|schema <name>|check <name>
     python -m agents models list [category]|info <name>|check <workflow_name>
@@ -344,6 +345,7 @@ def main() -> None:
         "ipa": "go_knives_ipadapter.py",
         "multi": "go_multi_char_lora.py",
         "flux": "go_flux.py",
+        "sweep": "go_sweep.py",
     }
 
     if command not in script_map:
@@ -370,6 +372,8 @@ def main() -> None:
             from agents.go_multi_char_lora import main as target_main
         elif command == "flux":
             from agents.go_flux import main as target_main
+        elif command == "sweep":
+            from agents.go_sweep import main as target_main
         else:
             raise ValueError(f"Unknown command: {command}")
         target_main()
@@ -387,6 +391,7 @@ def _show_help() -> None:
         ("ipa", "IPAdapter 锁脸文生图（参考图驱动面部一致性）"),
         ("multi", "多角色 LoRA 同图（Knives + Caster + FaceDetailer）"),
         ("flux", "Flux.2 Klein 文生图（9B/4B，支持 LoRA 注入）"),
+        ("sweep", "参数网格扫描（Flux.2 Klein，自动对比拼图）"),
         ("check", "环境检查（ComfyUI / Ollama 连通性）"),
         ("workflow", "工作流模板管理（list / show / schema / check）"),
         ("models", "模型管理（list / info / check）"),
