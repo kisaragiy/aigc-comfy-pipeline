@@ -1,0 +1,142 @@
+{
+  "_meta": {
+    "title": "SDXL IPAdapter 锁脸",
+    "version": "1.0",
+    "description": "SDXL + LoRA + IPAdapter PLUS FACE",
+    "models": {
+      "checkpoint": "sd_xl_base_1.0.safetensors",
+      "lora": "knives_sdxl.safetensors"
+    },
+    "cli": "python -m agents ipa",
+    "custom_nodes": [
+      "IPAdapter"
+    ]
+  },
+  "4": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "sd_xl_base.safetensors"
+    }
+  },
+  "12": {
+    "class_type": "LoraLoader",
+    "inputs": {
+      "model": [
+        "4",
+        0
+      ],
+      "clip": [
+        "4",
+        1
+      ],
+      "lora_name": "knives_sdxl.safetensors",
+      "strength_model": 0.85,
+      "strength_clip": 0.85
+    }
+  },
+  "6": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "prompt",
+      "clip": [
+        "12",
+        1
+      ]
+    }
+  },
+  "7": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "negative",
+      "clip": [
+        "12",
+        1
+      ]
+    }
+  },
+  "5": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {
+      "width": 896,
+      "height": 1152,
+      "batch_size": 1
+    }
+  },
+  "10": {
+    "class_type": "IPAdapterUnifiedLoader",
+    "inputs": {
+      "model": [
+        "12",
+        0
+      ],
+      "preset": "PLUS FACE (portraits)"
+    }
+  },
+  "11": {
+    "class_type": "IPAdapterApply",
+    "inputs": {
+      "ipadapter": [
+        "10",
+        0
+      ],
+      "model": [
+        "10",
+        1
+      ],
+      "image": "ref_image.png",
+      "weight": 0.48,
+      "end_at": 1.0,
+      "weight_type": "prompt is more important"
+    }
+  },
+  "3": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 42,
+      "steps": 28,
+      "cfg": 6.5,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1.0,
+      "model": [
+        "11",
+        0
+      ],
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "7",
+        0
+      ],
+      "latent_image": [
+        "5",
+        0
+      ]
+    }
+  },
+  "8": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "3",
+        0
+      ],
+      "vae": [
+        "4",
+        2
+      ]
+    }
+  },
+  "9": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "8",
+        0
+      ],
+      "filename_prefix": "ipa"
+    }
+  }
+}

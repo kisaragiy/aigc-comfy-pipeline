@@ -39,16 +39,21 @@ def _scan_workflows() -> list[dict[str, Any]]:
             # 判断是 API 格式还是 UI 格式
             is_api = False
             if data:
-                first_val = next(iter(data.values()), {})
-                is_api = isinstance(first_val, dict) and "class_type" in first_val
+                # 跳过 _meta 字段检查实际节点
+                for key, val in data.items():
+                    if isinstance(val, dict) and "class_type" in val:
+                        is_api = True
+                        break
+            # 只统计有 class_type 的节点（跳过 _meta 等）
+            nodes = {k: v for k, v in data.items()
+                     if isinstance(v, dict) and "class_type" in v}
             results.append({
                 "name": name,
                 "path": str(fpath),
-                "node_count": len([v for v in data.values() if isinstance(v, dict)]),
+                "node_count": len(nodes),
                 "is_api_format": is_api,
                 "class_types": sorted(set(
-                    v.get("class_type", "?") for v in data.values()
-                    if isinstance(v, dict)
+                    v["class_type"] for v in nodes.values()
                 )) if is_api else [],
             })
     return results
