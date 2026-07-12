@@ -230,12 +230,16 @@ def _run_models() -> None:
             for m in result["found"]:
                 print(f"   ✅ [{m['category']}] {m['value']}")
 
+    elif action == "download":
+        from agents.model_download import download_cli
+        download_cli(sys.argv[3:])
+
     else:
         _show_models_help()
 
 
 def _show_models_help() -> None:
-    print("用法: python -m agents models list [category]|info <name>|check <workflow_name>")
+    print("用法: python -m agents models list [category]|info <name>|check <workflow_name>|download <url>")
 
 
 def _run_outputs() -> None:

@@ -10,8 +10,9 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.15.0** — 当前：ComfyUI 队列管理
-- V0.14.0 — 上一版：管线验收报告
+- **V0.16.0** — 当前：模型下载
+- V0.15.0 — 上一版：ComfyUI 队列管理
+- V0.14.0 — 管线验收报告
 - V0.13.0 — 自动标图 + LoRA 训练闭环
 - V0.12.0 — 批量迭代 + 参数扫描
 - V0.11.0 — 输出管理深度集成（自动归档 + metadata）
@@ -23,7 +24,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 - V0.5.0 — LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
 - V0.0.XXX — 小修
 
-## 当前版本：V0.15.0
+## 当前版本：V0.16.0
 
 ## 核心能力
 
@@ -40,7 +41,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 | Flux.2 Klein 身份一致性 | agents 脚本加载 workflows/JSON | — | 身份引导 + 单图工作流 |
 | Prompt 优化 | `comfy_utils.optimize_prompt()` | — | 六维度构图法转为结构化英文 tag |
 | 工作流管理 | `workflow_manager.py` | `python -m agents workflow` | 模板扫描、参数 schema 提取、节点依赖检查 |
-| 模型管理 | `model_manager.py` | `python -m agents models` | 列出已安装模型、查询详情、workflow 模型检查 |
+| 模型管理 | `model_manager.py` | `python -m agents models` | 列出/查询/检查/下载模型 |
 | Flux.2 Klein 生图 | `go_flux.py` | `python -m agents flux` | 程序化构建 Flux 工作流（9B/4B、LoRA 注入） |
 | 参数扫描 | `go_sweep.py` | `python -m agents sweep` | 网格参数迭代、自动对比拼图 |
 | 自动标图 | `go_caption.py` | `python -m agents caption` | Ollama VL 自动生成训练数据 .txt 标注 |
@@ -65,6 +66,7 @@ agents/                    # Python 编排脚本（产品）
   go_train.py               #   训练编排（数据验证 + 命令生成）
   go_report.py              #   管线验收报告
   go_queue.py               #   ComfyUI 队列管理
+  model_download.py         #   模型下载
   go_knives_lora.py        #   角色 LoRA 文生图（主力脚本）
   go_knives_ipadapter.py   #   IPAdapter 锁脸（复用 go_knives_lora 的构建函数）
   go_multi_char_lora.py    #   多角色同框
@@ -215,3 +217,5 @@ metadata.json 包含完整的生成参数，面试时打开即可证明工程化
 - [ ] `python -m agents report --json` 输出 JSON 格式
 - [ ] `python -m agents queue list` ComfyUI 离线时友好提示
 - [ ] `python -m agents queue --help` 显示 4 个子命令
+- [ ] `python -m agents models download --help` 显示下载参数
+- [ ] `python -m agents models download <url> --type lora --preview` 预览
