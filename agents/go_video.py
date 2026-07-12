@@ -22,6 +22,8 @@ from comfy_utils import (
 
 bootstrap_agents_path()
 
+from output_manager import save_run  # noqa: E402
+
 # Wan2.2 模型文件
 WAN_UNET = "wan2.2_ti2v_5B_fp16.safetensors"
 WAN_CLIP = "umt5_xxl_fp8_e4m3fn_scaled.safetensors"
@@ -150,6 +152,8 @@ def main() -> None:
                         help="等待出图超时秒数（默认 1800=30 分钟）")
     parser.add_argument("--preset", choices=list(VIDEO_PRESETS.keys()),
                         default=None, help="视频预设（quality/balanced/fast/cinematic）")
+    parser.add_argument("--count", type=int, default=1,
+                        help="批量生成数量（不同 seed，默认 1）")
     args = parser.parse_args()
 
     user = args.prompt
@@ -160,6 +164,43 @@ def main() -> None:
         sys.exit(1)
 
     prompt = user if args.raw else optimize_prompt(user)
+
+    if args.count > 1:
+        all_paths: list[str] = []
+        for i in range(args.count):
+            seed_val = -1 if args.seed == -1 else args.seed + i
+            print(f"\n--- [{i+1}/{args.count}] seed={seed_val if seed_val != -1 else '随机'} ---")
+            qr = generate_with_quality(
+                build_video_workflow, prompt,
+                no_validate=True,
+                wait_timeout=args.timeout,
+                preset=args.preset,
+                seed=seed_val,
+                steps=args.steps, cfg=args.cfg,
+                width=args.width, height=args.height,
+                frames=args.frames, fps=args.fps,
+                sampler=args.sampler, scheduler=args.scheduler,
+                denoise=args.denoise if args.ref else 1.0,
+                ref_image=args.ref,
+                negative=args.negative,
+                prefix=args.prefix,
+            )
+            paths = qr.get("images", [])
+            all_paths.extend(paths)
+            seed_actual = qr.get("seed", "?")
+
+        if all_paths:
+            save_run("video-batch", all_paths, {
+                "prompt": prompt,
+                "count": args.count,
+                "ref_image": args.ref,
+                "seed": args.seed,
+                "grid": {"frames": args.frames, "fps": args.fps,
+                         "steps": args.steps, "cfg": args.cfg},
+            })
+            print(f"\n✅ 批量生成完成，共 {len(all_paths)} 个视频")
+            print(f"   总数: {args.count} 个 · 成功: {len(all_paths)} 个")
+        return
 
     qr = generate_with_quality(
         build_video_workflow, prompt,

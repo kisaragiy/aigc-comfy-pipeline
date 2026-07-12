@@ -4,6 +4,7 @@ Output Gallery — 自动生成 HTML 画廊展示所有产出。
 用法示例:
   python go_gallery.py
   python go_gallery.py --output gallery.html
+  python go_gallery.py --type video
   python go_gallery.py --serve
   python go_gallery.py --serve --port 8080
 """
@@ -24,8 +25,7 @@ bootstrap_agents_path()
 
 from output_manager import list_runs  # noqa: E402
 
-
-GALLERY_CSS = """
+GALLERY_CSS = """\
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { background: #0f1115; color: #e8eaed; font-family: 'Segoe UI', sans-serif; }
 header { padding: 1.5rem 1rem; border-bottom: 1px solid #2a2f3a; text-align: center; }
@@ -55,6 +55,8 @@ header .stats { color: #9aa0a6; font-size: 0.85rem; }
 .cmd-badge.sweep { background: #f472b633; color: #f472b6; }
 .cmd-badge.video { background: #f59e0b33; color: #f59e0b; }
 .cmd-badge.serve { background: #6366f133; color: #6366f1; }
+.cmd-badge.video-batch { background: #f59e0b33; color: #f59e0b; }
+.cmd-badge.sweep-video { background: #f59e0b33; color: #f59e0b; }
 .card .images video { width: 100%; aspect-ratio: 1; object-fit: cover;
   display: block; background: #2a2f3a; }
 .time { color: #9aa0a6; font-size: 0.75rem; margin-left: 0.4rem; }
@@ -69,24 +71,145 @@ header .stats { color: #9aa0a6; font-size: 0.85rem; }
 .empty { text-align: center; padding: 4rem 1rem; color: #9aa0a6; }
 .empty h2 { font-size: 1.2rem; margin-bottom: 0.5rem; }
 footer { text-align: center; padding: 1.5rem; color: #555; font-size: 0.75rem; }
+/* Compare */
+.compare-bar { display: none; position: fixed; bottom: 0; left: 0; right: 0;
+  background: #1a1d24; border-top: 1px solid #6ea8fe; padding: 0.8rem 1rem;
+  justify-content: center; gap: 1rem; align-items: center; z-index: 100; }
+.compare-bar.active { display: flex; }
+.compare-bar .count { color: #9aa0a6; font-size: 0.85rem; }
+.compare-btn { background: #6ea8fe; color: #fff; border: none;
+  padding: 0.5rem 1.5rem; border-radius: 8px; cursor: pointer; font-size: 0.85rem; }
+.compare-btn:disabled { opacity: 0.4; cursor: default; }
+.card .cmp-cb { position: absolute; top: 8px; right: 8px; z-index: 10;
+  width: 22px; height: 22px; cursor: pointer; accent-color: #6ea8fe; }
+.overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+  z-index: 200; justify-content: center; align-items: center; padding: 2rem; }
+.overlay.active { display: flex; }
+.overlay .pair { display: flex; gap: 1rem; max-width: 90vw; max-height: 90vh; }
+.overlay .pair > div { flex: 1; min-width: 0; }
+.overlay .pair img, .overlay .pair video { width: 100%; max-height: 80vh;
+  object-fit: contain; border-radius: 8px; }
+.overlay .pair .label { color: #9aa0a6; font-size: 0.8rem; margin-top: 0.3rem;
+  text-align: center; }
+.overlay .close { position: absolute; top: 1rem; right: 1.5rem;
+  color: #fff; font-size: 2rem; cursor: pointer; background: none; border: none; }
+/* Sort */
+.sort-bar { margin-top: 0.5rem; display: flex; gap: 0.5rem; justify-content: center; }
+.sort-btn { background: none; color: #9aa0a6; border: none; cursor: pointer;
+  font-size: 0.8rem; padding: 0.2rem 0.6rem; border-radius: 4px; }
+.sort-btn:hover { color: #e8eaed; }
+.sort-btn.active { color: #6ea8fe; font-weight: bold; }
+"""
+
+GALLERY_JS = """\
+// Type filter
+document.querySelectorAll('.filter-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.filter-btn').forEach(function(b) { b.classList.remove('active'); });
+    this.classList.add('active');
+    var filter = this.dataset.filter;
+    document.querySelectorAll('.card').forEach(function(card) {
+      card.style.display = (filter === 'all' || card.dataset.command === filter) ? '' : 'none';
+    });
+  });
+});
+// Compare
+var selected = {};
+document.querySelectorAll('.cmp-cb').forEach(function(cb) {
+  cb.addEventListener('change', function() {
+    if (this.checked) {
+      selected[this.dataset.id] = this.dataset.index;
+    } else {
+      delete selected[this.dataset.id];
+    }
+    var n = Object.keys(selected).length;
+    document.querySelector('.compare-bar').classList.toggle('active', n > 0);
+    document.querySelector('.compare-bar .count').textContent = n + ' selected';
+    document.querySelector('.compare-btn').disabled = n !== 2;
+  });
+});
+document.querySelector('.compare-btn').addEventListener('click', function() {
+  var ids = Object.keys(selected).slice(0, 2);
+  var overlays = document.querySelectorAll('.overlay-item');
+  for (var i = 0; i < 2; i++) {
+    var idx = parseInt(selected[ids[i]]);
+    var card = document.querySelectorAll('.card')[idx];
+    overlays[i].innerHTML = card.querySelector('.images').innerHTML;
+    var label = (card.querySelector('.cmd-badge') || {}).textContent || '';
+    var ts = (card.querySelector('.time') || {}).textContent || '';
+    overlays[i].innerHTML += '<div class="label">' + label + ' ' + ts + '</div>';
+  }
+  document.querySelector('.overlay').classList.add('active');
+});
+document.querySelector('.overlay .close').addEventListener('click', function() {
+  document.querySelector('.overlay').classList.remove('active');
+});
+// Sort
+function sortGallery(method) {
+  var gallery = document.getElementById('gallery');
+  var cards = Array.from(gallery.querySelectorAll('.card'));
+  cards.sort(function(a, b) {
+    if (method === 'newest') {
+      return b.dataset.ts.localeCompare(a.dataset.ts);
+    } else if (method === 'oldest') {
+      return a.dataset.ts.localeCompare(b.dataset.ts);
+    } else {
+      return (a.dataset.command || '').localeCompare(b.dataset.command || '');
+    }
+  });
+  cards.forEach(function(c) { gallery.appendChild(c); });
+  document.querySelectorAll('.sort-btn').forEach(function(b) {
+    b.classList.toggle('active', b.dataset.sort === method);
+  });
+}
+document.querySelectorAll('.sort-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    sortGallery(this.dataset.sort);
+  });
+});
 """
 
 
 def _get_output_dir() -> Path:
     """获取 outputs/ 目录。"""
-    # 相对于该文件位置 ../outputs/
     return Path(__file__).resolve().parents[1] / "outputs"
 
 
-def _build_html(runs: list[dict[str, Any]]) -> str:
-    """构建自包含 HTML 画廊。"""
+def _has_video(run: dict[str, Any]) -> bool:
+    """检查 run 是否包含视频文件。"""
+    for img in run.get("images", []):
+        if img.lower().endswith((".mp4", ".webm", ".mov")):
+            return True
+    return False
+
+
+def _has_image(run: dict[str, Any]) -> bool:
+    """检查 run 是否包含图片文件。"""
+    for img in run.get("images", []):
+        if not img.lower().endswith((".mp4", ".webm", ".mov")):
+            return True
+    return False
+
+
+def _build_html(runs: list[dict[str, Any]], media_type: str = "all") -> str:
+    """构建自包含 HTML 画廊。
+
+    Args:
+        runs: 产出列表
+        media_type: 过滤类型 (all/image/video)
+    """
+    if media_type == "image":
+        runs = [r for r in runs if _has_image(r)]
+    elif media_type == "video":
+        runs = [r for r in runs if _has_video(r)]
+
     cards: list[str] = []
     total_images = 0
     total_videos = 0
     commands: set[str] = set()
     output_dir = _get_output_dir()
 
-    for run in runs:
+    for card_idx, run in enumerate(runs):
         cmd = run.get("command", "?")
         ts = (run.get("timestamp") or "?")[:19]
         rid = run.get("run_id", "")
@@ -94,10 +217,9 @@ def _build_html(runs: list[dict[str, Any]]) -> str:
         params = run.get("params", {})
         commands.add(cmd)
 
-        # 图片 / 视频
         imgs_html = ""
         run_path = output_dir / rid / "images"
-        for img_name in images[:4]:  # 最多 4 张
+        for img_name in images[:4]:
             media_path = run_path / img_name
             if not media_path.is_file():
                 continue
@@ -114,7 +236,6 @@ def _build_html(runs: list[dict[str, Any]]) -> str:
                     f'<img src="file:///{media_path.as_posix()}" loading="lazy" />'
                 )
 
-        # 参数
         tags = ""
         for k, v in params.items():
             if k in ("prompt_id", "images"):
@@ -126,8 +247,11 @@ def _build_html(runs: list[dict[str, Any]]) -> str:
         if isinstance(prompt, str) and len(prompt) > 90:
             prompt = prompt[:90] + "..."
 
-        cards.append(f"""<div class="card" data-command="{cmd}">
-  <div class="images">{imgs_html}</div>
+        cards.append(f"""<div class="card" data-command="{cmd}" data-ts="{ts}" data-idx="{card_idx}">
+  <div class="images">
+    <input type="checkbox" class="cmp-cb" data-id="{rid}" data-index="{card_idx}" />
+    {imgs_html}
+  </div>
   <div class="meta">
     <span class="cmd-badge {cmd}">{cmd}</span>
     <span class="time">{ts}</span>
@@ -140,6 +264,12 @@ def _build_html(runs: list[dict[str, Any]]) -> str:
         f'<button class="filter-btn" data-filter="{c}">{c}</button>'
         for c in sorted(commands)
     )
+
+    # 类型过滤按钮
+    type_filter_btns = ""
+    for t, label in [("all", "All"), ("image", "Images"), ("video", "Videos")]:
+        active = " active" if t == media_type else ""
+        type_filter_btns += f'<button class="filter-btn{active}" data-type-filter="{t}">{label}</button>'
 
     cards_html = "\n".join(cards) if cards else (
         '<div class="empty"><h2>暂无产出</h2>'
@@ -157,25 +287,47 @@ def _build_html(runs: list[dict[str, Any]]) -> str:
 <style>{GALLERY_CSS}</style>
 </head>
 <body>
+<div class="overlay">
+  <button class="close">&times;</button>
+  <div class="pair">
+    <div class="overlay-item"></div>
+    <div class="overlay-item"></div>
+  </div>
+</div>
+<div class="compare-bar">
+  <span class="count">0 selected</span>
+  <button class="compare-btn" disabled>Compare</button>
+</div>
 <header>
   <h1>🎨 Output Gallery</h1>
   <div class="filters">
     <button class="filter-btn active" data-filter="all">All</button>
     {commands_list}
   </div>
-  <div class="stats">{len(runs)} runs · {total_images} images{f' · {total_videos} videos' if total_videos else ''}</div>
+  <div class="filters" style="margin-top:0.4rem">
+    {type_filter_btns}
+  </div>
+  <div class="sort-bar">
+    <button class="sort-btn active" data-sort="newest">Newest</button>
+    <button class="sort-btn" data-sort="oldest">Oldest</button>
+    <button class="sort-btn" data-sort="command">Command</button>
+  </div>
+  <div class="stats">{len(runs)} runs &middot; {total_images} images{f' &middot; {total_videos} videos' if total_videos else ''}</div>
 </header>
 <main id="gallery">{cards_html}</main>
 <footer>generated {now}</footer>
-<script>
-document.querySelectorAll('.filter-btn').forEach(function(btn) {{
+<script>{GALLERY_JS}
+// Type filter (re-fetch gallery with type param)
+document.querySelectorAll('[data-type-filter]').forEach(function(btn) {{
   btn.addEventListener('click', function() {{
-    document.querySelectorAll('.filter-btn').forEach(function(b) {{ b.classList.remove('active'); }});
-    this.classList.add('active');
-    var filter = this.dataset.filter;
-    document.querySelectorAll('.card').forEach(function(card) {{
-      card.style.display = (filter === 'all' || card.dataset.command === filter) ? '' : 'none';
-    }});
+    var t = this.dataset.typeFilter;
+    var params = new URLSearchParams(window.location.search);
+    if (t === 'all') params.delete('type');
+    else params.set('type', t);
+    var url = window.location.pathname;
+    var qs = params.toString();
+    if (qs) url += '?' + qs;
+    window.location.href = url;
   }});
 }});
 </script>
@@ -183,13 +335,14 @@ document.querySelectorAll('.filter-btn').forEach(function(btn) {{
 </html>"""
 
 
-def generate_gallery(output_path: Path) -> None:
+def generate_gallery(output_path: Path, media_type: str = "all") -> None:
     """生成输出画廊 HTML。"""
     runs = list_runs()
-    html = _build_html(runs)
+    html = _build_html(runs, media_type=media_type)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(html, encoding="utf-8")
-    print(f"🎨 画廊已生成: {output_path}")
+    type_label = {"all": "全部", "image": "图片", "video": "视频"}[media_type]
+    print(f"🎨 画廊已生成 ({type_label}): {output_path}")
     webbrowser.open(output_path.resolve().as_uri())
 
 
@@ -207,18 +360,19 @@ def main() -> None:
         "--port", type=int, default=8765,
         help="HTTP 服务端口（默认 8765）",
     )
+    parser.add_argument(
+        "--type", choices=["all", "image", "video"], default="all",
+        help="过滤类型: all(全部) / image(仅图片) / video(仅视频)",
+    )
     args = parser.parse_args()
 
     if args.serve:
-        # HTTP 服务模式
         output_path = Path(args.output or "outputs/gallery.html")
         print(f"🎨 画廊服务: http://127.0.0.1:{args.port}")
         print("  按 Ctrl+C 停止")
 
-        # 生成初始画廊
-        generate_gallery(output_path)
+        generate_gallery(output_path, media_type=args.type)
 
-        # 启动 HTTP 服务
         server = HTTPServer(
             ("127.0.0.1", args.port),
             lambda *a, **kw: _GalleryHandler(output_path.parent, *a, **kw),
@@ -229,7 +383,7 @@ def main() -> None:
             print("\n服务已停止。")
     else:
         output_path = Path(args.output or "outputs/gallery.html")
-        generate_gallery(output_path)
+        generate_gallery(output_path, media_type=args.type)
 
 
 class _GalleryHandler(SimpleHTTPRequestHandler):
