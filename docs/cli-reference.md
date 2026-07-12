@@ -945,7 +945,9 @@ usage: python -m agents workshop create [-h] [--count COUNT] [--style STYLE]
   --preview          预览模式（跳过生成，显示引擎推测 + 负向）
   --ollama           使用 Ollama 优化 prompt
   --output OUTPUT    结果输出目录（保存 metadata.json + best.png，自动生成 gallery）
+                      metadata.json 含逐候选信息（seed/score/retries/error/inspect）
   --gallery GALLERY  候选画廊输出目录（默认仅 --output 时自动生成到 <output>/gallery/）
+                      Gallery 按综合分降序排列，显示负向提示词 + 引擎推测信息 + 排名标签
   --seed SEED        起始种子（0=随机，固定种子可复现结果）
   --open             生成后自动打开最优图
   --negative NEGATIVE
