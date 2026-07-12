@@ -46,8 +46,9 @@ def load_workflow() -> dict:
         return json.load(f)
 
 
-def submit(workflow: dict) -> None:
-    comfy_post_prompt(workflow, prompt_url=COMFY_URL)
+def submit(workflow: dict) -> str | None:
+    body = comfy_post_prompt(workflow, prompt_url=COMFY_URL)
+    return body.get("prompt_id")
 
 
 def main() -> None:
@@ -157,10 +158,21 @@ def main() -> None:
         workflow["3"]["inputs"]["cfg"] = args.cfg
 
     try:
-        submit(workflow)
+        prompt_id = submit(workflow)
     except RuntimeError as exc:
         print(exc, file=sys.stderr)
         sys.exit(1)
+
+    if prompt_id and prompt_id != "dry-run":
+        from output_manager import save_workflow_outputs
+        from comfy_utils import comfy_base_url
+
+        save_workflow_outputs(prompt_id, comfy_base_url(COMFY_URL), "ipa", {
+            "prompt": positive,
+            "reference": args.ref_image,
+            "ipa_weight": args.ipa_weight,
+            "lora": args.lora,
+        })
 
     print("\n====================")
     print("已提交 Knives LoRA + IPAdapter")

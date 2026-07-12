@@ -10,15 +10,16 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.10.0** — 当前：Flux.2 Klein 原生 CLI
-- V0.9.0 — 上一版：模型管理（列表/查询/依赖检查）
+- **V0.11.0** — 当前：输出管理深度集成（自动归档 + metadata）
+- V0.10.0 — 上一版：Flux.2 Klein 原生 CLI
+- V0.9.0 — 模型管理（列表/查询/依赖检查）
 - V0.8.0 — 工作流模板管理 + 依赖检查
-- V0.7.0 — 管线健壮性 + 验证（健康检查、Ollama 自动降级、dry-run）
+- V0.7.0 — 管线健壮性 + 验证
 - V0.6.0 — 统一 CLI + 输出管理
 - V0.5.0 — LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
 - V0.0.XXX — 小修
 
-## 当前版本：V0.10.0
+## 当前版本：V0.11.0
 
 ## 核心能力
 
@@ -29,7 +30,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 | IPAdapter 锁脸 | `go_knives_ipadapter.py` | `python -m agents ipa` | 参考图驱动面部一致性、权重可调 |
 | 多角色同框 | `go_multi_char_lora.py` | `python -m agents multi` | 双 LoRA + FaceDetailer 修脸 |
 | 批处理 | `go_knives_lora.py --count N` | `python -m agents lora --count N` | 多张自动复制到草稿库 |
-| 产出管理 | `output_manager.py` | `python -m agents outputs` | 结构化元数据、list/show/clean |
+| 产出管理 | `output_manager.py` | `python -m agents outputs` | 结构化元数据、list/show/clean，**所有命令自动归档** |
 | 环境检查 | `comfy_utils.py` | `python -m agents check` | 运行前探活 ComfyUI/Ollama，自助诊断 |
 | Dry-run 验证 | `comfy_utils.DRY_RUN` | `--dry-run` 全局参数 | 跳过真实提交，验证参数正确性 |
 | Flux.2 Klein 身份一致性 | agents 脚本加载 workflows/JSON | — | 身份引导 + 单图工作流 |
@@ -186,3 +187,6 @@ metadata.json 包含完整的生成参数，面试时打开即可证明工程化
 - [ ] `python -m agents flux --help` 显示 Flux 完整参数
 - [ ] `python -m agents flux --dry-run "test"` 构建 13 节点工作流并跳过提交
 - [ ] `python -m agents flux --lora <name> --dry-run "test"` LoRA 注入
+- [ ] `python -m agents run --dry-run "test"` dry-run 不归档
+- [ ] `python -m agents lora --dry-run "test"` dry-run 不归档
+- [ ] `python -m agents flux --dry-run "test"` dry-run 不归档

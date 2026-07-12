@@ -323,6 +323,18 @@ def main() -> None:
             tag = prefix_base.replace("_lora_sdxl", "").replace("_lora_sd15", "")
             total_copied += copy_outputs(prompt_id, draft_dir, tag, i + 1)
             print(f"[{i+1}/{count}] prompt_id={prompt_id}")
+        elif count == 1 and prompt_id and prompt_id != "dry-run":
+            from output_manager import save_workflow_outputs
+            from comfy_utils import comfy_base_url
+
+            save_workflow_outputs(prompt_id, comfy_base_url(COMFY_URL), "lora", {
+                "prompt": positive,
+                "negative": negative,
+                "seed": workflow["3"]["inputs"]["seed"],
+                "lora": lora_name,
+                "lora_strength": strength,
+                "character": args.character,
+            })
 
     print("\n====================")
     print(f"已提交 {char['display']} LoRA 文生图" + (f" ×{count}" if count > 1 else ""))
