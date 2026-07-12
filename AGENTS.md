@@ -103,7 +103,8 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 ||| 视频预览模式 | `go_video.py --preview` | `python -m agents video "..." --preview` | 快速预览(25帧/480p/15步/CFG5)，自动打印正式命令 |
 ||| 视频后处理 | `go_video_process.py` | `python -m agents video-process` | GIF/裁剪/变速/拼接/帧提取，支持运行ID和链式操作 |
 ||| 帧提取 | `extract_frames()` | `--extract-frames --every N / --count N` | 从视频批量抽帧为JPG，支持间隔/均匀数量 |
-|| Gallery 类型筛选 | `go_gallery.py --type` | `python -m agents gallery --type video` | 按 image/video 过滤，JS 对比视图 + 排序 |
+||| Gallery 类型筛选 | `go_gallery.py --type` | `python -m agents gallery --type video` | 按 image/video 过滤，JS 对比视图 + 排序 |
+||| Gallery 全屏/幻灯片 | `go_gallery.py` | `python -m agents gallery` | 点击图片全屏浏览，← → 键盘翻页，缩略图导航 |
 
 ## 项目结构
 
