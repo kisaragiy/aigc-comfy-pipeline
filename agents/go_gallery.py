@@ -191,7 +191,61 @@ def _has_image(run: dict[str, Any]) -> bool:
     return False
 
 
-def _build_html(runs: list[dict[str, Any]], media_type: str = "all") -> str:
+def _find_ffmpeg() -> str:
+    """查找 ffmpeg 路径，返回空字符串表示未找到。"""
+    import shutil
+    return shutil.which("ffmpeg") or ""
+
+
+def _get_video_duration(video_path: Path) -> float:
+    """用 ffprobe 获取视频时长（秒）。"""
+    import json
+    import shutil
+    import subprocess
+
+    ffprobe = shutil.which("ffprobe")
+    if not ffprobe:
+        return 0.0
+    try:
+        result = subprocess.run(
+            [ffprobe, "-v", "quiet", "-print_format", "json",
+             "-show_format", str(video_path)],
+            capture_output=True, text=True, timeout=15,
+        )
+        data = json.loads(result.stdout)
+        return float(data.get("format", {}).get("duration", 0))
+    except (subprocess.TimeoutExpired, json.JSONDecodeError, KeyError, ValueError):
+        return 0.0
+
+
+def _extract_poster(video_path: Path, poster_path: Path) -> bool:
+    """从视频中间帧提取海报图。"""
+    import subprocess
+
+    ffmpeg = _find_ffmpeg()
+    if not ffmpeg:
+        return False
+    duration = _get_video_duration(video_path)
+    if duration <= 0:
+        return False
+    mid_time = duration / 2.0
+    try:
+        result = subprocess.run(
+            [ffmpeg, "-y", "-ss", str(mid_time), "-i", str(video_path),
+             "-vframes", "1", "-q:v", "2", str(poster_path)],
+            capture_output=True, text=True, timeout=30,
+        )
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return False
+
+
+def _get_poster_path(video_path: Path) -> Path:
+    """获取视频对应的海报图路径。"""
+    return video_path.parent / f"{video_path.stem}_poster.jpg"
+
+
+def _build_html(runs: list[dict[str, Any]], media_type: str = "all", refresh_posters: bool = False) -> str:
     """构建自包含 HTML 画廊。
 
     Args:
@@ -226,8 +280,12 @@ def _build_html(runs: list[dict[str, Any]], media_type: str = "all") -> str:
             ext = media_path.suffix.lower()
             if ext in (".mp4", ".webm", ".mov"):
                 total_videos += 1
+                poster_path = _get_poster_path(media_path)
+                if not poster_path.exists() and refresh_posters:
+                    _extract_poster(media_path, poster_path)
+                poster_attr = f' poster="file:///{poster_path.as_posix()}"' if poster_path.exists() else ""
                 imgs_html += (
-                    f'<video controls preload="metadata" muted playsinline '
+                    f'<video controls preload="metadata" muted playsinline{poster_attr} '
                     f'src="file:///{media_path.as_posix()}" />'
                 )
             else:
@@ -335,10 +393,10 @@ document.querySelectorAll('[data-type-filter]').forEach(function(btn) {{
 </html>"""
 
 
-def generate_gallery(output_path: Path, media_type: str = "all") -> None:
+def generate_gallery(output_path: Path, media_type: str = "all", refresh_posters: bool = False) -> None:
     """生成输出画廊 HTML。"""
     runs = list_runs()
-    html = _build_html(runs, media_type=media_type)
+    html = _build_html(runs, media_type=media_type, refresh_posters=refresh_posters)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(html, encoding="utf-8")
     type_label = {"all": "全部", "image": "图片", "video": "视频"}[media_type]
@@ -364,6 +422,10 @@ def main() -> None:
         "--type", choices=["all", "image", "video"], default="all",
         help="过滤类型: all(全部) / image(仅图片) / video(仅视频)",
     )
+    parser.add_argument(
+        "--refresh-posters", action="store_true",
+        help="强制重新提取视频海报帧",
+    )
     args = parser.parse_args()
 
     if args.serve:
@@ -371,7 +433,7 @@ def main() -> None:
         print(f"🎨 画廊服务: http://127.0.0.1:{args.port}")
         print("  按 Ctrl+C 停止")
 
-        generate_gallery(output_path, media_type=args.type)
+        generate_gallery(output_path, media_type=args.type, refresh_posters=args.refresh_posters)
 
         server = HTTPServer(
             ("127.0.0.1", args.port),
@@ -383,7 +445,7 @@ def main() -> None:
             print("\n服务已停止。")
     else:
         output_path = Path(args.output or "outputs/gallery.html")
-        generate_gallery(output_path, media_type=args.type)
+        generate_gallery(output_path, media_type=args.type, refresh_posters=args.refresh_posters)
 
 
 class _GalleryHandler(SimpleHTTPRequestHandler):

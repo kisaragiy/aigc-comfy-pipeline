@@ -3,6 +3,7 @@
 
 Usage:
     python -m agents run [--raw] [prompt]
+    python -m agents run --video [--ref img] [--frames N] [options] [prompt]
     python -m agents lora [--character knives|caster] [options] [prompt]
     python -m agents ipa [options] [prompt]
     python -m agents multi [options] [prompt]
@@ -21,7 +22,7 @@ Usage:
     python -m agents abtest --prompts "A" "B" [--seed N]
     python -m agents bestof <prompt> --count N
     python -m agents serve [--port PORT]
-    python -m agents outputs list|show <id>|clean [--days N]
+    python -m agents outputs list|show <id> [--info]|clean [--days N]
     python -m agents workflow list|show <name>|schema <name>|check <name>
     python -m agents models list [category]|info <name>|check <workflow_name>
     python -m agents check
@@ -295,12 +296,38 @@ def _show_models_help() -> None:
     print("用法: python -m agents models list [category]|info <name>|check <workflow_name>|check video|download <url>|download video|refresh")
 
 
+def _get_video_duration_str(video_path: Path) -> str:
+    """用 ffprobe 获取视频时长可读字符串。"""
+    import json
+    import shutil
+    import subprocess
+
+    ffprobe = shutil.which("ffprobe")
+    if not ffprobe:
+        return ""
+    try:
+        result = subprocess.run(
+            [ffprobe, "-v", "quiet", "-print_format", "json",
+             "-show_format", str(video_path)],
+            capture_output=True, text=True, timeout=15,
+        )
+        data = json.loads(result.stdout)
+        duration = float(data.get("format", {}).get("duration", 0))
+        if duration > 0:
+            mins, secs = divmod(int(duration), 60)
+            return f" · {mins:02d}:{secs:02d}"
+    except (subprocess.TimeoutExpired, json.JSONDecodeError, KeyError, ValueError, OSError):
+        pass
+    return ""
+
+
 def _run_outputs() -> None:
     """Handle 'outputs list|show|clean' subcommands."""
-    from agents.output_manager import clean_runs, list_runs, show_run
+    from agents.output_manager import clean_runs, list_runs, show_run, _get_output_dir
+    from pathlib import Path
 
     if len(sys.argv) < 3:
-        print("用法: python -m agents outputs list|show <id>|clean [--days N]")
+        print("用法: python -m agents outputs list|show <id> [--info]|clean [--days N]")
         return
 
     action = sys.argv[2]
@@ -322,9 +349,10 @@ def _run_outputs() -> None:
 
     elif action == "show":
         if len(sys.argv) < 4:
-            print("用法: python -m agents outputs show <run_id>")
+            print("用法: python -m agents outputs show <run_id> [--info]")
             return
         run_id = sys.argv[3]
+        show_info = "--info" in sys.argv
         meta = show_run(run_id)
         if meta is None:
             print(f"未找到产出: {run_id}")
@@ -340,8 +368,17 @@ def _run_outputs() -> None:
                 print(f"  - {fn}")
         if videos:
             print(f"视频 ({len(videos)}):")
+            img_dir = Path(_get_output_dir()) / run_id / "images"
             for fn in videos:
-                print(f"  - {fn}")
+                size_str = ""
+                dur_str = ""
+                fp = img_dir / fn
+                if fp.is_file():
+                    sz_kb = fp.stat().st_size / 1024
+                    size_str = f" ({sz_kb:.0f} KB)" if sz_kb < 1024 else f" ({sz_kb / 1024:.1f} MB)"
+                    if show_info:
+                        dur_str = _get_video_duration_str(fp)
+                print(f"  - {fn}{size_str}{dur_str}")
         if not images and not videos:
             print("文件:      (无)")
         params = meta.get("params", {})
@@ -349,6 +386,8 @@ def _run_outputs() -> None:
             print("\n参数:")
             for k, v in params.items():
                 print(f"  {k}: {v}")
+        if videos and show_info:
+            print("\n💡 提示: 使用 gallery 浏览视频，或 video-process 后处理")
 
     elif action == "clean":
         days = 30
@@ -498,7 +537,7 @@ def _show_help() -> None:
     print()
     print("子命令:")
     for name, desc in [
-        ("run", "一句话提交 ComfyUI 文生图（自然语言 → Ollama → 出图）"),
+        ("run", "一句话提交 ComfyUI 文生图（--video 可切换视频生成）"),
         ("lora", "角色 LoRA 文生图（Knives / Caster，支持批量）"),
         ("ipa", "IPAdapter 锁脸文生图（参考图驱动面部一致性）"),
         ("multi", "多角色 LoRA 同图（Knives + Caster + FaceDetailer）"),
@@ -520,7 +559,7 @@ def _show_help() -> None:
         ("check", "环境检查（ComfyUI / Ollama 连通性）"),
         ("workflow", "工作流模板管理（list / show / schema / check）"),
         ("models", "模型管理（list / info / check / download / refresh）"),
-        ("outputs", "产出管理（list / show / clean）"),
+        ("outputs", "产出管理（list / show <id> [--info] / clean）"),
     ]:
         print(f"  {name:12s}  {desc}")
     print()

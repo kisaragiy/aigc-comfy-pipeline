@@ -10,7 +10,9 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.37.0** — 当前：视频后处理工具 + 视频预览模式
+- **V0.39.0** — 当前：Run 视频路由 + 产出管理视频信息 <br>　　　　　　`python -m agents run "prompt" --video` 自动路由视频生成 <br>　　　　　　`python -m agents outputs show <id> --info` 显示视频时长/大小
+- **V0.38.0** — Gallery 视频缩略图 + 测试覆盖增强（32→89 项）<br>　　　　　　`--refresh-posters` 强制刷新
+- **V0.37.0** — 视频后处理工具 + 视频预览模式
 - **V0.36.0** — 视频批量生成 + 参数扫描视频支持 + Gallery 增强筛选对比
 - **V0.35.0** — 模型下载增强（含视频模型预设）+ 模型缓存刷新
 - V0.34.0 — 上一版：模型完整性检查（含视频模型）+ CLI 文档同步
@@ -39,13 +41,13 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 - V0.5.0 — LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
 - V0.0.XXX — 小修
 
-## 当前版本：V0.37.0
+## 当前版本：V0.39.0
 
 ## 核心能力
 
 | 能力 | 入口 | 统一 CLI | 说明 |
 |------|------|----------|------|
-| 一句话出图 | `run.py` | `python -m agents run` | 自然语言 → Ollama 转写英文 tag → ComfyUI 提交 |
+| 一句话出图 | `run.py` | `python -m agents run` | 自然语言 → Ollama 转写，**--video 切换视频生成** |
 | 角色 LoRA 文生图 | `go_knives_lora.py` | `python -m agents lora` | SDXL/SD1.5 多角色（Knives / Caster）、批量、换装 |
 | IPAdapter 锁脸 | `go_knives_ipadapter.py` | `python -m agents ipa` | 参考图驱动面部一致性、权重可调 |
 | 多角色同框 | `go_multi_char_lora.py` | `python -m agents multi` | 双 LoRA + FaceDetailer 修脸 |
@@ -65,7 +67,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 | 队列管理 | `go_queue.py` | `python -m agents queue` | 查看/清空/中断队列、释放显存 |
 | 产出画廊 | `go_gallery.py` | `python -m agents gallery` | HTML 产出展示、HTTP 服务模式 |
 | 一键诊断 | `go_doctor.py` | `python -m agents doctor` | 9 项环境检查 + 自动修复 |
-| 单元测试 | `tests/` | `pytest tests/` | 32 项测试覆盖核心模块纯逻辑函数 |
+| 单元测试 | `tests/` | `pytest tests/` | 89 项测试覆盖核心模块 + 视频管线函数 |
 | CLI 文档 | `docs/cli-reference.md` | `python scripts/gen_cli_docs.py` | 16 命令 + 子命令自动生成参考文档 |
 | 高质量工作流 | `workflows/*.json` | `python scripts/build_workflows.py` | 6 个 API 格式工作流，带 _meta 元数据 |
 | ControlNet | `go_control.py` | `python -m agents control` | depth/openpose/softedge/tile/inpaint/lineart 引导生图 |
@@ -84,7 +86,9 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 | Gallery 视频 | `go_gallery.py` | `python -m agents gallery` | HTML 画廊自动检测 .mp4 渲染 `<video>` 标签 |
 | 视频 API | `go_serve.py /api/video` | `POST /api/video` | 异步视频作业（T2V/I2V + preset + timeout） |
 | 队列智能感知 | `go_queue.py list` | `python -m agents queue list` | 自动区分 image/video 任务类型 |
-| Output 视频感知 | `output_manager.py` | `python -m agents outputs list` | images/videos 分开统计，show 显示文件列表 |
+|| Output 视频感知 | `output_manager.py` | `python -m agents outputs list` | images/videos 分开统计，show 显示文件列表 |
+||| Run 视频路由 | `run.py --video` | `python -m agents run "..." --video` | 一句话出视频，支持全参数（ref/frames/fps/preset） |
+||| 产出视频信息 | `__main__.py` | `python -m agents outputs show <id> --info` | 视频文件大小 + ffprobe 时长 |
 || 视频参数对齐 | `go_video.py --sampler --scheduler` | `python -m agents video "..." --sampler dpmpp_2m` | KSampler 参数可自定义，预设含 sampler/scheduler |
 || 视频模型检查 | `model_manager.check_video_models()` | `python -m agents models check video` | Wan2.2 三件套完整性 + 文件大小健康检查 |
 || CLI 文档同步 | `scripts/gen_cli_docs.py` | `python scripts/gen_cli_docs.py` | 22 个命令自动生成参考文档 |
@@ -279,7 +283,7 @@ metadata.json 包含完整的生成参数，面试时打开即可证明工程化
 - [ ] `python -m agents models download <url> --type lora --preview` 预览
 - [ ] `python -m agents gallery --help` 显示参数
 - [ ] `python -m agents gallery --output /tmp/g.html` 生成 HTML
-- [ ] `PYTHONPATH=agents python -m pytest tests/ -v` 32 项测试通过
+- [ ] `PYTHONPATH=agents python -m pytest tests/ -v` 89 项测试通过
 - [ ] `python -m agents workflow convert <name>` ComfyUI 离线时友好提示
 - [ ] `python -m agents doctor` 显示 9 项诊断
 - [ ] `python -m agents doctor --json` JSON 格式输出

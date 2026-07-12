@@ -27,6 +27,9 @@ docs/samples/_source/
 outputs/*
 !outputs/.gitkeep
 
+# 测试残留工件
+\[aout]*
+
 # IDE
 .idea/
 .vscode/
