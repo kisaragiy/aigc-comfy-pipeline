@@ -10,8 +10,9 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.21.0** — 当前：CLI 文档自动生成
-- V0.20.0 — 上一版：一键诊断修复 (doctor)
+- **V0.22.0** — 当前：工作流重建工程
+- V0.21.0 — 上一版：CLI 文档自动生成
+- V0.20.0 — 一键诊断修复 (doctor)
 - V0.19.0 — workflow API 格式转换
 - V0.18.0 — 工程化测试 + CI
 - V0.17.0 — Output Gallery 增强
@@ -29,7 +30,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 - V0.5.0 — LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
 - V0.0.XXX — 小修
 
-## 当前版本：V0.21.0
+## 当前版本：V0.22.0
 
 ## 核心能力
 
@@ -57,6 +58,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 | 一键诊断 | `go_doctor.py` | `python -m agents doctor` | 9 项环境检查 + 自动修复 |
 | 单元测试 | `tests/` | `pytest tests/` | 32 项测试覆盖核心模块纯逻辑函数 |
 | CLI 文档 | `docs/cli-reference.md` | `python scripts/gen_cli_docs.py` | 16 命令 + 子命令自动生成参考文档 |
+| 高质量工作流 | `workflows/*.json` | `python scripts/build_workflows.py` | 6 个 API 格式工作流，带 _meta 元数据 |
 
 ## 项目结构
 
@@ -88,6 +90,7 @@ scripts/                   # 辅助脚本（开发用）
   bootstrap_portfolio.py   #   从本机 DrawingLive 同步 + 生成 SFW 样张
   finalize_portfolio.py    #   [弃用] 仅调用 bootstrap，待删除
   gen_cli_docs.py          #   自动生成 CLI 参考文档
+  build_workflows.py       #   程序化构建 API 格式工作流 JSON
 docs/                      # 作品展示 + 知识库
   GALLERY.html
   PORTFOLIO.md
@@ -239,3 +242,5 @@ metadata.json 包含完整的生成参数，面试时打开即可证明工程化
 - [ ] `python -m agents doctor` 显示 9 项诊断
 - [ ] `python -m agents doctor --json` JSON 格式输出
 - [ ] `python scripts/gen_cli_docs.py` 生成 `docs/cli-reference.md`
+- [ ] `python scripts/build_workflows.py` 生成 6 个 API 格式工作流
+- [ ] `python -m agents workflow list` 显示新增工作流为 ✅ API 格式

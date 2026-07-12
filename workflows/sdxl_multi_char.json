@@ -1,0 +1,132 @@
+{
+  "_meta": {
+    "title": "SDXL 多角色同框",
+    "version": "1.0",
+    "description": "SDXL + 双 LoRA + FaceDetailer 修脸",
+    "models": {
+      "checkpoint": "sd_xl_base_1.0.safetensors",
+      "lora": "knives_sdxl.safetensors, caster_sdxl.safetensors"
+    },
+    "cli": "python -m agents multi",
+    "custom_nodes": [
+      "FaceDetailer",
+      "comfyui-impact-pack"
+    ]
+  },
+  "4": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "sd_xl_base.safetensors"
+    }
+  },
+  "12": {
+    "class_type": "LoraLoader",
+    "inputs": {
+      "model": [
+        "4",
+        0
+      ],
+      "clip": [
+        "4",
+        1
+      ],
+      "lora_name": "knives_sdxl.safetensors",
+      "strength_model": 0.72,
+      "strength_clip": 0.72
+    }
+  },
+  "13": {
+    "class_type": "LoraLoader",
+    "inputs": {
+      "model": [
+        "12",
+        0
+      ],
+      "clip": [
+        "12",
+        1
+      ],
+      "lora_name": "caster_sdxl.safetensors",
+      "strength_model": 0.72,
+      "strength_clip": 0.72
+    }
+  },
+  "6": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "prompt",
+      "clip": [
+        "13",
+        1
+      ]
+    }
+  },
+  "7": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "negative",
+      "clip": [
+        "13",
+        1
+      ]
+    }
+  },
+  "5": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {
+      "width": 1344,
+      "height": 896,
+      "batch_size": 1
+    }
+  },
+  "3": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 42,
+      "steps": 32,
+      "cfg": 7.0,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1.0,
+      "model": [
+        "13",
+        0
+      ],
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "7",
+        0
+      ],
+      "latent_image": [
+        "5",
+        0
+      ]
+    }
+  },
+  "8": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "3",
+        0
+      ],
+      "vae": [
+        "4",
+        2
+      ]
+    }
+  },
+  "9": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "8",
+        0
+      ],
+      "filename_prefix": "multi"
+    }
+  }
+}
