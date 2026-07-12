@@ -1,6 +1,6 @@
 # CLI 参考文档
 
-> 自动生成于 2026-07-13 00:35
+> 自动生成于 2026-07-13
 
 AIGC ComfyUI Pipeline v?
 
@@ -915,7 +915,7 @@ usage: python -m agents workshop <subcommand> [args...]
 子命令:
   create  "描述"   — 一句话出图（引擎 → 多张生成 → 质检 → 选最优）
   engine  "描述"   — 测试 prompt 引擎（显示优化后提示词）
-  inspect <图片>   — 逐部位质检
+  inspect <图片|目录|通配符> — 逐部位质检（支持批量）
   manga   "剧本"   — 漫画/分镜生成
   video   "描述"   — 视频生成
 ```
@@ -987,6 +987,8 @@ usage: python -m agents workshop inspect [-h] [--verbose] image_path
 示例:
   python -m agents workshop inspect output/001.png
   python -m agents workshop inspect output/001.png --verbose
+  python -m agents workshop inspect ./outputs/           # 目录全部图片
+  python -m agents workshop inspect "outputs/*.png"      # 通配符
 ```
 
 ### `workshop manga`
@@ -996,14 +998,16 @@ usage: python -m agents workshop inspect [-h] [--verbose] image_path
 ```text
 usage: python -m agents workshop manga [-h] [--style STYLE] [--preview]
                                        [--layout LAYOUT] [--char CHAR ...]
+                                       [--script-file SCRIPT_FILE]
                                        script_text [script_text ...]
 
 参数:
-  --style STYLE       画风 (默认: anime)
-  --preview           仅预览 prompt
-  --layout LAYOUT     拼页布局 (auto/4koma)
+  --style STYLE           画风 (默认: anime)
+  --preview               仅预览 prompt
+  --layout LAYOUT         拼页布局 (auto/4koma)
   --char "名:服饰:发型:特征"  角色定义 (可重复，支持 1~4 个)
-  script_text         剧本/场景描述
+  --script-file FILE       从文件读取剧本（替代命令行参数）
+  script_text             剧本/场景描述
 
 示例:
   python -m agents workshop manga "教室中，两人相对而立。" --preview

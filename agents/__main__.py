@@ -625,18 +625,82 @@ def _workshop_engine(args: list[str]) -> None:
 
 
 def _workshop_inspect(args: list[str]) -> None:
-    """python -m agents workshop inspect <image_path> [--verbose]"""
-    import argparse
+    """python -m agents workshop inspect <image_path|dir|glob> [--verbose]
 
-    parser = argparse.ArgumentParser(description="逐部位质检")
-    parser.add_argument("image_path", help="图片路径")
+    支持:
+      - 单张图片: workshop inspect image.png
+      - 目录:     workshop inspect ./outputs/
+      - 通配符:   workshop inspect "output/*.png"
+    """
+    import argparse
+    import glob
+
+    parser = argparse.ArgumentParser(description="逐部位质检（支持单张/目录/通配符）")
+    parser.add_argument("image_path", help="图片路径、目录或通配符")
     parser.add_argument("--verbose", action="store_true", help="详细信息")
     parsed = parser.parse_args(args)
 
     from workshop.inspect import inspect_image, format_report
-    result = inspect_image(parsed.image_path, verbose=parsed.verbose)
-    report = format_report(result)
-    print(report)
+
+    # 解析输入路径
+    raw = parsed.image_path
+    paths: list[str] = []
+
+    # 尝试通配符
+    globbed = glob.glob(raw)
+    if globbed:
+        paths = sorted(globbed)
+    elif Path(raw).is_dir():
+        # 目录: 递归找图片
+        exts = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+        paths = sorted([str(p) for p in Path(raw).rglob("*") if p.suffix.lower() in exts])
+    elif Path(raw).is_file():
+        paths = [raw]
+    else:
+        print(f"❌ 路径不存在或未匹配: {raw}")
+        return
+
+    if not paths:
+        print(f"⚠️  未找到图片: {raw}")
+        return
+
+    # 批量质检
+    results: list[dict[str, object]] = []
+    total = len(paths)
+    for i, fp in enumerate(paths):
+        if not parsed.verbose:
+            print(f"\r  [{i+1}/{total}] 质检中 {Path(fp).name}...", end="", flush=True)
+        result = inspect_image(fp, verbose=parsed.verbose)
+        results.append({"path": fp, "result": result})
+
+    print()  # 换行
+
+    # 输出
+    if total == 1:
+        print(format_report(results[0]["result"]))
+        return
+
+    # 多文件 → 汇总表
+    print(f"📋 质检汇总 ({total} 张):")
+    print(f"  {'图片':<30} {'脸':<6} {'眼':<6} {'手':<6} {'脚':<6} {'模糊':<6} {'综合分':<8}")
+    print(f"  {'-'*30} {'-'*6} {'-'*6} {'-'*6} {'-'*6} {'-'*6} {'-'*8}")
+    ok_count = 0
+    for item in results:
+        r = item["result"]
+        name = Path(item["path"]).name[:30]
+        parts = r.get("parts", {})
+        scores = r.get("scores", {})
+        face_s = "✅" if parts.get("脸", {}).get("status") == "ok" else "❌" if parts.get("脸", {}).get("status") == "崩了" else "❓"
+        eye_s = "✅" if parts.get("左眼", {}).get("status") in ("ok", "闭眼") and parts.get("右眼", {}).get("status") in ("ok", "闭眼") else "❌" if parts.get("左眼", {}).get("status") == "崩了" or parts.get("右眼", {}).get("status") == "崩了" else "❓"
+        hand_s = "✅" if parts.get("手", {}).get("status") == "ok" else "❌" if parts.get("手", {}).get("status") == "崩了" else "❓"
+        foot_s = "✅" if parts.get("脚", {}).get("status") == "ok" else "❌" if parts.get("脚", {}).get("status") == "异常" else "❓"
+        blur_s = "✅" if parts.get("模糊", {}).get("status") == "正常" else "❌" if parts.get("模糊", {}).get("status") == "模糊" else "❓"
+        overall = scores.get("overall", 0)
+        if r.get("status") == "ok":
+            ok_count += 1
+        print(f"  {name:<30} {face_s:<6} {eye_s:<6} {hand_s:<6} {foot_s:<6} {blur_s:<6} {overall:<8.2f}")
+
+    print(f"\n  ✅ {ok_count}/{total} 张通过 · ⚠️ {total - ok_count} 张有问题")
 
 
 def _workshop_manga(args: list[str]) -> None:
@@ -650,9 +714,19 @@ def _workshop_manga(args: list[str]) -> None:
     parser.add_argument("--layout", default="auto", help="拼页布局 (auto/4koma)")
     parser.add_argument("--char", action="append", default=None,
                         help='角色定义 (可重复): "名:服饰:发型:特征" 例：--char "Knives:白校服:银发:猫耳红瞳"')
+    parser.add_argument("--script-file", default=None,
+                        help="从文件读取剧本（替代命令行参数）")
     parsed = parser.parse_args(args)
 
-    script = " ".join(parsed.script_text) if parsed.script_text else ""
+    script = ""
+    if parsed.script_file:
+        sp = Path(parsed.script_file)
+        if not sp.is_file():
+            print(f"❌ 剧本文件不存在: {parsed.script_file}")
+            return
+        script = sp.read_text(encoding="utf-8").strip()
+    else:
+        script = " ".join(parsed.script_text) if parsed.script_text else ""
     if not script:
         parser.print_help()
         return
