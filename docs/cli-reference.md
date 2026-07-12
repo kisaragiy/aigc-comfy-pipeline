@@ -1,6 +1,6 @@
 # CLI 参考文档
 
-> 自动生成于 2026-07-12 21:11
+> 自动生成于 2026-07-12 21:17
 
 AIGC ComfyUI Pipeline v?
 
@@ -646,14 +646,54 @@ workflow_multi_char_lora_sdxl               11 ✅      CLIPTextEncode, Checkpoi
 模型管理（list / info / check / download）
 
 ```
-用法: python -m agents models list [category]|info <name>|check <workflow_name>|check video|download <url>
+用法: python -m agents models list [category]|info <name>|check <workflow_name>|check video|download <url>|download video|refresh
 ```
 
 ### `models list`
 
 ```
-未找到 --help 模型。
-处理: 确认 ComfyUI 已安装模型到 COMFY_ROOT/models/ 目录下。
+共 88 个模型:
+
+  📁 animatediff (1):
+    mm_sdxl_v10_beta.ckpt                          906.1MB
+
+  📁 checkpoint (10):
+    index.bin                                        0.2MB
+    postings.bin                                     0.1MB
+    base_sd15.safetensors                         4067.6MB
+    waiIllustriousSDXL_v160.safetensors           6616.6MB
+    anima-base-v1.0.safetensors                   3988.5MB
+    anima-preview.safetensors                     3988.5MB
+    anima-preview2.safetensors                    3988.5MB
+    anima-preview3-base.safetensors               3988.5MB
+    flux-2-klein-9b-fp8.safetensors               8996.1MB
+    wan2.2_ti2v_5B_fp16.safetensors               9536.4MB
+
+  📁 clip (9):
+    t5xxl_fp8_e4m3fn_scaled.safetensors           4918.4MB
+    clip-vit-large-patch14.safetensors            1631.3MB
+    mistral_3_small_flux2_fp8.safetensors         17199.2MB
+    qwen_3_06b_base.safetensors                   1136.9MB
+    qwen_3_8b_fp8mixed.safetensors                8263.4MB
+    sd_xl_base_1.0.safetensors                    6616.7MB
+    t5xxl_fp8_e4m3fn.safetensors                  4667.2MB
+    t5xxl_fp8_e4m3fn_scaled.safetensors           4918.4MB
+    umt5_xxl_fp8_e4m3fn_scaled.safetensors        6423.9MB
+
+  📁 controlnet (17):
+    control-lora-openposeXL2-rank256.safetensors   738.5MB
+    controlnet-depth-sdxl-1.0.safetensors         4772.3MB
+    controlnet-sd-xl-1.0-softedge-dexined.safetensors 4772.3MB
+    controlnet-tile-sdxl-1.0.safetensors          2386.2MB
+    controlnet_inpaint_sdxl1.safetensors          2386.2MB
+    diffusion_pytorch_model.safetensors           4772.3MB
+    dw-ll_ucoco.pth                                386.0MB
+    dw-ll_ucoco_384.pth                            388.0MB
+    dw-mm_ucoco.pth                                206.8MB
+    dw-ss_ucoco.pth                                 98.2MB
+    dw-tt_ucoco.pth                                 65.3MB
+    rtm-l_ucoco_256-95bb32f5_20230822.pth          128.0MB
+    rtm-x_ucoco_
 ```
 
 ### `models info`
@@ -681,7 +721,8 @@ usage: python -m agents models download [-h]
 下载模型到 ComfyUI 目录
 
 positional arguments:
-  url                   下载 URL（HuggingFace / CivitAI / 直链）
+  url                   下载 URL（HuggingFace / CivitAI / 直链），或使用 'video' 下载
+                        Wan2.2 模型预设
 
 options:
   -h, --help            show this help message and exit

@@ -10,8 +10,8 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.34.0** — 当前：模型完整性检查（含视频模型）+ CLI 文档同步
-- V0.33.0 — 上一版：Output 视频感知 + 视频参数对齐
+- **V0.35.0** — 当前：模型下载增强（含视频模型预设）+ 模型缓存刷新
+- V0.34.0 — 上一版：模型完整性检查（含视频模型）+ CLI 文档同步
 - V0.27.0 — A/B 测试
 - V0.26.0 — Prompt 兜底 + 质量验证
 - V0.25.0 — Docker 部署
@@ -37,7 +37,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 - V0.5.0 — LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
 - V0.0.XXX — 小修
 
-## 当前版本：V0.34.0
+## 当前版本：V0.35.0
 
 ## 核心能力
 
@@ -86,6 +86,9 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 || 视频参数对齐 | `go_video.py --sampler --scheduler` | `python -m agents video "..." --sampler dpmpp_2m` | KSampler 参数可自定义，预设含 sampler/scheduler |
 || 视频模型检查 | `model_manager.check_video_models()` | `python -m agents models check video` | Wan2.2 三件套完整性 + 文件大小健康检查 |
 || CLI 文档同步 | `scripts/gen_cli_docs.py` | `python scripts/gen_cli_docs.py` | 22 个命令自动生成参考文档 |
+|| 视频模型下载 | `model_download.download_video_models()` | `python -m agents models download video` | Wan2.2 三件套一键下载（HF 镜像预设） |
+|| 模型缓存刷新 | `model_manager.refresh_cache()` | `python -m agents models refresh` | 清除扫描缓存，新增模型后不用重启 |
+|| 列表实时扫描 | `list_models(no_cache=True)` | `python -m agents models list --no-cache` | 跳过缓存直接扫描磁盘 |
 
 ## 项目结构
 
@@ -303,6 +306,10 @@ metadata.json 包含完整的生成参数，面试时打开即可证明工程化
 - [ ] `python -m agents models check video` 模型缺失时友好提示
 - [ ] `python -m agents models check video` 文件过小时警告损坏风险
 - [ ] `python scripts/gen_cli_docs.py` 生成 22 个命令的参考文档
+- [ ] `python -m agents models download video --preview` 显示 Wan2.2 三件套路径
+- [ ] `python -m agents models download video` 已存在时跳过下载
+- [ ] `python -m agents models refresh` 清除缓存并重新扫描
+- [ ] `python -m agents models list --no-cache` 跳过缓存扫描磁盘
 - [ ] gallery 渲染 .mp4 视频为 `<video>` 标签而非 `<img>`
 - [ ] gallery stats 显示 `N videos` 当有视频时
 - [ ] `POST /api/video` 返回 job_id + status

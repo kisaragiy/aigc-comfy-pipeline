@@ -34,6 +34,31 @@ CATEGORY_PREFERRED_DIR: dict[str, str] = {
     "style_model": "style_models",
 }
 
+# Wan2.2 视频模型预设下载链接 (Kijai 仓库，HF 镜像)
+VIDEO_MODEL_URLS: list[dict[str, Any]] = [
+    {
+        "filename": "wan2.2_ti2v_5B_fp16.safetensors",
+        "url": "https://huggingface.co/Kijai/Wan2.2_comfyui/resolve/main/wan2.2_ti2v_5B_fp16.safetensors",
+        "subdir": "diffusion_models",
+        "expected_gb": 9.5,
+        "description": "Wan2.2 T2V 扩散模型 (5B)",
+    },
+    {
+        "filename": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+        "url": "https://huggingface.co/Kijai/Wan2.2_comfyui/resolve/main/umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+        "subdir": "text_encoders",
+        "expected_gb": 6.4,
+        "description": "Wan2.2 文本编码器 (UMT5)",
+    },
+    {
+        "filename": "wan2.2_vae.safetensors",
+        "url": "https://huggingface.co/Kijai/Wan2.2_comfyui/resolve/main/wan2.2_vae.safetensors",
+        "subdir": "vae",
+        "expected_gb": 1.3,
+        "description": "Wan2.2 VAE 解码器",
+    },
+]
+
 
 def _resolve_target_dir(category: str) -> Path | None:
     """根据类型确定目标子目录。"""
@@ -138,13 +163,93 @@ def download_model(
     return dest
 
 
+def download_video_models(
+    *,
+    hf_mirror: bool = True,
+    preview: bool = False,
+    timeout: float = 3600,
+) -> int:
+    """下载 Wan2.2 视频生成所需的三件套模型。
+
+    Returns:
+        成功下载的数量（已存在的也算成功）。
+    """
+    from model_manager import resolve_models_root
+
+    models_root = resolve_models_root()
+    if models_root is None:
+        print("错误: 无法确定 ComfyUI models 目录", file=sys.stderr)
+        return 0
+
+    success = 0
+    total = len(VIDEO_MODEL_URLS)
+
+    print(f"\n=== Wan2.2 视频模型下载 ({total} 个) ===\n")
+
+    for item in VIDEO_MODEL_URLS:
+        fn = item["filename"]
+        dest_dir = models_root / item["subdir"]
+        dest = dest_dir / fn
+
+        exists = dest.exists()
+
+        if preview:
+            status = "✅ 已存在" if exists else "❌ 缺失"
+            size_str = f"({dest.stat().st_size / (1024*1024):.0f} MB)" if exists else ""
+            print(f"  [{status}] {fn:50s} {size_str}")
+            print(f"          → {dest}")
+            if exists:
+                success += 1
+            continue
+
+        if exists:
+            size_mb = dest.stat().st_size / (1024 * 1024)
+            print(f"  ✅ {fn} 已存在 ({size_mb:.1f} MB)")
+            success += 1
+            continue
+
+        print(f"\n  [{success+1}/{total}] {item['description']}")
+        result = download_model(
+            item["url"],
+            "checkpoint",
+            filename=fn,
+            hf_mirror=hf_mirror,
+            timeout=timeout,
+        )
+        if result:
+            success += 1
+        else:
+            print(f"  ❌ {fn} 下载失败")
+
+    print(f"\n结果: {success}/{total} 个模型可用")
+    if preview:
+        print(f"\n预览结果: {success}/{total} 个模型已存在")
+        print("使用 python -m agents models download video 开始下载。")
+    elif success == total:
+        print("✅ Wan2.2 视频模型已就绪，可以开始视频生成。")
+        print("   验证: python -m agents models check video")
+    else:
+        print(f"⚠️  缺少 {total - success} 个模型，视频生成可能不可用。")
+        print("   重试: python -m agents models download video")
+    return success
+
+
 def download_cli(argv: list[str]) -> None:
     """CLI 入口，接收 argv 列表。"""
+    # 特殊子命令: download video
+    if argv and argv[0] == "video":
+        preview = "--preview" in argv or "-p" in argv
+        no_mirror = "--direct" in argv
+        return download_video_models(
+            hf_mirror=not no_mirror,
+            preview=preview,
+        )
+
     parser = argparse.ArgumentParser(
         prog="python -m agents models download",
         description="下载模型到 ComfyUI 目录",
     )
-    parser.add_argument("url", help="下载 URL（HuggingFace / CivitAI / 直链）")
+    parser.add_argument("url", help="下载 URL（HuggingFace / CivitAI / 直链），或使用 'video' 下载 Wan2.2 模型预设")
     parser.add_argument(
         "--type",
         choices=[
