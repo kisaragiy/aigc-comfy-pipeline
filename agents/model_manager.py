@@ -1,6 +1,7 @@
 """模型管理 — 列出、查询、检查 ComfyUI 模型依赖。"""
 from __future__ import annotations
 
+import json
 import os
 import time
 from pathlib import Path
@@ -87,7 +88,7 @@ def refresh_cache() -> None:
     print(f"✅ 模型缓存已刷新，共 {len(_model_cache)} 个模型。")
 
 
-def list_models(category: str | None = None, no_cache: bool = False) -> list[dict[str, Any]]:
+def list_models(category: str | None = None, no_cache: bool = False, with_disk: bool = False) -> list[dict[str, Any]]:
     """列出模型。category 为 None 返回全部，否则按类型过滤。"""
     global _model_cache
     if no_cache or _model_cache is None:
@@ -231,4 +232,62 @@ def check_workflow_models(workflow: dict) -> dict[str, Any]:
         "found": found,
         "missing": missing,
         "all_found": len(missing) == 0,
+    }
+
+
+def prune_models(dry_run: bool = True) -> dict[str, Any]:
+    """查找未被任何本地 workflow 引用的模型（孤立模型）。
+
+    Args:
+        dry_run: 仅预览不改动。
+
+    Returns:
+        {orphaned: [...], preserve_count, orphan_count, total_bytes, dry_run}
+    """
+    models = list_models(no_cache=True)
+
+    # 扫描所有本地 workflow JSON 文件提取 model refs
+    from comfy_utils import AGENTS_DIR
+    from workflow_manager import find_workflow
+
+    all_ref_names: set[str] = set()
+    # 从 workdir 的 workflow json 中提取
+    for wf_file in AGENTS_DIR.glob("workflow_*.json"):
+        try:
+            wf_data = json.loads(wf_file.read_text(encoding="utf-8"))
+            refs = _extract_model_refs(wf_data)
+            for r in refs:
+                all_ref_names.add(r["value"].lower())
+        except (json.JSONDecodeError, OSError):
+            continue
+
+    # 匹配已安装模型
+    orphaned: list[dict[str, Any]] = []
+    preserved: list[dict[str, Any]] = []
+    for m in models:
+        name_lower = m["name"].lower()
+        # 检查是否被任何 workflow 引用
+        is_used = False
+        for ref_name in all_ref_names:
+            if name_lower == ref_name or name_lower in ref_name or ref_name in name_lower:
+                is_used = True
+                break
+        (preserved if is_used else orphaned).append(m)
+
+    total_bytes = sum(m.get("size_mb", 0) * 1024 * 1024 for m in orphaned)
+
+    if dry_run or True:
+        if orphaned:
+            print(f"\n孤立模型 ({len(orphaned)} 个, {sum(m['size_mb'] for m in orphaned):.0f}MB):")
+            for m in orphaned:
+                print(f"  {m['name']:45s} {m['size_mb']:>7.1f}MB  [{m['subdir']}]")
+        else:
+            print("\n✅ 无孤立模型。")
+
+    return {
+        "orphaned": orphaned,
+        "preserve_count": len(preserved),
+        "orphan_count": len(orphaned),
+        "total_mb": round(sum(m["size_mb"] for m in orphaned), 1),
+        "dry_run": dry_run,
     }

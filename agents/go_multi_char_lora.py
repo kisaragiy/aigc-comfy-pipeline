@@ -8,7 +8,6 @@
   python go_multi_char_lora.py --raw 2girls, knives..., caster...
   python go_multi_char_lora.py --no-face-detail   # 跳过 FaceDetailer（无 impact-pack 时）
 """
-
 from __future__ import annotations
 
 import argparse
@@ -16,10 +15,16 @@ import json
 import os
 import random
 import sys
-import uuid
 from pathlib import Path
+from typing import Any
 
-from comfy_utils import AGENTS_DIR, bootstrap_agents_path, comfy_post_prompt, ollama_generate_or_fallback
+from comfy_utils import (
+    AGENTS_DIR,
+    bootstrap_agents_path,
+    comfy_post_prompt,
+    generate_with_quality,
+    ollama_generate_or_fallback,
+)
 
 bootstrap_agents_path()
 
@@ -58,12 +63,52 @@ def call_llm_scene(user_text: str) -> str:
     return text
 
 
-def load_workflow(use_face_detail: bool) -> dict:
+def build_multi_workflow(
+    prompt: str,
+    *,
+    negative_prompt: str = "",
+    seed: int = -1,
+    steps: int = 32,
+    cfg: float = 7.0,
+    width: int = 1344,
+    height: int = 896,
+    knives_lora: str = "knives_sdxl.safetensors",
+    caster_lora: str = "caster_sdxl.safetensors",
+    lora_strength: float = 0.72,
+    use_face_detail: bool = True,
+    filename_prefix: str = "multi_char_lora_sdxl",
+    sampler: str | None = None,
+    scheduler: str | None = None,
+) -> tuple[dict[str, Any], int]:
+    """构建多角色 SDXL + FaceDetailer 工作流。"""
     path = WORKFLOW if use_face_detail else WORKFLOW_SIMPLE
     if not path.is_file():
         path = WORKFLOW
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
+    template = json.loads(path.read_text(encoding="utf-8"))
+    wf = json.loads(json.dumps(template))
+
+    seed_actual = seed if seed != -1 else random.randint(1, 2**48 - 1)
+    s = max(0.0, min(1.2, lora_strength))
+
+    wf["6"]["inputs"]["text"] = prompt
+    wf["7"]["inputs"]["text"] = negative_prompt
+    wf["12"]["inputs"]["lora_name"] = knives_lora
+    wf["13"]["inputs"]["lora_name"] = caster_lora
+    wf["12"]["inputs"]["strength_model"] = s
+    wf["12"]["inputs"]["strength_clip"] = s
+    wf["13"]["inputs"]["strength_model"] = s
+    wf["13"]["inputs"]["strength_clip"] = s
+    wf["3"]["inputs"]["seed"] = seed_actual
+    wf["3"]["inputs"]["steps"] = steps
+    wf["3"]["inputs"]["cfg"] = cfg
+    wf["5"]["inputs"]["width"] = width
+    wf["5"]["inputs"]["height"] = height
+    wf["9"]["inputs"]["filename_prefix"] = filename_prefix
+    if use_face_detail and "30" in wf:
+        wf["30"]["inputs"]["seed"] = random.randint(1, 2**48 - 1)
+    elif not use_face_detail:
+        wf["9"]["inputs"]["images"] = ["8", 0]
+    return wf, seed_actual
 
 
 def main() -> None:
@@ -81,6 +126,15 @@ def main() -> None:
     parser.add_argument("--cfg", type=float, default=7.0)
     parser.add_argument("--prefix", default="multi_char_lora_sdxl")
     parser.add_argument("--no-face-detail", action="store_true", help="保存 VAEDecode 结果，不用 FaceDetailer")
+    # 质量门禁参数
+    parser.add_argument("--seed", type=int, default=-1, help="随机种子（-1 自动）")
+    parser.add_argument("--preset", default=None, help="SDXL 质量预设（暂未实现）")
+    parser.add_argument("--min-score", type=float, default=0.0,
+                        help="最低 CLIP 评分（≤0 跳过验证）")
+    parser.add_argument("--retry", type=int, default=0,
+                        help="质量不合格时最大重试次数")
+    parser.add_argument("--no-validate", action="store_true",
+                        help="跳过质量验证")
     args = parser.parse_args()
 
     user = (args.prompt or "").strip()
@@ -99,51 +153,64 @@ def main() -> None:
 
     negative = args.negative or DEFAULT_NEGATIVE
     use_fd = not args.no_face_detail
-    wf = load_workflow(use_fd)
 
-    wf["6"]["inputs"]["text"] = positive
-    wf["7"]["inputs"]["text"] = negative
-    wf["12"]["inputs"]["lora_name"] = args.knives_lora
-    wf["13"]["inputs"]["lora_name"] = args.caster_lora
-    s = max(0.0, min(1.2, args.lora_strength))
-    wf["12"]["inputs"]["strength_model"] = s
-    wf["12"]["inputs"]["strength_clip"] = s
-    wf["13"]["inputs"]["strength_model"] = s
-    wf["13"]["inputs"]["strength_clip"] = s
-    wf["3"]["inputs"]["seed"] = random.randint(1, 2**48 - 1)
-    wf["3"]["inputs"]["steps"] = args.steps
-    wf["3"]["inputs"]["cfg"] = args.cfg
-    wf["5"]["inputs"]["width"] = args.width
-    wf["5"]["inputs"]["height"] = args.height
-    wf["9"]["inputs"]["filename_prefix"] = args.prefix
+    qr = generate_with_quality(
+        lambda prompt, **kw: build_multi_workflow(
+            prompt,
+            knives_lora=args.knives_lora,
+            caster_lora=args.caster_lora,
+            lora_strength=args.lora_strength,
+            use_face_detail=use_fd,
+            filename_prefix=args.prefix,
+            **{k: v for k, v in kw.items()
+               if k in ("seed", "steps", "cfg", "width", "height",
+                        "negative_prompt", "sampler", "scheduler")},
+        ),
+        positive,
+        min_score=args.min_score if not args.no_validate else 0.0,
+        max_retries=args.retry,
+        preset=args.preset,
+        seed=args.seed,
+        negative_prompt=negative,
+        steps=args.steps,
+        cfg=args.cfg,
+        width=args.width,
+        height=args.height,
+    )
 
-    if use_fd and "30" in wf:
-        wf["30"]["inputs"]["seed"] = random.randint(1, 2**48 - 1)
-    elif not use_fd:
-        wf["9"]["inputs"]["images"] = ["8", 0]
+    prompt_id = qr.get("prompt_id", "")
+    seed_actual = qr.get("seed", 0)
+    images = qr.get("images", [])
 
-    try:
-        result = comfy_post_prompt(wf, prompt_url=COMFY_URL)
-    except RuntimeError as exc:
-        print(exc, file=sys.stderr)
-        sys.exit(1)
-
-    prompt_id = result.get("prompt_id", "")
-    if prompt_id and prompt_id != "dry-run":
+    if images:
         from output_manager import save_workflow_outputs
         from comfy_utils import comfy_base_url
 
-        save_workflow_outputs(prompt_id, comfy_base_url(COMFY_URL), "multi", {
-            "prompt": positive,
-            "negative": negative,
-            "knives_lora": args.knives_lora,
-            "caster_lora": args.caster_lora,
-            "face_detailer": use_fd,
-        })
+        save_workflow_outputs(
+            prompt_id,
+            comfy_base_url(COMFY_URL),
+            "multi",
+            {
+                "prompt": positive,
+                "negative": negative,
+                "knives_lora": args.knives_lora,
+                "caster_lora": args.caster_lora,
+                "face_detailer": use_fd,
+                "seed": seed_actual,
+                "score": qr.get("score"),
+                "retries": qr.get("retries", 0),
+            },
+        )
 
     print("\n已提交多角色 LoRA 生图")
     print("正向：", positive[:500], "..." if len(positive) > 500 else "")
     print("FaceDetailer:", use_fd)
+    score = qr.get("score")
+    if score is not None:
+        print(f"  CLIP 评分: {score:.3f}")
+    retries = qr.get("retries", 0)
+    if retries > 0:
+        print(f"  重试次数:  {retries}")
 
 
 if __name__ == "__main__":

@@ -10,7 +10,8 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.40.0** — 当前：Run 升级 Flux（generate_with_quality + --lora + --preset）<br>　　　　　　`python -m agents run` 等价 `python -m agents flux` 超集 <br>　　　　　　支持 `--preset`/`--lora`/`--model`/`--steps`/`--min-score`/`--retry`
+- **V0.41.0** — 当前：lora/ipa/multi 升级 Flux（generate_with_quality）+ 模型管理增强（--disk + prune）<br>　　　　　　`python -m agents lora/ipa/multi` 增加 `--preset`/`--seed`/`--min-score`/`--retry` <br>　　　　　　`python -m agents models list --disk` 显示磁盘占用 <br>　　　　　　`python -m agents models prune [--force]` 清理孤立模型
+- **V0.40.0** — 上一版：Run 升级 Flux（generate_with_quality + --lora + --preset）<br>　　　　　　`python -m agents run` 等价 `python -m agents flux` 超集 <br>　　　　　　支持 `--preset`/`--lora`/`--model`/`--steps`/`--min-score`/`--retry`
 - **V0.39.0** — Run 视频路由 + 产出管理视频信息 <br>　　　　　　`python -m agents run "prompt" --video` 自动路由视频生成 <br>　　　　　　`python -m agents outputs show <id> --info` 显示视频时长/大小
 - **V0.38.0** — Gallery 视频缩略图 + 测试覆盖增强（32→89 项）<br>　　　　　　`--refresh-posters` 强制刷新
 - **V0.37.0** — 视频后处理工具 + 视频预览模式
@@ -42,16 +43,16 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 - V0.5.0 — LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
 - V0.0.XXX — 小修
 
-## 当前版本：V0.40.0
+## 当前版本：V0.41.0
 
 ## 核心能力
 
 | 能力 | 入口 | 统一 CLI | 说明 |
 |------|------|----------|------|
 | 一句话出图 | `run.py` | `python -m agents run` | 自然语言 → Ollama 转写，**--video 切换视频**，支持 --lora/--preset/--model 等全参数 |
-| 角色 LoRA 文生图 | `go_knives_lora.py` | `python -m agents lora` | SDXL/SD1.5 多角色（Knives / Caster）、批量、换装 |
-| IPAdapter 锁脸 | `go_knives_ipadapter.py` | `python -m agents ipa` | 参考图驱动面部一致性、权重可调 |
-| 多角色同框 | `go_multi_char_lora.py` | `python -m agents multi` | 双 LoRA + FaceDetailer 修脸 |
+| 角色 LoRA 文生图 | `go_knives_lora.py` | `python -m agents lora` | SDXL/SD1.5 多角色（Knives / Caster）、批量、换装、**质量门禁 + --preset** |
+| IPAdapter 锁脸 | `go_knives_ipadapter.py` | `python -m agents ipa` | 参考图驱动面部一致性、权重可调、**质量门禁 + --preset** |
+| 多角色同框 | `go_multi_char_lora.py` | `python -m agents multi` | 双 LoRA + FaceDetailer 修脸、**质量门禁 + --preset** |
 | 批处理 | `go_knives_lora.py --count N` | `python -m agents lora --count N` | 多张自动复制到草稿库 |
 | 产出管理 | `output_manager.py` | `python -m agents outputs` | 结构化元数据、list/show/clean，**所有命令自动归档** |
 | 环境检查 | `comfy_utils.py` | `python -m agents check` | 运行前探活 ComfyUI/Ollama，自助诊断 |
@@ -59,7 +60,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 | Flux.2 Klein 身份一致性 | agents 脚本加载 workflows/JSON | — | 身份引导 + 单图工作流 |
 | Prompt 优化 | `comfy_utils.optimize_prompt()` | — | 六维度构图法转为结构化英文 tag |
 | 工作流管理 | `workflow_manager.py` | `python -m agents workflow` | 模板扫描、参数 schema 提取、节点依赖检查、格式转换 |
-| 模型管理 | `model_manager.py` | `python -m agents models` | 列出/查询/检查/下载模型 |
+| 模型管理 | `model_manager.py` | `python -m agents models` | 列出/查询/检查/下载、**--disk 磁盘占用**、**prune 清理孤立** |
 | Flux.2 Klein 生图 | `go_flux.py` | `python -m agents flux` | 程序化构建 Flux 工作流（9B/4B、LoRA 注入） |
 | 参数扫描 | `go_sweep.py` | `python -m agents sweep` | 网格参数迭代、自动对比拼图 |
 | 自动标图 | `go_caption.py` | `python -m agents caption` | Ollama VL 自动生成训练数据 .txt 标注 |

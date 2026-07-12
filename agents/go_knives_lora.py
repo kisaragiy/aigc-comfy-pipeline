@@ -9,7 +9,6 @@
 
 环境变量：COMFY_URL、OLLAMA_URL、OLLAMA_MODEL（与 run.py 相同）
 """
-
 from __future__ import annotations
 
 import argparse
@@ -26,6 +25,7 @@ from comfy_utils import (
     bootstrap_agents_path,
     comfy_base_url,
     comfy_post_prompt,
+    generate_with_quality,
     ollama_generate_or_fallback,
     resolve_comfy_root,
     wait_images,
@@ -146,47 +146,56 @@ def default_negative(char: dict[str, Any], sdxl: bool) -> str:
     )
 
 
-def submit(workflow: dict) -> str | None:
-    body = comfy_post_prompt(workflow, prompt_url=COMFY_URL)
-    return body.get("prompt_id")
-
-
-def apply_workflow(
-    workflow: dict,
+def build_lora_workflow(
+    prompt: str,
     *,
-    positive: str,
-    negative: str,
-    lora_name: str,
-    strength: float,
-    prefix: str,
-    use_portrait: bool,
-    use_sdxl: bool,
-    ckpt: str | None,
-    width: int | None,
-    height: int | None,
-    steps: int | None,
-    cfg: float | None,
-) -> None:
-    workflow["6"]["inputs"]["text"] = positive
-    workflow["7"]["inputs"]["text"] = negative
-    workflow["12"]["inputs"]["lora_name"] = lora_name
-    workflow["12"]["inputs"]["strength_model"] = strength
-    workflow["12"]["inputs"]["strength_clip"] = strength
-    workflow["3"]["inputs"]["seed"] = random.randint(1, 2**48 - 1)
-    workflow["9"]["inputs"]["filename_prefix"] = prefix
+    negative_prompt: str = "",
+    seed: int = -1,
+    steps: int | None = None,
+    cfg: float | None = None,
+    width: int | None = None,
+    height: int | None = None,
+    character: str = "knives",
+    lora_name: str = "",
+    lora_strength: float = 0.9,
+    sd15: bool = False,
+    portrait: bool = True,
+    ckpt: str | None = None,
+    filename_prefix: str = "",
+    sampler: str | None = None,
+    scheduler: str | None = None,
+) -> tuple[dict[str, Any], int]:
+    """构建 SDXL/SD1.5 + LoRA 工作流。"""
+    char = CHARACTERS[character]
+    use_sdxl = not sd15
+    actual_prefix = filename_prefix or (char["prefix_sdxl"] if use_sdxl else char["prefix_sd15"])
+
+    wf_path = char["workflow_sdxl"] if use_sdxl else WORKFLOW_SD15
+    template = json.loads(wf_path.read_text(encoding="utf-8"))
+    wf = json.loads(json.dumps(template))
+
+    seed_actual = seed if seed != -1 else random.randint(1, 2**48 - 1)
+    wf["6"]["inputs"]["text"] = prompt
+    wf["7"]["inputs"]["text"] = negative_prompt
+    wf["12"]["inputs"]["lora_name"] = lora_name
+    wf["12"]["inputs"]["strength_model"] = max(0.0, min(2.0, lora_strength))
+    wf["12"]["inputs"]["strength_clip"] = max(0.0, min(2.0, lora_strength))
+    wf["3"]["inputs"]["seed"] = seed_actual
+    wf["9"]["inputs"]["filename_prefix"] = actual_prefix
     if ckpt:
-        workflow["4"]["inputs"]["ckpt_name"] = ckpt
-    if use_sdxl and width is None and height is None and use_portrait:
-        workflow["5"]["inputs"]["width"] = DEFAULT_SDXL_WIDTH
-        workflow["5"]["inputs"]["height"] = DEFAULT_SDXL_HEIGHT
+        wf["4"]["inputs"]["ckpt_name"] = ckpt
+    if use_sdxl and portrait and width is None and height is None:
+        wf["5"]["inputs"]["width"] = DEFAULT_SDXL_WIDTH
+        wf["5"]["inputs"]["height"] = DEFAULT_SDXL_HEIGHT
     if width is not None:
-        workflow["5"]["inputs"]["width"] = width
+        wf["5"]["inputs"]["width"] = width
     if height is not None:
-        workflow["5"]["inputs"]["height"] = height
+        wf["5"]["inputs"]["height"] = height
     if steps is not None:
-        workflow["3"]["inputs"]["steps"] = steps
+        wf["3"]["inputs"]["steps"] = steps
     if cfg is not None:
-        workflow["3"]["inputs"]["cfg"] = cfg
+        wf["3"]["inputs"]["cfg"] = cfg
+    return wf, seed_actual
 
 
 def copy_outputs(prompt_id: str, draft_dir: Path, prefix: str, index: int) -> int:
@@ -242,6 +251,15 @@ def main() -> None:
         default=None,
         help="批量出图复制目录（默认 C:\\DrawingLive\\ai生图草稿库）",
     )
+    # 质量门禁参数
+    parser.add_argument("--seed", type=int, default=-1, help="随机种子（-1 自动）")
+    parser.add_argument("--preset", default=None, help="SDXL 质量预设（暂未实现）")
+    parser.add_argument("--min-score", type=float, default=0.0,
+                        help="最低 CLIP 评分（≤0 跳过验证）")
+    parser.add_argument("--retry", type=int, default=0,
+                        help="质量不合格时最大重试次数")
+    parser.add_argument("--no-validate", action="store_true",
+                        help="跳过质量验证")
     args = parser.parse_args()
 
     char = CHARACTERS[args.character]
@@ -253,6 +271,7 @@ def main() -> None:
         else:
             print("提示: 使用 SD1.5 旧 LoRA；主流程请用 SDXL。", file=sys.stderr)
 
+    # 提示词构建
     user = args.prompt or ""
     if args.outfit:
         user = f"{user} {args.outfit}".strip() if user else args.outfit.strip()
@@ -292,56 +311,99 @@ def main() -> None:
     draft_dir = args.out or Path(r"C:\DrawingLive\ai生图草稿库")
     count = max(1, args.count)
 
-    with open(
-        char["workflow_sdxl"] if use_sdxl else WORKFLOW_SD15,
-        encoding="utf-8",
-    ) as f:
-        template = json.load(f)
-
-    total_copied = 0
-    for i in range(count):
-        workflow = json.loads(json.dumps(template))
-        file_prefix = f"{prefix_base}_batch_{i+1:02d}" if count > 1 else prefix_base
-        apply_workflow(
-            workflow,
-            positive=positive,
-            negative=negative,
-            lora_name=lora_name,
-            strength=strength,
-            prefix=file_prefix,
-            use_portrait=use_portrait,
-            use_sdxl=use_sdxl,
-            ckpt=args.ckpt,
-            width=args.width,
-            height=args.height,
+    if count == 1:
+        # 单张模式：使用 generate_with_quality（质量门禁 + 重试）
+        qr = generate_with_quality(
+            lambda prompt, **kw: build_lora_workflow(
+                prompt,
+                character=args.character,
+                lora_name=lora_name,
+                lora_strength=strength,
+                sd15=args.sd15,
+                portrait=use_portrait,
+                ckpt=args.ckpt,
+                filename_prefix=prefix_base,
+                **{k: v for k, v in kw.items()
+                   if k in ("seed", "steps", "cfg", "width", "height",
+                            "negative_prompt", "sampler", "scheduler")},
+            ),
+            positive,
+            min_score=args.min_score if not args.no_validate else 0.0,
+            max_retries=args.retry,
+            preset=args.preset,
+            seed=args.seed,
+            negative_prompt=negative,
             steps=args.steps,
             cfg=args.cfg,
+            width=args.width,
+            height=args.height,
         )
-        prompt_id = submit(workflow)
-        if count > 1 and prompt_id:
-            draft_dir.mkdir(parents=True, exist_ok=True)
-            tag = prefix_base.replace("_lora_sdxl", "").replace("_lora_sd15", "")
-            total_copied += copy_outputs(prompt_id, draft_dir, tag, i + 1)
-            print(f"[{i+1}/{count}] prompt_id={prompt_id}")
-        elif count == 1 and prompt_id and prompt_id != "dry-run":
+
+        prompt_id = qr.get("prompt_id", "")
+        seed_actual = qr.get("seed", 0)
+        images = qr.get("images", [])
+
+        if images:
             from output_manager import save_workflow_outputs
-            from comfy_utils import comfy_base_url
+            save_workflow_outputs(
+                prompt_id,
+                comfy_base_url(COMFY_URL),
+                "lora",
+                {
+                    "prompt": positive,
+                    "negative": negative,
+                    "seed": seed_actual,
+                    "lora": lora_name,
+                    "lora_strength": strength,
+                    "character": args.character,
+                    "score": qr.get("score"),
+                    "retries": qr.get("retries", 0),
+                },
+            )
 
-            save_workflow_outputs(prompt_id, comfy_base_url(COMFY_URL), "lora", {
-                "prompt": positive,
-                "negative": negative,
-                "seed": workflow["3"]["inputs"]["seed"],
-                "lora": lora_name,
-                "lora_strength": strength,
-                "character": args.character,
-            })
+        print("\n====================")
+        print(f"已提交 {char['display']} LoRA 文生图")
+        print("====================")
+        print("正向：", positive)
+        print("LoRA：", lora_name, f"strength={strength}")
+        score = qr.get("score")
+        if score is not None:
+            print(f"  CLIP 评分: {score:.3f}")
+        retries = qr.get("retries", 0)
+        if retries > 0:
+            print(f"  重试次数:  {retries}")
+    else:
+        # 批量模式：保持原有逻辑（直接提交 + 复制）
+        total_copied = 0
+        for i in range(count):
+            wf, seed_actual = build_lora_workflow(
+                positive,
+                negative_prompt=negative,
+                seed=args.seed if args.seed != -1 else -1,
+                steps=args.steps,
+                cfg=args.cfg,
+                width=args.width,
+                height=args.height,
+                character=args.character,
+                lora_name=lora_name,
+                lora_strength=strength,
+                sd15=args.sd15,
+                portrait=use_portrait,
+                ckpt=args.ckpt,
+                filename_prefix=f"{prefix_base}_batch_{i+1:02d}" if count > 1 else prefix_base,
+            )
+            prompt_id_ = comfy_post_prompt(wf, prompt_url=COMFY_URL).get("prompt_id", "")
+            if prompt_id_:
+                draft_dir.mkdir(parents=True, exist_ok=True)
+                tag = prefix_base.replace("_lora_sdxl", "").replace("_lora_sd15", "")
+                total_copied += copy_outputs(prompt_id_, draft_dir, tag, i + 1)
+                print(f"[{i+1}/{count}] prompt_id={prompt_id_}")
 
-    print("\n====================")
-    print(f"已提交 {char['display']} LoRA 文生图" + (f" ×{count}" if count > 1 else ""))
-    print("====================")
-    print("正向：", positive)
-    print("LoRA：", lora_name, f"strength={strength}")
-    if count > 1:
+        print("\n====================")
+        print(f"已提交 {char['display']} LoRA 文生图 ×{count}")
+        print("====================")
+        print("正向：", positive)
+        print("LoRA：", lora_name, f"strength={strength}")
         print(f"批量完成，共复制 {total_copied} 张到 {draft_dir}")
 
 

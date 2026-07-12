@@ -195,6 +195,7 @@ def _run_models() -> None:
     if action == "list":
         category = sys.argv[3] if len(sys.argv) > 3 and not sys.argv[3].startswith("--") else None
         no_cache = "--no-cache" in sys.argv
+        show_disk = "--disk" in sys.argv
         models = list_models(category, no_cache=no_cache)
         if not models:
             msg = f"未找到 {category} 模型。" if category else "未找到模型。"
@@ -203,19 +204,25 @@ def _run_models() -> None:
             return
 
         if category:
-            print(f"\n{category} 模型 ({len(models)} 个):")
+            total = sum(m["size_mb"] for m in models)
+            print(f"\n{category} 模型 ({len(models)} 个, {total:.0f}MB):")
             for m in models:
-                print(f"  {m['name']:45s} {m['size_mb']:>6.1f}MB")
+                disk_tag = f"  {m['size_mb']:>6.1f}MB" if show_disk else ""
+                print(f"  {m['name']:45s}{disk_tag}")
         else:
             by_cat: dict[str, list] = {}
             for m in models:
                 by_cat.setdefault(m["category"], []).append(m)
-            print(f"\n共 {len(models)} 个模型:\n")
+            total_all = sum(m["size_mb"] for m in models)
+            print(f"\n共 {len(models)} 个模型 (合计 {total_all:.0f}MB):\n")
             for cat in sorted(by_cat):
                 items = by_cat[cat]
-                print(f"  📁 {cat} ({len(items)}):")
+                cat_total = sum(m["size_mb"] for m in items)
+                cat_info = f"  [{cat_total:.0f}MB]" if show_disk else ""
+                print(f"  📁 {cat} ({len(items)}) {cat_info}:")
                 for m in items:
-                    print(f"    {m['name']:45s} {m['size_mb']:>6.1f}MB")
+                    disk_tag = f"  {m['size_mb']:>7.1f}MB" if show_disk else ""
+                    print(f"    {m['name']:45s}{disk_tag}")
                 print()
 
     elif action == "info":
@@ -288,12 +295,28 @@ def _run_models() -> None:
         from agents.model_manager import refresh_cache
         refresh_cache()
 
+    elif action == "prune":
+        from agents.model_manager import prune_models
+        dry_run = "--force" not in sys.argv
+        result = prune_models(dry_run=dry_run)
+        if not dry_run:
+            import os
+            for m in result["orphaned"]:
+                try:
+                    os.remove(m["path"])
+                    print(f"  已删除: {m['name']}")
+                except OSError as e:
+                    print(f"  删除失败 {m['name']}: {e}")
+            print(f"\n✅ 已清理 {result['orphan_count']} 个孤立模型，释放 {result['total_mb']:.0f}MB。")
+        elif result["orphan_count"] > 0:
+            print(f"\n提示: 用 --force 确认删除 {result['orphan_count']} 个孤立模型（释放 {result['total_mb']:.0f}MB）。")
+
     else:
         _show_models_help()
 
 
 def _show_models_help() -> None:
-    print("用法: python -m agents models list [category]|info <name>|check <workflow_name>|check video|download <url>|download video|refresh")
+    print("用法: python -m agents models list [category] [--disk]|info <name>|check <workflow_name>|check video|download <url>|download video|refresh|prune [--force]")
 
 
 def _get_video_duration_str(video_path: Path) -> str:
