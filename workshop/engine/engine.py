@@ -112,23 +112,21 @@ STYLE_KEYWORDS: dict[str, str] = {
 
 # ── 模板化系统 ──────────────────────────────────────────
 
-_OLLAMA_TEMPLATE = """你是一位专业的 AI 绘画提示词工程师。请将用户的自然语言描述，转化为高质量的英文 Stable Diffusion / Flux 提示词。
+_OLLAMA_TEMPLATE = """You are a professional AI prompt engineer for Stable Diffusion / Flux. Convert the user's natural language description into a high-quality English prompt.
 
-要求：
-1. 分析描述中隐含的【画风】—— 是二次元、真人摄影、CG渲染、插画、还是油画等
-2. 分析【构图】—— 特写/半身/全身/远景/俯拍等
-3. 分析【光照】—— 自然光/逆光/侧光/霓虹/舞台光等
-4. 分析【色调/氛围】—— 暖色/冷色/赛博朋克/古风等
-5. 如果不确定，根据最常见的搭配做合理推断
-6. 在输出末尾单独一行注明你推测的 → 【风格: xxx】【构图: xxx】【光照: xxx】
+Requirements:
+1. Analyze the implied STYLE (anime, photoreal, CG, cosplay, cinematic, oil painting, etc.)
+2. Analyze the COMPOSITION (close-up, half-body, full-body, wide shot, low/high angle, etc.)
+3. Analyze the LIGHTING (natural, backlight, side light, neon, stage, etc.)
+4. Analyze the MOOD / COLOR TONE (warm, cool, cyberpunk, etc.)
+5. Infer defaults for any missing elements using best practices
+6. Output ONLY the English prompt — no explanations, no notes, no markup
 
-用户描述：
+User description:
 {user_input}
 
-输出格式（只输出英文提示词，不要多余说明，除非风格推断行）：
-MASTERPIECE, best quality, [详细英文描述], [构图], [光照], [色调]
-→ 【风格: xxx】【构图: xxx】【光照: xxx】
-"""
+Output format (English only, comma-separated tags):
+MASTERPIECE, best quality, [detailed English description], [composition], [lighting], [color/mood terms]"""
 
 _FALLBACK_TEMPLATE = """你是一位专业的 AI 绘画提示词工程师。请将用户的自然语言描述，转化为高质量的英文绘画提示词。
 
@@ -232,16 +230,64 @@ def _ollama_enhance(
     url: str | None = None,
     model: str | None = None,
 ) -> str:
-    """使用 Ollama 增强提示词。"""
+    """使用 Ollama 增强提示词。
+
+    自动探测可用 Ollama 地址（优先环境变量 → 默认 → WSL 地址），
+    全部不可用则抛异常由调用方降级。
+    """
     from agents.comfy_utils import ollama_generate
+
+    # 自动探测可用 Ollama 地址
+    candidates = []
+    if url:
+        candidates.append(url)
+    env_url = __import__("os").environ.get("OLLAMA_URL")
+    if env_url:
+        candidates.append(env_url)
+    # 默认（git-bash 下 env 可能未传递）
+    from agents.comfy_utils import DEFAULT_OLLAMA_URL
+    candidates.append(DEFAULT_OLLAMA_URL)
+    # WSL 备用地址
+    candidates.append("http://172.18.9.126:11434/api/generate")
+
+    model_name = model or __import__("os").environ.get("OLLAMA_MODEL") or "qwen3:14b"
 
     template = _OLLAMA_TEMPLATE
     if style_hint:
-        template = f"（用户指定的画风方向: {style_hint}）\n\n" + template
+        template = f"(User-specified style direction: {style_hint})\n\n" + template
 
     prompt = template.format(user_input=nl_text)
-    result = ollama_generate(prompt, url=url, model=model)
-    return result.strip()
+
+    # 逐个尝试
+    last_err = None
+    for try_url in dict.fromkeys(candidates):  # dedup preserving order
+        try:
+            result = ollama_generate(prompt, url=try_url, model=model_name, timeout=30)
+            if result:
+                return _clean_ollama_output(result)
+        except Exception as e:
+            last_err = e
+            continue
+
+    raise RuntimeError(f"所有 Ollama 地址均不可用: {last_err}")
+
+
+def _clean_ollama_output(result: str) -> str:
+    """清理 Ollama 输出：去空白/引号/中文行/尾随分隔符。"""
+    result = result.strip().strip("，,。、")
+    # 去掉引号包裹
+    if (result.startswith('"') and result.endswith('"')) or \
+       (result.startswith("'") and result.endswith("'")):
+        result = result[1:-1]
+    # 去掉可能的中文说明行（包含中文的行）
+    lines = result.split("\n")
+    cleaned_lines = [l for l in lines if not re.search(r"[\u4e00-\u9fff]", l)]
+    if cleaned_lines:
+        result = cleaned_lines[0].strip().strip("，,。、")
+    else:
+        result = result.strip()
+
+    return result
 
 
 def _ollama_vl_analyze(
@@ -253,8 +299,13 @@ def _ollama_vl_analyze(
     """使用 Ollama VL 模型分析参考图，提取角色/画风特征。"""
     import json
     import requests
+    import os
 
-    ollama_url = url or "http://172.18.9.126:11434/api/generate"
+    # 自动探测 Ollama 地址
+    env_url = url or os.environ.get("OLLAMA_URL", "http://172.18.9.126:11434/api/generate")
+    ollama_url = env_url
+    if not ollama_url.endswith("/api/generate"):
+        ollama_url = ollama_url.rstrip("/") + "/api/generate"
     prompt = (
         "请分析这张图片，并严格按 JSON 格式输出，不要多余文字。\n"
         "JSON 键:\n"

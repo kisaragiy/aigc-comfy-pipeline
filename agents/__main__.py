@@ -573,12 +573,13 @@ def _workshop_create(args: list[str]) -> None:
 
 
 def _workshop_engine(args: list[str]) -> None:
-    """python -m agents workshop engine <nl_text> [--style STYLE]"""
+    """python -m agents workshop engine <nl_text> [--style STYLE] [--ollama]"""
     import argparse
 
     parser = argparse.ArgumentParser(description="测试 Prompt 引擎")
     parser.add_argument("nl_text", nargs="*", help="自然语言描述")
     parser.add_argument("--style", default=None, help="画风提示")
+    parser.add_argument("--ollama", action="store_true", help="使用 Ollama 增强 prompt")
     parser.add_argument("--list-presets", action="store_true", help="列出可用预设")
     parsed = parser.parse_args(args)
 
@@ -599,12 +600,21 @@ def _workshop_engine(args: list[str]) -> None:
 
     from workshop.engine import nls_to_prompt, STYLE_PRESETS
 
-    # 模板兜底结果
+    # 模板兜底结果（不用 Ollama）
     result = nls_to_prompt(nl_text, style_hint=parsed.style, ollama_available=False)
     print(f"\n📝 原始描述: {nl_text}")
     print(f"\n🔧 风格: {parsed.style or '(自动推测)'}")
-    print(f"\n✅ 优化后 Prompt:")
+    print(f"\n✅ 模板优化 Prompt:")
     print(f"  {result}")
+
+    # Ollama 结果（如指定）
+    if parsed.ollama:
+        ollama_result = nls_to_prompt(nl_text, style_hint=parsed.style, ollama_available=True)
+        if ollama_result != result:
+            print(f"\n🤖 Ollama 增强 Prompt:")
+            print(f"  {ollama_result}")
+        else:
+            print(f"\n⚠️  Ollama 不可用（降级到模板）")
 
     # 显示推测
     from workshop.engine.engine import _detect_style, _detect_composition, _detect_lighting
