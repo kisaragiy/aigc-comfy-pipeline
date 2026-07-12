@@ -155,14 +155,16 @@ def generate_panels(
     flux: bool = True,
     dry_run: bool = False,
     prefix: str = "manga",
+    max_retries: int = 0,
 ) -> list[dict[str, Any]]:
-    """逐格提交 ComfyUI 出图。
+    """逐格提交 ComfyUI 出图，失败可重试。
 
     Args:
         panel_list: storyboard_to_prompts() 的输出
         flux: 使用 Flux.2 Klein（否则 SDXL）
         dry_run: 预览模式（跳过提交）
         prefix: 文件前缀
+        max_retries: 每格失败后最大重试次数（默认 0=不重试）
 
     Returns:
         [{"shot": "S01", "prompt_id": "...", "images": [...], ...}, ...]
@@ -207,13 +209,27 @@ def generate_panels(
         pid = ""
         images = []
         error = ""
-        try:
-            resp = comfy_post_prompt(workflow)
-            pid = resp.get("prompt_id", "")
-            images = wait_images(pid)
-        except Exception as exc:
-            error = str(exc)
-            print(f"    ❌ 失败: {exc}")
+        retry_count = 0
+        while retry_count <= max_retries:
+            try:
+                resp = comfy_post_prompt(workflow)
+                pid = resp.get("prompt_id", "")
+                images = wait_images(pid)
+                if images:
+                    break  # 出图成功
+                error = "空结果（无图片返回）"
+            except Exception as exc:
+                error = str(exc)
+                print(f"    ❌ 尝试 {retry_count+1}/{max_retries+1} 失败: {exc}")
+            retry_count += 1
+            if retry_count <= max_retries:
+                import time
+                wait = 2 * retry_count
+                print(f"    🔄 {wait}s 后重试...")
+                time.sleep(wait)
+
+        if error and not images:
+            print(f"    ❌ 最终失败 ({retry_count} 次重试): {error}")
 
         results.append({
             "shot": panel["shot"],

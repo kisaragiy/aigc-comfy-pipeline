@@ -563,11 +563,21 @@ def _workshop_create(args: list[str]) -> None:
     if parsed.output:
         print(f"\n📁 已保存: {parsed.output}/")
 
-    print(f"\n📊 排名:")
+    print(f"\n📊 候选排行榜:")
+    medals = ["🥇", "🥈", "🥉"]
+    print(f"  {'':<4} {'候选':<6} {'种子':<8} {'综合分':<8} {'质检':<5} {'CLIP':<8}")
+    print(f"  {'':-<4} {'-':-<6} {'-':-<8} {'-':-<8} {'-':-<5} {'-':-<8}")
     for i, c in enumerate(result.get("candidates", [])):
-        ins_sum = c.get("inspect", {}).get("summary", "")
-        err_tag = " ❌" if c.get("error") else ""
-        print(f"  #{i+1} seed={c.get('seed','?')} score={c.get('score', -1)}{err_tag} {ins_sum}")
+        prefix = medals[i] if i < 3 else "   "
+        name = f"#{i+1}"
+        seed = c.get("seed", "?")
+        clip = c.get("score", -1)
+        clip_str = f"{clip:.2f}" if clip >= 0 else "?"
+        ins = c.get("inspect", {})
+        ins_s = "✅" if ins.get("status") == "ok" else "❌" if ins.get("status") == "issues_found" else "❓"
+        overall = ins.get("scores", {}).get("overall", 0)
+        err_tag = " ERR" if c.get("error") else ""
+        print(f"  {prefix:<4} {name:<6} {str(seed):<8} {overall:<8.2f} {ins_s:<5} {clip_str:<8}{err_tag}")
 
     had_err = result.get("had_errors", False)
     if had_err:
@@ -720,6 +730,8 @@ def _workshop_manga(args: list[str]) -> None:
                         help="从文件读取剧本（替代命令行参数）")
     parser.add_argument("--output", default=None,
                         help="输出目录（保存拼页 + 逐格图 + metadata.json）")
+    parser.add_argument("--retry", type=int, default=0,
+                        help="每格失败后最大重试次数（默认 0=不重试）")
     parsed = parser.parse_args(args)
 
     script = ""
@@ -774,7 +786,7 @@ def _workshop_manga(args: list[str]) -> None:
         return
 
     print("\n🖼️  逐格生图...")
-    results = generate_panels(panels, dry_run=parsed.preview)
+    results = generate_panels(panels, dry_run=parsed.preview, max_retries=parsed.retry)
 
     # 处理 --output
     if parsed.output:

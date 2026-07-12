@@ -1011,6 +1011,7 @@ usage: python -m agents workshop manga [-h] [--style STYLE] [--preview]
   --char "名:服饰:发型:特征"  角色定义 (可重复，支持 1~4 个)
   --script-file FILE       从文件读取剧本（替代命令行参数）
   --output DIR             输出目录（保存拼页 + 逐格图 + metadata.json）
+  --retry N                每格失败后最大重试次数（默认 0=不重试）
   script_text             剧本/场景描述
 
 示例:
