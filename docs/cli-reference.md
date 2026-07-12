@@ -946,6 +946,7 @@ usage: python -m agents workshop create [-h] [--count COUNT] [--style STYLE]
   --output OUTPUT    结果输出目录（保存 metadata.json + best.png）
   --gallery GALLERY  候选画廊输出目录（生成 index.html 可浏览所有候选图）
   --seed SEED        起始种子（0=随机，固定种子可复现结果）
+  --open             生成后自动打开最优图
   --verbose          详细信息
 
 示例:
@@ -956,6 +957,7 @@ usage: python -m agents workshop create [-h] [--count COUNT] [--style STYLE]
   python -m agents workshop create "prompt" --output ./result  # 保存最优
   python -m agents workshop create "prompt" --gallery ./gallery  # 所有候选 HTML 画廊
   python -m agents workshop create "银发少女" --seed 42  # 固定种子可复现
+  python -m agents workshop create "银发少女" --open      # 生成后自动打开最优图
 ```
 
 ### `workshop engine`
