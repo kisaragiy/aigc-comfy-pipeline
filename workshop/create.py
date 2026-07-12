@@ -364,12 +364,14 @@ def _generate_gallery_html(result: dict[str, Any], output_dir: str) -> str:
             pass
         is_best = (src == best_img)
         ins = c.get("inspect", {})
+        ins_scores = ins.get("scores", {}) if ins else {}
         images.append({
             "file": dest.name,
             "seed": c.get("seed", "?"),
             "score": c.get("score", -1),
             "summary": ins.get("summary", ""),
-            "overall": ins.get("scores", {}).get("overall", 0) if ins else 0,
+            "overall": ins_scores.get("overall", 0),
+            "parts": {k: v for k, v in ins_scores.items() if k != "overall"},
             "best": is_best,
             "error": False,
         })
@@ -408,9 +410,18 @@ def _generate_gallery_html(result: dict[str, Any], output_dir: str) -> str:
         summary_tag = f"<span class='summary'>{img['summary']}</span>" if img.get("summary") else ""
         overall_tag = f"<span class='overall'>综合: {img.get('overall', 0):.2f}</span>" if img.get('overall', 0) > 0 else ""
         best_badge = " <span class='badge best-badge'>🏆 最优</span>" if img.get("best") else ""
+        parts = img.get("parts", {})
+        parts_tags = ""
+        if parts:
+            part_map = {"脸": "Face", "左眼": "L-Eye", "右眼": "R-Eye", "手": "Hand", "脚": "Foot", "模糊": "Blur"}
+            for pk, pv in parts.items():
+                pname = part_map.get(pk, pk[:4])
+                pcls = "p-ok" if pv >= 0.8 else "p-warn" if pv >= 0.3 else "p-bad"
+                parts_tags += f"<span class='part {pcls}'>{pname} {pv:.1f}</span>"
         rows_html += f"""\n<div class="card{best_class}">
   <img src="{img['file']}" loading="lazy" onclick="openModal(this.src)" />
   <div class="info">#{_rank} · seed: {img['seed']} {score_tag} {overall_tag} {summary_tag}{best_badge}</div>
+  {('<div class="parts">'+parts_tags+'</div>') if parts_tags else ''}
 </div>"""
 
     html = f"""<!DOCTYPE html>
@@ -432,6 +443,11 @@ h1{{font-size:1.5rem;margin-bottom:8px;color:#e8a87c}}
 .card.error{{padding:20px;text-align:center;color:#666}}
 .img-placeholder{{font-size:2rem;padding:40px 0;color:#555}}
 .info{{padding:8px 10px;font-size:.8rem;display:flex;flex-wrap:wrap;gap:4px;align-items:center}}
+.parts{{padding:0 10px 8px;display:flex;flex-wrap:wrap;gap:3px}}
+.part{{padding:1px 6px;border-radius:4px;font-size:.72rem;font-weight:600}}
+.p-ok{{background:#1a3a2a;color:#4ade80}}
+.p-warn{{background:#3a3a1a;color:#facc15}}
+.p-bad{{background:#3a1a1a;color:#f87171}}
 .score{{color:#7ec8e3}}
 .overall{{color:#a8e6cf}}
 .summary{{color:#d4a5a5}}
