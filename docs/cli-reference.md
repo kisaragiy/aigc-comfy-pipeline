@@ -1,6 +1,6 @@
 # CLI 参考文档
 
-> 自动生成于 2026-07-13 00:11
+> 自动生成于 2026-07-13 00:17
 
 AIGC ComfyUI Pipeline v?
 
@@ -413,25 +413,33 @@ options:
 usage: go_video_process.py [-h] [--to-gif] [--trim TRIM] [--speed SPEED]
                            [--concat] [--output OUTPUT] [--recent]
                            [--run-id RUN_ID] [--gif-fps GIF_FPS]
-                           [--scale SCALE]
+                           [--scale SCALE] [--extract-frames] [--every EVERY]
+                           [--count COUNT] [--quality QUALITY]
+                           [--output-dir OUTPUT_DIR]
                            [inputs ...]
 
 视频后处理 — GIF / 裁剪 / 变速 / 拼接
 
 positional arguments:
-  inputs             输入文件路径或运行 ID
+  inputs                输入文件路径或运行 ID
 
 options:
-  -h, --help         show this help message and exit
-  --to-gif           转换为 GIF
-  --trim TRIM        裁剪片段: START-END (如 00:05-00:15)
-  --speed SPEED      变速系数: 0.5=慢放, 2.0=快放
-  --concat           拼接模式（所有 inputs 拼接为一个视频）
-  --output OUTPUT    输出文件路径
-  --recent           使用 outputs/ 中最新视频
-  --run-id RUN_ID    使用指定运行 ID 的视频
-  --gif-fps GIF_FPS  GIF 帧率（默认 10）
-  --scale SCALE      缩放目标（如 480:-1, 320:240）
+  -h, --help            show this help message and exit
+  --to-gif              转换为 GIF
+  --trim TRIM           裁剪片段: START-END (如 00:05-00:15)
+  --speed SPEED         变速系数: 0.5=慢放, 2.0=快放
+  --concat              拼接模式（所有 inputs 拼接为一个视频）
+  --output OUTPUT       输出文件路径
+  --recent              使用 outputs/ 中最新视频
+  --run-id RUN_ID       使用指定运行 ID 的视频
+  --gif-fps GIF_FPS     GIF 帧率（默认 10）
+  --scale SCALE         缩放目标（如 480:-1, 320:240）
+  --extract-frames      从视频中提取帧为 JPG
+  --every EVERY         每隔 N 帧提取一帧（与 --count 互斥）
+  --count COUNT         均匀提取 N 帧（与 --every 互斥）
+  --quality QUALITY     JPEG 质量 1-31（1=最高, 31=最低, 默认 2）
+  --output-dir OUTPUT_DIR
+                        帧提取输出目录（默认: 输入文件同目录下 _frames 子目录）
 ```
 
 ---
