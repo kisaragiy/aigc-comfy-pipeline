@@ -10,8 +10,9 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.19.0** — 当前：workflow API 格式转换
-- V0.18.0 — 上一版：工程化测试 + CI
+- **V0.20.0** — 当前：一键诊断修复 (doctor)
+- V0.19.0 — 上一版：workflow API 格式转换
+- V0.18.0 — 工程化测试 + CI
 - V0.17.0 — Output Gallery 增强
 - V0.16.0 — 模型下载
 - V0.15.0 — ComfyUI 队列管理
@@ -27,7 +28,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 - V0.5.0 — LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
 - V0.0.XXX — 小修
 
-## 当前版本：V0.19.0
+## 当前版本：V0.20.0
 
 ## 核心能力
 
@@ -52,6 +53,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 | 管线报告 | `go_report.py` | `python -m agents report` | 一键验收：ComfyUI/模型/workflow/产出全貌 |
 | 队列管理 | `go_queue.py` | `python -m agents queue` | 查看/清空/中断队列、释放显存 |
 | 产出画廊 | `go_gallery.py` | `python -m agents gallery` | HTML 产出展示、HTTP 服务模式 |
+| 一键诊断 | `go_doctor.py` | `python -m agents doctor` | 9 项环境检查 + 自动修复 |
 | 单元测试 | `tests/` | `pytest tests/` | 32 项测试覆盖核心模块纯逻辑函数 |
 
 ## 项目结构
@@ -73,6 +75,7 @@ agents/                    # Python 编排脚本（产品）
   go_queue.py               #   ComfyUI 队列管理
   model_download.py         #   模型下载
   go_gallery.py             #   输出画廊
+  go_doctor.py              #   一键诊断修复
   go_knives_lora.py        #   角色 LoRA 文生图（主力脚本）
   go_knives_ipadapter.py   #   IPAdapter 锁脸（复用 go_knives_lora 的构建函数）
   go_multi_char_lora.py    #   多角色同框
@@ -229,3 +232,5 @@ metadata.json 包含完整的生成参数，面试时打开即可证明工程化
 - [ ] `python -m agents gallery --output /tmp/g.html` 生成 HTML
 - [ ] `PYTHONPATH=agents python -m pytest tests/ -v` 32 项测试通过
 - [ ] `python -m agents workflow convert <name>` ComfyUI 离线时友好提示
+- [ ] `python -m agents doctor` 显示 9 项诊断
+- [ ] `python -m agents doctor --json` JSON 格式输出
