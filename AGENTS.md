@@ -10,8 +10,8 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.31.0** — 当前：I2V 补齐 + 自定义预设 + 视频质量闭环
-- V0.30.0 — 上一版：API 质量统一 + 视频预设
+- **V0.32.0** — 当前：视频管线完整化（Gallery + Serve + Queue）
+- V0.31.0 — 上一版：I2V 补齐 + 自定义预设 + 视频质量闭环
 - V0.27.0 — A/B 测试
 - V0.26.0 — Prompt 兜底 + 质量验证
 - V0.25.0 — Docker 部署
@@ -37,7 +37,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 - V0.5.0 — LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
 - V0.0.XXX — 小修
 
-## 当前版本：V0.31.0
+## 当前版本：V0.32.0
 
 ## 核心能力
 
@@ -79,6 +79,9 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 | 自动门禁 | `comfy_utils.generate_with_quality()` | `--min-score 0.25 --retry 3` | 出图验证 + 不合格自动重试 |
 | 自定义预设 | `presets.json` | 项目根目录 JSON | 用户自定义 image/video 预设，无硬编码限制 |
 | I2V 视频 | `go_video.py --ref` | `python -m agents video "..." --ref img.png` | Wan2.2 I2V，自动构建 LoadImage+VAEEncode 工作流 |
+| Gallery 视频 | `go_gallery.py` | `python -m agents gallery` | HTML 画廊自动检测 .mp4 渲染 `<video>` 标签 |
+| 视频 API | `go_serve.py /api/video` | `POST /api/video` | 异步视频作业（T2V/I2V + preset + timeout） |
+| 队列智能感知 | `go_queue.py list` | `python -m agents queue list` | 自动区分 image/video 任务类型 |
 
 ## 项目结构
 
@@ -291,3 +294,10 @@ metadata.json 包含完整的生成参数，面试时打开即可证明工程化
 - [ ] `presets.json` 可定义任意 QUALITY_PRESETS/VIDEO_PRESETS 覆盖
 - [ ] `python -m agents serve --help` API 服务器帮助
 - [ ] `python -m agents flux --preset nonexistent --dry-run "test"` 未知预设友好降级
+- [ ] `python -m agents gallery` 无产出时友好提示
+- [ ] gallery 渲染 .mp4 视频为 `<video>` 标签而非 `<img>`
+- [ ] gallery stats 显示 `N videos` 当有视频时
+- [ ] `POST /api/video` 返回 job_id + status
+- [ ] `POST /api/video` 支持 preset/timeout/denoise/ref 参数
+- [ ] `python -m agents queue list` 显示 `🎬 video`/`🖼️ image` 类型标记
+- [ ] `python -m agents queue list` 队列为空时友好提示

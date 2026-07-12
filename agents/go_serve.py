@@ -135,6 +135,58 @@ def _run_lora(job_id: str, params: dict) -> None:
         jobs[job_id]["error"] = str(e)
 
 
+def _run_video(job_id: str, params: dict) -> None:
+    """后台执行视频作业（generate_with_quality + no_validate）。"""
+    from comfy_utils import generate_with_quality, resolve_comfy_root
+    from go_video import build_video_workflow
+
+    try:
+        prompt = params.get("prompt", "")
+        if not prompt:
+            raise ValueError("prompt is required")
+
+        qr = generate_with_quality(
+            build_video_workflow, prompt,
+            no_validate=True,
+            wait_timeout=params.get("timeout", 1800.0),
+            preset=params.get("preset"),
+            seed=params.get("seed", -1),
+            steps=params.get("steps"),
+            cfg=params.get("cfg"),
+            width=params.get("width"),
+            height=params.get("height"),
+            frames=params.get("frames"),
+            fps=params.get("fps"),
+            denoise=params.get("denoise", 0.85) if params.get("ref") else 1.0,
+            ref_image=params.get("ref"),
+            negative=params.get("negative", ""),
+            prefix=params.get("prefix", "api_video"),
+        )
+
+        seed = qr["seed"]
+        comfy_root = resolve_comfy_root()
+        video_urls = []
+        for sub, name in qr.get("images", []):
+            path = (comfy_root / "output" / sub / name).resolve()
+            if path.is_file():
+                video_urls.append(f"/outputs/{name}")
+
+        jobs[job_id]["status"] = "completed"
+        jobs[job_id]["result"] = {
+            "seed": seed,
+            "videos": video_urls,
+            "retries": qr.get("retries", 0),
+            "params": {
+                "prompt": prompt,
+                "preset": params.get("preset"),
+                "mode": "I2V" if params.get("ref") else "T2V",
+            },
+        }
+    except Exception as e:
+        jobs[job_id]["status"] = "failed"
+        jobs[job_id]["error"] = str(e)
+
+
 # FastAPI 导入（可选依赖）
 try:
     from fastapi import FastAPI, BackgroundTasks
@@ -148,7 +200,7 @@ except ImportError:
 
 if _HAS_FASTAPI:
 
-    app = FastAPI(title="AIGC Pipeline API", version="0.30.0")
+    app = FastAPI(title="AIGC Pipeline API", version="0.32.0")
 
     @app.post("/api/flux")
     async def api_flux(params: dict, background: BackgroundTasks):
@@ -162,6 +214,13 @@ if _HAS_FASTAPI:
         job_id = uuid.uuid4().hex[:12]
         jobs[job_id] = {"status": "queued", "command": "lora", "params": params}
         background.add_task(_run_lora, job_id, params)
+        return JSONResponse({"job_id": job_id, "status": "queued"}, status_code=202)
+
+    @app.post("/api/video")
+    async def api_video(params: dict, background: BackgroundTasks):
+        job_id = uuid.uuid4().hex[:12]
+        jobs[job_id] = {"status": "queued", "command": "video", "params": params}
+        background.add_task(_run_video, job_id, params)
         return JSONResponse({"job_id": job_id, "status": "queued"}, status_code=202)
 
     @app.get("/api/jobs/{job_id}")
@@ -233,13 +292,14 @@ def main() -> None:
         sys.exit(1)
 
     port = args.port or int(os.environ.get("PORT", 8765))
-    print(f"🚀 AIGC Pipeline API v0.30.0")
+    print(f"🚀 AIGC Pipeline API v0.32.0")
     print(f"   地址: http://127.0.0.1:{port}")
     print(f"   文档: http://127.0.0.1:{port}/docs")
     print(f"   健康: http://127.0.0.1:{port}/api/health")
     print()
     print(f"   可用端点:")
     print(f"     POST /api/flux   — Flux.2 Klein 文生图（支持 preset/min_score/retry）")
+    print(f"     POST /api/video  — Wan2.2 视频生成（T2V/I2V，支持 preset/timeout/denoise）")
     print(f"     POST /api/lora   — SDXL LoRA 文生图")
     print(f"     GET  /api/jobs   — 作业列表")
     print(f"     GET  /api/health — 健康检查")

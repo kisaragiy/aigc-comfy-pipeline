@@ -53,7 +53,10 @@ header .stats { color: #9aa0a6; font-size: 0.85rem; }
 .cmd-badge.ipa { background: #34d39933; color: #34d399; }
 .cmd-badge.multi { background: #fbbf2433; color: #fbbf24; }
 .cmd-badge.sweep { background: #f472b633; color: #f472b6; }
-.cmd-badge.run { background: #60a5fa33; color: #60a5fa; }
+.cmd-badge.video { background: #f59e0b33; color: #f59e0b; }
+.cmd-badge.serve { background: #6366f133; color: #6366f1; }
+.card .images video { width: 100%; aspect-ratio: 1; object-fit: cover;
+  display: block; background: #2a2f3a; }
 .time { color: #9aa0a6; font-size: 0.75rem; margin-left: 0.4rem; }
 .prompt { color: #e8eaed; font-size: 0.82rem; margin: 0.4rem 0;
   line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2;
@@ -79,6 +82,7 @@ def _build_html(runs: list[dict[str, Any]]) -> str:
     """构建自包含 HTML 画廊。"""
     cards: list[str] = []
     total_images = 0
+    total_videos = 0
     commands: set[str] = set()
     output_dir = _get_output_dir()
 
@@ -88,16 +92,27 @@ def _build_html(runs: list[dict[str, Any]]) -> str:
         rid = run.get("run_id", "")
         images = run.get("images", [])
         params = run.get("params", {})
-        total_images += len(images)
         commands.add(cmd)
 
-        # 图片
+        # 图片 / 视频
         imgs_html = ""
         run_path = output_dir / rid / "images"
         for img_name in images[:4]:  # 最多 4 张
-            img_path = run_path / img_name
-            if img_path.is_file():
-                imgs_html += f'<img src="file:///{img_path.as_posix()}" loading="lazy" />'
+            media_path = run_path / img_name
+            if not media_path.is_file():
+                continue
+            ext = media_path.suffix.lower()
+            if ext in (".mp4", ".webm", ".mov"):
+                total_videos += 1
+                imgs_html += (
+                    f'<video controls preload="metadata" muted playsinline '
+                    f'src="file:///{media_path.as_posix()}" />'
+                )
+            else:
+                total_images += 1
+                imgs_html += (
+                    f'<img src="file:///{media_path.as_posix()}" loading="lazy" />'
+                )
 
         # 参数
         tags = ""
@@ -148,7 +163,7 @@ def _build_html(runs: list[dict[str, Any]]) -> str:
     <button class="filter-btn active" data-filter="all">All</button>
     {commands_list}
   </div>
-  <div class="stats">{len(runs)} runs · {total_images} images</div>
+  <div class="stats">{len(runs)} runs · {total_images} images{f' · {total_videos} videos' if total_videos else ''}</div>
 </header>
 <main id="gallery">{cards_html}</main>
 <footer>generated {now}</footer>

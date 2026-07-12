@@ -18,6 +18,18 @@ from comfy_utils import bootstrap_agents_path, check_comfy_health, comfy_base_ur
 
 bootstrap_agents_path()
 
+_VIDEO_NODE_TYPES = {"VideoCombine", "EmptyLatentVideo"}
+
+
+def _detect_task_type(prompt_data: dict) -> str:
+    """从 prompt 数据检测任务类型 (video / image / unknown)。"""
+    if not isinstance(prompt_data, dict):
+        return "unknown"
+    for node in prompt_data.values():
+        if isinstance(node, dict) and node.get("class_type") in _VIDEO_NODE_TYPES:
+            return "video"
+    return "image"
+
 
 def get_queue(base: str) -> dict[str, Any]:
     """获取队列状态。"""
@@ -53,19 +65,37 @@ def _do_list(base: str) -> None:
     running = data.get("queue_running", [])
     pending = data.get("queue_pending", [])
 
+    running_img = sum(1 for it in running if _detect_task_type(it[1]) == "image")
+    running_vid = sum(1 for it in running if _detect_task_type(it[1]) == "video")
+    pending_img = sum(1 for it in pending if _detect_task_type(it[1]) == "image")
+    pending_vid = sum(1 for it in pending if _detect_task_type(it[1]) == "video")
+
+    type_summary = []
+    if running_img or pending_img:
+        type_summary.append(f"🖼️ image: {running_img}r + {pending_img}q")
+    if running_vid or pending_vid:
+        type_summary.append(f"🎬 video: {running_vid}r + {pending_vid}q")
+
     print("\nComfyUI 队列状态:")
-    print(f"  运行中: {len(running)}")
-    print(f"  待处理: {len(pending)}")
+    print(f"  运行中: {len(running)}, 待处理: {len(pending)}")
+    if type_summary:
+        print(f"  类型:   {' | '.join(type_summary)}")
     print()
 
     if running:
         print("  正在运行:")
         for item in running:
-            print(f"    [{item[0][:12]}] 步骤信息: {item[2] if len(item) > 2 else 'N/A'}")
+            node_count = len(item[1]) if isinstance(item[1], dict) else 0
+            style = _detect_task_type(item[1])
+            emoji = "🎬" if style == "video" else "🖼️"
+            print(f"    {emoji} [{item[0][:12]}] {style} ({node_count} nodes)")
     if pending:
         print("\n  待处理:")
         for item in pending:
-            print(f"    [{item[0][:12]}] 排队中")
+            node_count = len(item[1]) if isinstance(item[1], dict) else 0
+            style = _detect_task_type(item[1])
+            emoji = "🎬" if style == "video" else "🖼️"
+            print(f"    {emoji} [{item[0][:12]}] {style} ({node_count} nodes)")
 
     if not running and not pending:
         print("  队列为空。\n")
