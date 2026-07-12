@@ -507,9 +507,16 @@ def _workshop_create(args: list[str]) -> None:
     parser.add_argument("--negative", default=None, help="负向提示词（不设置时使用风格预设默认值）")
     parser.add_argument("--verbose", action="store_true", help="详细信息")
     parser.add_argument("--clean", action="store_true", help="生成前清理输出目录旧文件")
+    parser.add_argument("--batch-file", default=None, help="批量文件路径（每行一条 prompt，空行和 # 注释行跳过）")
     parsed = parser.parse_args(args)
 
     nl_text = " ".join(parsed.nl_text) if parsed.nl_text else ""
+
+    # 批量模式
+    if parsed.batch_file:
+        _workshop_create_batch(parsed)
+        return
+
     if not nl_text:
         parser.print_help()
         return
@@ -639,6 +646,40 @@ def _workshop_create(args: list[str]) -> None:
             os.startfile(best["image"])
             print(f"\n📂 已打开: {best['image']}")
 
+
+
+
+
+def _workshop_create_batch(parsed) -> None:
+    """批量模式：从文件读取多条 prompt，逐条执行 create 管线。"""
+    from workshop.create import create_batch
+
+    results = create_batch(
+        parsed.batch_file,
+        count=parsed.count,
+        style_hint=parsed.style,
+        ref_path=parsed.ref,
+        preset=parsed.preset,
+        min_score=parsed.min_score,
+        retry=parsed.retry,
+        inspect=not parsed.no_inspect,
+        seed=parsed.seed,
+        negative_prompt=parsed.negative or "",
+        use_ollama=parsed.ollama,
+        output_dir=parsed.output,
+        verbose=parsed.verbose,
+    )
+
+    # --open 打开第一个成功的结果
+    if parsed.open and results:
+        for r in results:
+            best = r.get("best", {})
+            best_img = best.get("image", "")
+            if best_img and Path(best_img).is_file():
+                import os
+                os.startfile(best_img)
+                print(f"\\n📂 已打开: {best_img}")
+                break
 
 def _workshop_engine(args: list[str]) -> None:
     """python -m agents workshop engine <nl_text> [--style STYLE] [--ollama]"""

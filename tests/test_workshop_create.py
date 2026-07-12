@@ -419,3 +419,108 @@ class TestCreateClean:
                 dry_run=True,
             )
             assert not gal.is_dir()
+
+
+# ── create_batch ─────────────────────────────────────
+
+class TestCreateBatch:
+    """测试 create_batch 批量管线。"""
+
+    def test_batch_function_exists(self):
+        """create_batch 函数存在且可导入。"""
+        from workshop.create import create_batch
+        import inspect
+        sig = inspect.signature(create_batch)
+        assert "prompts_file" in sig.parameters
+
+    def test_make_slug_strips_special_chars(self):
+        """_make_slug 清理非法路径字符。"""
+        from workshop.create import _make_slug
+        assert _make_slug("银发少女") == "银发少女"
+        assert _make_slug("test/path:bad") == "testpathbad"
+        assert _make_slug("/\\:*?\"<>|") == "prompt"  # 全是非法字符 → fallback
+        assert len(_make_slug("a" * 50)) <= 16
+
+    def test_parse_batch_file(self):
+        """create_batch 正确解析批量文件。"""
+        import tempfile
+        from workshop.create import create_batch
+
+        with tempfile.TemporaryDirectory() as tmp:
+            fp = Path(tmp) / "prompts.txt"
+            fp.write_text(
+                "# 这是我的批量生成\n"
+                "银发少女校服\n"
+                "\n"
+                "金发御姐礼服\n"
+                "  # inline comment\n"
+                "红发猫娘午后庭院\n",
+                encoding="utf-8",
+            )
+            # 用 dry_run=True 避免连接 ComfyUI
+            results = create_batch(
+                str(fp),
+                count=2,
+                dry_run=True,
+                output_dir=tmp,
+                verbose=False,
+            )
+        assert len(results) == 3  # 3 个非空非注释行
+        assert results[0].get("prompt_text") == "银发少女校服"
+        assert results[1].get("prompt_text") == "金发御姐礼服"
+        assert results[2].get("prompt_text") == "红发猫娘午后庭院"
+        # 每个结果应有 dry_run 模式的标准字段
+        for r in results:
+            assert "candidates" in r
+            assert r.get("dry_run") is True or not r.get("error"), f"Unexpected error: {r.get('error')}"
+
+    def test_batch_empty_file(self):
+        """空文件/无有效 prompt 不报错，返回空列表。"""
+        import tempfile
+        from workshop.create import create_batch
+
+        with tempfile.TemporaryDirectory() as tmp:
+            fp = Path(tmp) / "empty.txt"
+            fp.write_text("# only comments\n  \n# more\n", encoding="utf-8")
+            results = create_batch(str(fp), dry_run=True, output_dir=tmp)
+        assert results == []
+
+    def test_batch_nonexistent_file(self):
+        """不存在的文件返回空列表。"""
+        from workshop.create import create_batch
+        results = create_batch("/nonexistent/prompts.txt", dry_run=True)
+        assert results == []
+
+    def test_batch_creates_subdirs(self):
+        """每条 prompt 在输出目录下创建独立子目录。"""
+        import tempfile
+        from workshop.create import create_batch
+
+        with tempfile.TemporaryDirectory() as tmp:
+            fp = Path(tmp) / "prompts.txt"
+            fp.write_text("银发少女\n金发御姐\n", encoding="utf-8")
+            results = create_batch(str(fp), count=2, dry_run=True, output_dir=tmp)
+            # 检查子目录是否存在
+            subdirs = [d for d in Path(tmp).iterdir() if d.is_dir()]
+            assert len(subdirs) >= 2  # 至少 2 个子目录（不含 batch_metadata.json）
+            # 检查 slug 命名
+            dir_names = sorted(d.name for d in subdirs)
+            assert any("001" in n for n in dir_names)
+            assert any("002" in n for n in dir_names)
+
+    def test_batch_metadata_saved(self):
+        """批量结束后生成 batch_metadata.json。"""
+        import tempfile
+        import json
+        from workshop.create import create_batch
+
+        with tempfile.TemporaryDirectory() as tmp:
+            fp = Path(tmp) / "prompts.txt"
+            fp.write_text("prompt a\nprompt b\n", encoding="utf-8")
+            create_batch(str(fp), count=2, dry_run=True, output_dir=tmp)
+            meta_path = Path(tmp) / "batch_metadata.json"
+            assert meta_path.is_file()
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            assert meta["total"] == 2
+            assert meta["success"] == 2  # dry_run 不报错
+            assert len(meta["prompts"]) == 2
