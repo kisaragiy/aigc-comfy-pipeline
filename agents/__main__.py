@@ -516,6 +516,11 @@ def _workshop_create(args: list[str]) -> None:
 
     from workshop.create import create_from_nl
 
+    # auto-gallery: 有 --output 但无 --gallery 时，在 output 目录自动生成
+    gallery_dir = parsed.gallery
+    if not gallery_dir and parsed.output:
+        gallery_dir = str(Path(parsed.output) / "gallery")
+
     result = create_from_nl(
         nl_text,
         count=parsed.count,
@@ -530,7 +535,7 @@ def _workshop_create(args: list[str]) -> None:
         use_ollama=parsed.ollama,
         output_dir=parsed.output,
         verbose=parsed.verbose,
-        gallery_dir=parsed.gallery,
+        gallery_dir=gallery_dir,
     )
 
     if parsed.preview:
@@ -747,6 +752,8 @@ def _workshop_manga(args: list[str]) -> None:
                         help="输出目录（保存拼页 + 逐格图 + metadata.json）")
     parser.add_argument("--retry", type=int, default=0,
                         help="每格失败后最大重试次数（默认 0=不重试）")
+    parser.add_argument("--sdxl", action="store_true",
+                        help="使用 SDXL 代替 Flux（更快，支持 LoRA）")
     parsed = parser.parse_args(args)
 
     script = ""
@@ -801,7 +808,7 @@ def _workshop_manga(args: list[str]) -> None:
         return
 
     print("\n🖼️  逐格生图...")
-    results = generate_panels(panels, dry_run=parsed.preview, max_retries=parsed.retry)
+    results = generate_panels(panels, dry_run=parsed.preview, max_retries=parsed.retry, flux=not parsed.sdxl)
 
     # 处理 --output
     if parsed.output:
