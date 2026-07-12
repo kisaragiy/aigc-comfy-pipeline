@@ -4,6 +4,7 @@ from workshop.engine.engine import (
     STYLE_PRESETS,
     COMPOSITION_PRESETS,
     LIGHTING_PRESETS,
+    NEGATIVE_KEYWORDS,
     STYLE_KEYWORDS,
     nls_to_prompt,
     ref_analyze_to_prompt,
@@ -11,6 +12,7 @@ from workshop.engine.engine import (
 )
 
 __all__ = [
-    "STYLE_PRESETS", "COMPOSITION_PRESETS", "LIGHTING_PRESETS", "STYLE_KEYWORDS",
+    "STYLE_PRESETS", "COMPOSITION_PRESETS", "LIGHTING_PRESETS",
+    "NEGATIVE_KEYWORDS", "STYLE_KEYWORDS",
     "nls_to_prompt", "ref_analyze_to_prompt", "list_presets",
 ]

@@ -618,6 +618,7 @@ def _workshop_engine(args: list[str]) -> None:
     parser.add_argument("nl_text", nargs="*", help="自然语言描述")
     parser.add_argument("--style", default=None, help="画风提示")
     parser.add_argument("--ollama", action="store_true", help="使用 Ollama 增强 prompt")
+    parser.add_argument("--ref", default=None, help="参考图路径（测试角色/画风特征分析）")
     parser.add_argument("--list-presets", action="store_true", help="列出可用预设")
     parsed = parser.parse_args(args)
 
@@ -655,11 +656,33 @@ def _workshop_engine(args: list[str]) -> None:
             print(f"\n⚠️  Ollama 不可用（降级到模板）")
 
     # 显示推测
-    from workshop.engine.engine import _detect_style, _detect_composition, _detect_lighting
+    from workshop.engine.engine import _detect_style, _detect_composition, _detect_lighting, _detect_negative
     detected = _detect_style(nl_text, parsed.style)
     comp = _detect_composition(nl_text)
     light = _detect_lighting(nl_text)
+    neg = _detect_negative(nl_text)
     print(f"\n📋 引擎推测: 风格={detected} | 构图={comp[:30]}... | 光照={light[:30]}...")
+    if neg:
+        print(f"  ⛔ 自动负向: {neg[:80]}...")
+
+    # 参考图分析
+    if parsed.ref:
+        from pathlib import Path
+        ref_path = Path(parsed.ref)
+        if not ref_path.is_file():
+            print(f"\n❌ 参考图不存在: {parsed.ref}")
+        else:
+            from workshop.engine import ref_analyze_to_prompt
+            print(f"\n📎 参考图分析 ({parsed.ref}):")
+            analysis = ref_analyze_to_prompt(
+                parsed.ref, nl_text,
+                ollama_available=parsed.ollama,
+            )
+            if analysis.get("character_desc"):
+                print(f"  角色: {analysis['character_desc'][:80]}...")
+            if analysis.get("style_desc"):
+                print(f"  画风: {analysis['style_desc'][:80]}...")
+            print(f"  Prompt: {analysis['prompt'][:120]}...")
 
 
 def _workshop_inspect(args: list[str]) -> None:
