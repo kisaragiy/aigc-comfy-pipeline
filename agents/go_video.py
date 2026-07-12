@@ -29,7 +29,11 @@ WAN_UNET = "wan2.2_ti2v_5B_fp16.safetensors"
 WAN_CLIP = "umt5_xxl_fp8_e4m3fn_scaled.safetensors"
 WAN_VAE = "wan2.2_vae.safetensors"
 
-# 默认视频参数
+PREVIEW_FRAMES = 25
+PREVIEW_WIDTH = 480
+PREVIEW_HEIGHT = 270
+PREVIEW_STEPS = 15
+PREVIEW_CFG = 5.0
 DEFAULT_WIDTH = 848
 DEFAULT_HEIGHT = 480
 DEFAULT_FRAMES = 49
@@ -154,7 +158,20 @@ def main() -> None:
                         default=None, help="视频预设（quality/balanced/fast/cinematic）")
     parser.add_argument("--count", type=int, default=1,
                         help="批量生成数量（不同 seed，默认 1）")
+    parser.add_argument("--preview", action="store_true",
+                        help="快速预览模式（低帧数/低分辨率/低步数/低CFG）")
     args = parser.parse_args()
+
+    preview = args.preview
+
+    if preview:
+        print("=" * 50)
+        print("📷 预览模式")
+        print(f"   帧数:   {PREVIEW_FRAMES} (正式 ~{DEFAULT_FRAMES})")
+        print(f"   分辨率: {PREVIEW_WIDTH}x{PREVIEW_HEIGHT} (正式 {DEFAULT_WIDTH}x{DEFAULT_HEIGHT})")
+        print(f"   步数:   {PREVIEW_STEPS} (正式 ~{DEFAULT_STEPS})")
+        print(f"   CFG:    {PREVIEW_CFG} (正式 ~{DEFAULT_CFG})")
+        print("=" * 50)
 
     user = args.prompt
     if not user:
@@ -165,41 +182,55 @@ def main() -> None:
 
     prompt = user if args.raw else optimize_prompt(user)
 
+    # 预览模式参数覆盖
+    steps_val = PREVIEW_STEPS if preview else args.steps
+    cfg_val = PREVIEW_CFG if preview else args.cfg
+    width_val = PREVIEW_WIDTH if preview else args.width
+    height_val = PREVIEW_HEIGHT if preview else args.height
+    frames_val = PREVIEW_FRAMES if preview else args.frames
+
     if args.count > 1:
         all_paths: list[str] = []
         for i in range(args.count):
             seed_val = -1 if args.seed == -1 else args.seed + i
-            print(f"\n--- [{i+1}/{args.count}] seed={seed_val if seed_val != -1 else '随机'} ---")
+            label = f"[{i+1}/{args.count}] seed={seed_val if seed_val != -1 else '随机'}"
+            if preview:
+                label += " [预览]"
+            print(f"\n--- {label} ---")
             qr = generate_with_quality(
                 build_video_workflow, prompt,
                 no_validate=True,
                 wait_timeout=args.timeout,
                 preset=args.preset,
                 seed=seed_val,
-                steps=args.steps, cfg=args.cfg,
-                width=args.width, height=args.height,
-                frames=args.frames, fps=args.fps,
+                steps=steps_val, cfg=cfg_val,
+                width=width_val, height=height_val,
+                frames=frames_val, fps=args.fps,
                 sampler=args.sampler, scheduler=args.scheduler,
                 denoise=args.denoise if args.ref else 1.0,
                 ref_image=args.ref,
                 negative=args.negative,
-                prefix=args.prefix,
+                prefix=f"{'preview_' if preview else ''}{args.prefix}",
             )
             paths = qr.get("images", [])
             all_paths.extend(paths)
             seed_actual = qr.get("seed", "?")
 
         if all_paths:
-            save_run("video-batch", all_paths, {
+            cmd_name = f"video-{'preview' if preview else 'batch'}"
+            save_run(cmd_name, all_paths, {
                 "prompt": prompt,
                 "count": args.count,
                 "ref_image": args.ref,
                 "seed": args.seed,
-                "grid": {"frames": args.frames, "fps": args.fps,
-                         "steps": args.steps, "cfg": args.cfg},
+                "preview": preview,
+                "grid": {"frames": frames_val, "fps": args.fps,
+                         "steps": steps_val, "cfg": cfg_val},
             })
             print(f"\n✅ 批量生成完成，共 {len(all_paths)} 个视频")
-            print(f"   总数: {args.count} 个 · 成功: {len(all_paths)} 个")
+
+        if preview:
+            _print_production_cmd(args, prompt)
         return
 
     qr = generate_with_quality(
@@ -208,14 +239,14 @@ def main() -> None:
         wait_timeout=args.timeout,
         preset=args.preset,
         seed=args.seed,
-        steps=args.steps, cfg=args.cfg,
-        width=args.width, height=args.height,
-        frames=args.frames, fps=args.fps,
+        steps=steps_val, cfg=cfg_val,
+        width=width_val, height=height_val,
+        frames=frames_val, fps=args.fps,
         sampler=args.sampler, scheduler=args.scheduler,
         denoise=args.denoise if args.ref else 1.0,
         ref_image=args.ref,
         negative=args.negative,
-        prefix=args.prefix,
+        prefix=f"{'preview_' if preview else ''}{args.prefix}",
     )
 
     seed_actual = qr["seed"]
@@ -227,12 +258,50 @@ def main() -> None:
     print(f"  prompt_id: {qr.get('prompt_id', '')}")
     print(f"  seed:      {seed_actual}")
     print(f"  模式:      {'I2V' if args.ref else 'T2V'}")
+    if preview:
+        print(f"  预览:     ✅ (低质量快速预览)")
     if args.ref:
         print(f"  参考图:    {args.ref}")
     if video_paths:
         print(f"  输出:      {video_paths[0][:100]}" if len(video_paths[0]) > 100
               else f"  输出:      {video_paths[0]}")
     print(f"  重试:      {qr.get('retries', 0)}")
+
+    if preview:
+        _print_production_cmd(args, prompt, seed_actual)
+
+
+def _print_production_cmd(
+    args: argparse.Namespace, prompt: str, seed_override: int | None = None,
+) -> None:
+    """打印正式版生成命令。"""
+    parts = ["python -m agents video"]
+    # 非默认参数
+    if prompt:
+        parts.append(f'"{prompt}"')
+    if args.ref:
+        parts.append(f"--ref {args.ref}")
+    if seed_override is not None and seed_override != -1:
+        parts.append(f"--seed {seed_override}")
+    # 显式推荐正式参数
+    if not args.frames or args.frames == PREVIEW_FRAMES:
+        parts.append(f"--frames {DEFAULT_FRAMES}")
+    if not args.width or args.width == PREVIEW_WIDTH:
+        parts.append(f"--width {DEFAULT_WIDTH}")
+    if not args.height or args.height == PREVIEW_HEIGHT:
+        parts.append(f"--height {DEFAULT_HEIGHT}")
+    if not args.steps or args.steps == PREVIEW_STEPS:
+        parts.append(f"--steps {DEFAULT_STEPS}")
+    if not args.cfg or args.cfg == PREVIEW_CFG:
+        parts.append(f"--cfg {DEFAULT_CFG}")
+    if args.preset:
+        parts.append(f"--preset {args.preset}")
+
+    print(f"\n{'=' * 50}")
+    print("📷 预览完成！使用以下命令生成正式版视频:")
+    print(f"{'=' * 50}")
+    print("  " + " ".join(parts))
+    print(f"{'=' * 50}")
 
 
 if __name__ == "__main__":
