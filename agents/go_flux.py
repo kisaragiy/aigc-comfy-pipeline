@@ -205,8 +205,7 @@ def main() -> None:
     parser.add_argument("--sampler", default=None, help="采样器（预设自动）")
     parser.add_argument("--scheduler", default=None, help="调度器（预设自动）")
     parser.add_argument("--prefix", default="flux_klein", help="输出文件名前缀")
-    parser.add_argument("--preset", choices=["quality", "balanced", "fast", "portrait"],
-                        default=None, help="质量预设")
+    parser.add_argument("--preset", default=None, help="质量预设（anime/photoreal 等）")
     parser.add_argument("--min-score", type=float, default=0.0,
                         help="最低 CLIP 评分（≤0 跳过验证）")
     parser.add_argument("--retry", type=int, default=0,
