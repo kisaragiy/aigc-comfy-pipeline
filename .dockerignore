@@ -1,0 +1,15 @@
+.git/
+.gitignore
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.hermes/
+docs/
+tests/
+*.md
+*.ps1
+*.bat
+*.jpg
+*.png
+一键推送GitHub.ps1

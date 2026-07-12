@@ -1,0 +1,55 @@
+version: "3.8"
+
+services:
+  comfyui:
+    image: ghcr.io/comfyanonymous/comfyui:latest
+    ports:
+      - "8188:8188"
+    volumes:
+      - comfyui_models:/workspace/ComfyUI/models
+      - comfyui_input:/workspace/ComfyUI/input
+      - comfyui_output:/workspace/ComfyUI/output
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  pipeline:
+    build: .
+    depends_on:
+      - comfyui
+    volumes:
+      - pipeline_outputs:/app/outputs
+    environment:
+      - COMFY_URL=http://comfyui:8188/prompt
+      - OLLAMA_URL=http://ollama:11434/api/generate
+    stdin_open: true
+    tty: true
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+
+volumes:
+  comfyui_models:
+  comfyui_input:
+  comfyui_output:
+  pipeline_outputs:
+  ollama_models:
