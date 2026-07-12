@@ -10,7 +10,8 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.41.0** — 当前：lora/ipa/multi 升级 Flux（generate_with_quality）+ 模型管理增强（--disk + prune）<br>　　　　　　`python -m agents lora/ipa/multi` 增加 `--preset`/`--seed`/`--min-score`/`--retry` <br>　　　　　　`python -m agents models list --disk` 显示磁盘占用 <br>　　　　　　`python -m agents models prune [--force]` 清理孤立模型
+- **V0.42.0** — 当前：测试覆盖 run.py（30 项）+ outputs 内联预览（--images/--open）<br>　　　　　　`python -m agents outputs list --images` 显示首文件名预览 <br>　　　　　　`python -m agents outputs show <id> --open` 打开产出目录 <br>　　　　　　测试总数 89 → 119 项
+- **V0.41.0** — 上一版：lora/ipa/multi 升级 Flux + 模型管理增强<br>　　　　　　`python -m agents lora/ipa/multi` 增加 `--preset`/`--seed`/`--min-score`/`--retry` <br>　　　　　　`python -m agents models list --disk` 显示磁盘占用 <br>　　　　　　`python -m agents models prune [--force]` 清理孤立模型
 - **V0.40.0** — 上一版：Run 升级 Flux（generate_with_quality + --lora + --preset）<br>　　　　　　`python -m agents run` 等价 `python -m agents flux` 超集 <br>　　　　　　支持 `--preset`/`--lora`/`--model`/`--steps`/`--min-score`/`--retry`
 - **V0.39.0** — Run 视频路由 + 产出管理视频信息 <br>　　　　　　`python -m agents run "prompt" --video` 自动路由视频生成 <br>　　　　　　`python -m agents outputs show <id> --info` 显示视频时长/大小
 - **V0.38.0** — Gallery 视频缩略图 + 测试覆盖增强（32→89 项）<br>　　　　　　`--refresh-posters` 强制刷新
@@ -43,7 +44,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 - V0.5.0 — LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
 - V0.0.XXX — 小修
 
-## 当前版本：V0.41.0
+## 当前版本：V0.42.0
 
 ## 核心能力
 
@@ -54,7 +55,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 | IPAdapter 锁脸 | `go_knives_ipadapter.py` | `python -m agents ipa` | 参考图驱动面部一致性、权重可调、**质量门禁 + --preset** |
 | 多角色同框 | `go_multi_char_lora.py` | `python -m agents multi` | 双 LoRA + FaceDetailer 修脸、**质量门禁 + --preset** |
 | 批处理 | `go_knives_lora.py --count N` | `python -m agents lora --count N` | 多张自动复制到草稿库 |
-| 产出管理 | `output_manager.py` | `python -m agents outputs` | 结构化元数据、list/show/clean，**所有命令自动归档** |
+| 产出管理 | `output_manager.py` | `python -m agents outputs` | 结构化元数据、list/show/clean，**所有命令自动归档**，`list --images` 预览首文件，`show --open` 打开目录 |
 | 环境检查 | `comfy_utils.py` | `python -m agents check` | 运行前探活 ComfyUI/Ollama，自助诊断 |
 | Dry-run 验证 | `comfy_utils.DRY_RUN` | `--dry-run` 全局参数 | 跳过真实提交，验证参数正确性 |
 | Flux.2 Klein 身份一致性 | agents 脚本加载 workflows/JSON | — | 身份引导 + 单图工作流 |
@@ -69,7 +70,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 | 队列管理 | `go_queue.py` | `python -m agents queue` | 查看/清空/中断队列、释放显存 |
 | 产出画廊 | `go_gallery.py` | `python -m agents gallery` | HTML 产出展示、HTTP 服务模式 |
 | 一键诊断 | `go_doctor.py` | `python -m agents doctor` | 9 项环境检查 + 自动修复 |
-| 单元测试 | `tests/` | `pytest tests/` | 89 项测试覆盖核心模块 + 视频管线函数 |
+| 单元测试 | `tests/` | `pytest tests/` | 119 项测试覆盖核心模块 + 视频管线 + run.py 参数映射 |
 | CLI 文档 | `docs/cli-reference.md` | `python scripts/gen_cli_docs.py` | 16 命令 + 子命令自动生成参考文档 |
 | 高质量工作流 | `workflows/*.json` | `python scripts/build_workflows.py` | 6 个 API 格式工作流，带 _meta 元数据 |
 | ControlNet | `go_control.py` | `python -m agents control` | depth/openpose/softedge/tile/inpaint/lineart 引导生图 |
