@@ -720,9 +720,13 @@ def _workshop_inspect(args: list[str]) -> None:
     parser = argparse.ArgumentParser(description="逐部位质检（支持单张/目录/通配符）")
     parser.add_argument("image_path", help="图片路径、目录或通配符")
     parser.add_argument("--verbose", action="store_true", help="详细信息")
+    parser.add_argument("--annotate", action="store_true",
+                        help="生成标注图（绘制质检结果到图片上）")
+    parser.add_argument("--open", action="store_true",
+                        help="生成后自动打开标注图（仅 --annotate 时有效）")
     parsed = parser.parse_args(args)
 
-    from workshop.inspect import inspect_image, format_report
+    from workshop.inspect import inspect_image, format_report, annotate_image
 
     # 解析输入路径
     raw = parsed.image_path
@@ -759,10 +763,28 @@ def _workshop_inspect(args: list[str]) -> None:
 
     # 输出
     if total == 1:
-        print(format_report(results[0]["result"]))
+        report = format_report(results[0]["result"])
+        print(report)
+        if parsed.annotate:
+            ann = annotate_image(results[0]["path"], results[0]["result"])
+            if ann:
+                print(f"  🖼️  标注图: {ann}")
+                if parsed.open:
+                    import os
+                    os.startfile(ann)
         return
 
-    # 多文件 → 汇总表
+    # 多文件 → 汇总表 + 失败原因聚合
+    from collections import Counter
+    fail_reasons: Counter[str] = Counter()
+    for item in results:
+        r = item["result"]
+        parts = r.get("parts", {})
+        for part, info in parts.items():
+            s = info.get("status", "")
+            if s in ("崩了", "模糊", "异常"):
+                fail_reasons[part] += 1
+
     print(f"📋 质检汇总 ({total} 张):")
     print(f"  {'图片':<30} {'脸':<6} {'眼':<6} {'手':<6} {'脚':<6} {'模糊':<6} {'综合分':<8}")
     print(f"  {'-'*30} {'-'*6} {'-'*6} {'-'*6} {'-'*6} {'-'*6} {'-'*8}")
@@ -783,6 +805,9 @@ def _workshop_inspect(args: list[str]) -> None:
         print(f"  {name:<30} {face_s:<6} {eye_s:<6} {hand_s:<6} {foot_s:<6} {blur_s:<6} {overall:<8.2f}")
 
     print(f"\n  ✅ {ok_count}/{total} 张通过 · ⚠️ {total - ok_count} 张有问题")
+    if fail_reasons and total > 1:
+        reasons_str = " · ".join(f"⚠️ {part}: {cnt}张" for part, cnt in fail_reasons.most_common(5))
+        print(f"  📊 失败原因: {reasons_str}")
 
 
 def _workshop_manga(args: list[str]) -> None:
