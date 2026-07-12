@@ -1,5 +1,5 @@
 """
-Video Post-processing — MP4 → GIF / 裁剪 / 变速 / 拼接
+Video Post-processing — MP4 → GIF / 裁剪 / 变速 / 拼接 / 帧提取
 
 用法示例:
   python go_video_process.py <video.mp4> --to-gif
@@ -9,6 +9,9 @@ Video Post-processing — MP4 → GIF / 裁剪 / 变速 / 拼接
   python go_video_process.py <video1> <video2> --concat --output merged.mp4
   python go_video_process.py --recent --to-gif
   python go_video_process.py --run-id 2026-07-12_153022-video --to-gif
+  python go_video_process.py <video.mp4> --extract-frames
+  python go_video_process.py <video.mp4> --extract-frames --every 10
+  python go_video_process.py <video.mp4> --extract-frames --count 50
 """
 from __future__ import annotations
 
@@ -188,6 +191,117 @@ def concat_videos(input_paths: list[Path], output_path: Path) -> Path:
     return output_path
 
 
+def extract_frames(
+    input_path: Path,
+    output_dir: Path,
+    every: int | None = None,
+    count: int | None = None,
+    quality: int = 2,
+) -> list[Path]:
+    """从视频中提取帧为 JPG。
+
+    Args:
+        input_path: 输入视频路径
+        output_dir: 输出目录
+        every: 每隔 N 帧提取一帧
+        count: 均匀提取 N 帧（与 every 互斥）
+        quality: JPEG 质量 1-31（1=最高, 31=最低, 默认 2）
+
+    Returns:
+        输出的 JPG 文件路径列表
+    """
+    import math
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    ffmpeg = _find_ffmpeg()
+    stem = input_path.stem
+
+    frames_out: list[Path] = []
+
+    if every:
+        # 每隔 N 帧提取
+        # 使用 select filter: select='not(mod(n,N))'
+        filter_expr = f"select='not(mod(n,{every}))'"
+        out_pattern = str(output_dir / f"{stem}_frame_%05d.jpg")
+        cmd = [
+            "-i", str(input_path),
+            "-vf", f"{filter_expr},setpts=N/FRAME_RATE/TB",
+            "-vsync", "vfr",
+            "-q:v", str(quality),
+            out_pattern,
+        ]
+        _run_ffmpeg(cmd, f"帧提取: 每 {every} 帧一帧")
+
+        # 列举生成的帧
+        for f in sorted(output_dir.glob(f"{stem}_frame_*.jpg")):
+            frames_out.append(f)
+        print(f"  ✅ 提取 {len(frames_out)} 帧 → {output_dir}")
+
+    elif count:
+        # 均匀提取 N 帧：先用 ffprobe 获取总帧数
+        ffprobe = _find_ffmpeg().replace("ffmpeg", "ffprobe")
+        try:
+            probe_result = subprocess.run(
+                [ffprobe, "-v", "quiet", "-select_streams", "v:0",
+                 "-count_packets", "-show_entries", "stream=nb_read_packets",
+                 "-of", "csv=p=0", str(input_path)],
+                capture_output=True, text=True, timeout=30,
+            )
+            total_frames = int(probe_result.stdout.strip())
+        except (ValueError, subprocess.TimeoutExpired, OSError):
+            # 回退：用 ffprobe 从时长和 fps 估算
+            try:
+                probe = subprocess.run(
+                    [ffprobe, "-v", "quiet", "-print_format", "json",
+                     "-show_streams", str(input_path)],
+                    capture_output=True, text=True, timeout=30,
+                )
+                import json
+                info = json.loads(probe.stdout)
+                stream = info["streams"][0]
+                duration = float(stream.get("duration", 0))
+                fps_parts = stream.get("r_frame_rate", "30/1").split("/")
+                fps_val = float(fps_parts[0]) / float(fps_parts[1]) if len(fps_parts) == 2 else 30.0
+                total_frames = int(duration * fps_val)
+            except (json.JSONDecodeError, KeyError, IndexError, ValueError, OSError):
+                total_frames = 300  # 兜底
+
+        if total_frames <= 0:
+            total_frames = 300
+
+        # 计算均匀间隔
+        step = max(1, total_frames // count)
+        # 用 select filter 提取
+        filter_expr = f"select='not(mod(n,{step}))'"
+        out_pattern = str(output_dir / f"{stem}_frame_%05d.jpg")
+        cmd = [
+            "-i", str(input_path),
+            "-vf", f"{filter_expr},setpts=N/FRAME_RATE/TB",
+            "-vsync", "vfr",
+            "-q:v", str(quality),
+            out_pattern,
+        ]
+        _run_ffmpeg(cmd, f"帧提取: 均匀 {count} 帧")
+
+        for f in sorted(output_dir.glob(f"{stem}_frame_*.jpg")):
+            frames_out.append(f)
+
+        # 如果提取太多（间隔估算不准），只保留前 N 帧
+        if len(frames_out) > count:
+            extra = sorted(frames_out)[count:]
+            for f in extra:
+                f.unlink(missing_ok=True)
+            frames_out = sorted(frames_out)[:count]
+
+        print(f"  ✅ 提取 {len(frames_out)}/{count} 帧 → {output_dir}")
+
+    else:
+        # 默认每隔 30 帧
+        return extract_frames(input_path, output_dir, every=30, quality=quality)
+
+    return frames_out
+
+
 def auto_output_path(input_path: Path, suffix: str, ext: str | None = None) -> Path:
     """自动生成输出路径。"""
     stem = input_path.stem
@@ -218,6 +332,16 @@ def main() -> None:
                         help="GIF 帧率（默认 10）")
     parser.add_argument("--scale", default="",
                         help="缩放目标（如 480:-1, 320:240）")
+    parser.add_argument("--extract-frames", action="store_true",
+                        help="从视频中提取帧为 JPG")
+    parser.add_argument("--every", type=int, default=None,
+                        help="每隔 N 帧提取一帧（与 --count 互斥）")
+    parser.add_argument("--count", type=int, default=None,
+                        help="均匀提取 N 帧（与 --every 互斥）")
+    parser.add_argument("--quality", type=int, default=2,
+                        help="JPEG 质量 1-31（1=最高, 31=最低, 默认 2）")
+    parser.add_argument("--output-dir", default=None,
+                        help="帧提取输出目录（默认: 输入文件同目录下 _frames 子目录）")
     args = parser.parse_args()
 
     # 解析输入
@@ -245,6 +369,21 @@ def main() -> None:
         if not p.is_file():
             print(f"错误: 文件不存在: {p}", file=sys.stderr)
             sys.exit(1)
+
+    # 帧提取模式（独立，不参与链式处理）
+    if args.extract_frames:
+        input_path = input_paths[0]
+        if args.output_dir:
+            out_dir = Path(args.output_dir)
+        else:
+            out_dir = input_path.parent / f"{input_path.stem}_frames"
+        extract_frames(
+            input_path, out_dir,
+            every=args.every,
+            count=args.count,
+            quality=args.quality,
+        )
+        return
 
     # 确定输出路径
     if args.concat:
