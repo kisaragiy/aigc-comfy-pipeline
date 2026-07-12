@@ -549,6 +549,23 @@ def _workshop_create(args: list[str]) -> None:
     neg_display = result.get("negative_prompt", auto_neg or "")
     neg_suffix = f" | 负向={neg_display[:40]}..." if neg_display else ""
 
+    # 将引擎推测信息补充到已保存的 metadata.json
+    if parsed.output and not parsed.preview:
+        meta_path = Path(parsed.output) / "metadata.json"
+        if meta_path.is_file():
+            try:
+                import json as _json
+                meta = _json.loads(meta_path.read_text(encoding="utf-8"))
+                meta["engine_detection"] = {
+                    "style": detected_style,
+                    "composition": detected_comp,
+                    "lighting": detected_light,
+                    "auto_negative": auto_neg,
+                }
+                meta_path.write_text(_json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+            except Exception:
+                pass  # 静默降级，元数据非关键
+
     if parsed.preview:
         print(f"\n📝 Prompt: {result['prompt']}")
         if neg_display:

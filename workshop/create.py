@@ -256,28 +256,53 @@ def create_from_nl(
     return result
 
 
-def _maybe_save_output(result: dict[str, Any], output_dir: str | None) -> None:
-    """如指定 output_dir，保存结构化的结果元数据到 JSON + 复制最优图。"""
+def _maybe_save_output(result: dict[str, Any], output_dir: str | None, extra_meta: dict[str, Any] | None = None) -> None:
+    """如指定 output_dir，保存结构化的结果元数据到 JSON + 复制最优图。
+
+    Args:
+        result: create_from_nl() 的完整结果
+        output_dir: 输出目录路径
+        extra_meta: 额外元数据（如引擎推测信息），由调用方补充
+    """
     if not output_dir:
         return
 
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
 
+    # 逐候选摘要（不保存图片路径，仅存储轻量信息）
+    candidates_info = []
+    for c in result.get("candidates", []):
+        ins = c.get("inspect", {})
+        candidates_info.append({
+            "seed": c.get("seed", 0),
+            "score": c.get("score", -1),
+            "retries": c.get("retries", 0),
+            "error": c.get("error"),
+            "inspect_status": ins.get("status", ""),
+            "inspect_overall": ins.get("scores", {}).get("overall", 0) if ins else 0,
+            "inspect_summary": ins.get("summary", ""),
+        })
+
     # 保存 JSON 元数据
     meta = {
         "created_at": datetime.now().isoformat(timespec="seconds"),
+        "version": "0.64.0",
         "prompt": result.get("prompt", ""),
         "negative_prompt": result.get("negative_prompt", ""),
-        "inspection_summary": result.get("inspection_summary", ""),
+        "candidates_count": len(result.get("candidates", [])),
         "best": {
             "seed": result.get("best", {}).get("seed", 0),
             "score": result.get("best", {}).get("score", -1),
             "image_relative": "",
             "inspect": _summarize_inspect(result.get("best", {}).get("inspect", {})),
         },
-        "candidates_count": len(result.get("candidates", [])),
+        "candidates": candidates_info,
     }
+
+    # 合并额外元数据（如引擎推测）
+    if extra_meta:
+        meta.update(extra_meta)
 
     # 复制最优图
     best_img = result.get("best", {}).get("image", "")
@@ -313,7 +338,10 @@ def _register_output(result: dict[str, Any]) -> None:
 
 
 def _generate_gallery_html(result: dict[str, Any], output_dir: str) -> str:
-    """生成全候选 HTML 画廊（self-contained），返回输出路径。"""
+    """生成全候选 HTML 画廊（self-contained），返回输出路径。
+
+    候选按综合分降序排列（最优在前），引擎推测信息显示在页面标题区。
+    """
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
 
@@ -346,15 +374,32 @@ def _generate_gallery_html(result: dict[str, Any], output_dir: str) -> str:
             "error": False,
         })
 
-    # 组装 HTML
+    # 按综合分降序排序（最优在前）
+    images.sort(key=lambda x: (x.get("best", False), x.get("error", True), -x.get("overall", 0)))
+
+    # 引擎推测信息（可选）
     prompt_escaped = result.get("prompt", "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    negative = result.get("negative_prompt", "")
+    negative_escaped = negative.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     summary = result.get("inspection_summary", "")
     rows_html = ""
-    for img in images:
+
+    # 引擎推测信息（可选）
+    engine = result.get("engine_detection", {})
+    engine_html = ""
+    if engine:
+        style_str = engine.get("style", "")
+        comp_str = engine.get("composition", "")
+        light_str = engine.get("lighting", "")
+        auto_neg = engine.get("auto_negative", "")
+        parts = [f"🎨 风格: {style_str}", f"📐 构图: {comp_str[:30]}", f"💡 光照: {light_str[:30]}"]
+        if auto_neg:
+            parts.append(f"⛔ 自动负向: {auto_neg[:30]}")
+        engine_html = '<div class="engine">' + " · ".join(parts) + "</div>"
+    for _rank, img in enumerate(images, 1):
         if img.get("error"):
-            rows_html += f"""
-<div class="card error">
-  <div class="img-placeholder">❌ seed={img['seed']}</div>
+            rows_html += f"""\n<div class="card error">
+  <div class="img-placeholder">❌ #{_rank} seed={img['seed']}</div>
   <div class="info">seed: {img['seed']} <span class="badge error-badge">ERROR</span></div>
 </div>"""
             continue
@@ -363,10 +408,9 @@ def _generate_gallery_html(result: dict[str, Any], output_dir: str) -> str:
         summary_tag = f"<span class='summary'>{img['summary']}</span>" if img.get("summary") else ""
         overall_tag = f"<span class='overall'>综合: {img.get('overall', 0):.2f}</span>" if img.get('overall', 0) > 0 else ""
         best_badge = " <span class='badge best-badge'>🏆 最优</span>" if img.get("best") else ""
-        rows_html += f"""
-<div class="card{best_class}">
+        rows_html += f"""\n<div class="card{best_class}">
   <img src="{img['file']}" loading="lazy" onclick="openModal(this.src)" />
-  <div class="info">seed: {img['seed']} {score_tag} {overall_tag} {summary_tag}{best_badge}</div>
+  <div class="info">#{_rank} · seed: {img['seed']} {score_tag} {overall_tag} {summary_tag}{best_badge}</div>
 </div>"""
 
     html = f"""<!DOCTYPE html>
@@ -376,7 +420,9 @@ def _generate_gallery_html(result: dict[str, Any], output_dir: str) -> str:
 *{{margin:0;padding:0;box-sizing:border-box}}
 body{{background:#1a1a2e;color:#eee;font-family:system-ui,sans-serif;padding:20px}}
 h1{{font-size:1.5rem;margin-bottom:8px;color:#e8a87c}}
-.prompt{{color:#999;font-size:.85rem;margin-bottom:20px;padding:10px;background:#16213e;border-radius:8px;word-break:break-all}}
+.prompt{{color:#999;font-size:.85rem;margin-bottom:8px;padding:10px;background:#16213e;border-radius:8px;word-break:break-all}}
+.negative{{color:#d4a5a5;font-size:.82rem;margin-bottom:4px;padding:4px 10px;background:#1f1f35;border-radius:6px;word-break:break-all}}
+.engine{{color:#7ec8e3;font-size:.82rem;margin-bottom:12px;padding:4px 10px;background:#1f1f35;border-radius:6px}}
 .summary-row{{margin-bottom:16px;font-size:.9rem;color:#aaa}}
 .grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}}
 .card{{background:#16213e;border-radius:10px;overflow:hidden;border:2px solid transparent;transition:transform .15s}}
@@ -392,6 +438,7 @@ h1{{font-size:1.5rem;margin-bottom:8px;color:#e8a87c}}
 .badge{{font-size:.7rem;padding:2px 6px;border-radius:4px}}
 .best-badge{{background:#e8a87c33;color:#e8a87c}}
 .error-badge{{background:#ff444433;color:#ff4444}}
+.sort-note{{font-size:.75rem;color:#666;margin-left:8px}}
 /* modal */
 #modal{{display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.9);cursor:zoom-out;align-items:center;justify-content:center}}
 #modal.show{{display:flex}}
@@ -400,7 +447,9 @@ h1{{font-size:1.5rem;margin-bottom:8px;color:#e8a87c}}
 <body>
 <h1>🖼️ 创作工坊 · Gallery</h1>
 <div class="prompt">{prompt_escaped}</div>
-<div class="summary-row">{f'质检: {summary}' if summary else ''} · 共 {len(images)} 张</div>
+{('<div class="negative">⛔ 负向: ' + negative_escaped + '</div>') if negative else ''}
+{engine_html}
+<div class="summary-row">{f'质检: {summary}' if summary else ''} · 共 {len(images)} 张<span class="sort-note" title="按综合分降序 · 🏆 最优在前">  已排序</span></div>
 <div class="grid">{rows_html}</div>
 <div id="modal" onclick="this.classList.remove('show')"><img id="modal-img" src="" alt=""/></div>
 <script>
