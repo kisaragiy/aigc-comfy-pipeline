@@ -10,7 +10,7 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.49.0** — 当前：workshop 模块初建（Prompt 引擎 + 质检 + 漫画骨架 + 视频封装）<br>　　　　　　`workshop/engine/` — 自然语言 → 专业绘画提示词，多风格预设，模板兜底<br>　　　　　　`workshop/inspect/` — 逐部位质检报告 [脸:正常] [手:崩了] [模糊:正常]<br>　　　　　　`workshop/manga/` — 剧本 → 焚诀八列分镜表 → 逐格生图 → 拼页输出<br>　　　　　　`workshop/video/` — 分镜驱动视频生成（封装 Wan2.2 go_video）<br>　　　　　　AGENTS.md 定位改为"自然语言驱动的 AIGC 创作工坊"，不做什么更新<br>　　　　　　版本 0.49.0
+- **V0.50.0** — 当前：创作工坊 CLI + 端到端"一句话创作"管线<br>　　　　　　`python -m agents workshop create "描述"` — 引擎→多张生成→质检→选最优<br>　　　　　　`python -m agents workshop engine "描述"` — 测试 prompt 引擎<br>　　　　　　`python -m agents workshop inspect img.png` — 逐部位质检<br>　　　　　　`python -m agents workshop manga "剧本"` — 漫画/分镜生成<br>　　　　　　`python -m agents workshop video "描述"` — 视频生成<br>　　　　　　workshop/create.py 端到端管线：NL→prompt→generate×N→inspect→rank<br>　　　　　　按 inspect(50%) + CLIP(50%) 综合排序<br>　　　　　　版本 0.50.0<br>　　　　　　
 - **V0.48.0** — 上一版：serve API 升级（新增 control/sweep/abtest/bestof 端点）<br>　　　　　　`POST /api/control` — ControlNet 条件生图，ref/type/model，走 generate_with_quality <br>　　　　　　`POST /api/sweep` — 参数网格扫描，grid/type，走 generate_with_quality <br>　　　　　　`POST /api/abtest` — A/B 双 Prompt 对比，prompts[2]，走 generate_with_quality <br>　　　　　　`POST /api/bestof` — Best of N 多轮择优，count/prompt，走 generate_with_quality<br>　　　　　　API 版本升至 0.48.0，新增 4 个后台异步端点 + quality 门禁全覆盖
 - **V0.47.0** — 上一版：AB Test / Best of N 升级 generate_with_quality + 质量门禁<br>　　　　　　`python -m agents abtest --prompts "A" "B" --preset anime --min-score 0.2` <br>　　　　　　`python -m agents bestof "prompt" --count 4 --retry 2 --min-score 0.25` <br>　　　　　　替换直调 `build_flux_workflow` 为 `generate_with_quality`，新增 `--preset`/`--min-score`/`--retry`/`--no-validate`
 - **V0.46.0** — 上一版：gallery 新增全屏/幻灯片/键盘导航<br>　　　　　　点击图片全屏 Lightbox，← → 翻页，缩略图条，Esc 关闭
@@ -50,7 +50,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 - V0.5.0 — LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
 - V0.0.XXX — 小修
 
-## 当前版本：V0.49.0
+## 当前版本：V0.50.0
 
 ## 核心能力
 
@@ -86,7 +86,13 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 | 质量验证 | `go_validate.py` | `python -m agents validate` | CLIP score + 崩脸检测 + 图像质量 |
 || A/B 测试 | `go_abtest.py` | `python -m agents abtest` | 同 seed prompt 对比，**走 generate_with_quality**，支持 `--preset`/`--min-score`/`--retry` |
 || Best of N | `go_abtest.py` | `python -m agents bestof` | 多 seed 自动挑优 + 排名，**质量门禁 + --preset** |
-|| API 服务 | `go_serve.py` | `python -m agents serve` | FastAPI REST API，异步作业队列，flux/lora/video/control/sweep/abtest/bestof 全端点 + quality 门禁 |
+||| API 服务 | `go_serve.py` | `python -m agents serve` | FastAPI REST API，异步作业队列，flux/lora/video/control/sweep/abtest/bestof 全端点 + quality 门禁 |
+|| 一句话创作 | `workshop/create.py` | `python -m agents workshop create` | 引擎→多张生成→质检→排序→选最优，端到端管线 |
+|| 创作工坊 CLI | `agents/__main__.py` | `python -m agents workshop` | workshop 子命令入口：create/engine/inspect/manga/video |
+|| Prompt 引擎 | `workshop/engine/engine.py` | `python -m agents workshop engine` | 自然语言→专业绘画提示词，9 种风格预设，构图/光照/关键词库，模板兜底 |
+|| 逐部位质检 | `workshop/inspect/inspector.py` | `python -m agents workshop inspect` | [脸:ok] [左眼:ok] [右眼:ok] [手:ok] [脚:ok] [模糊:正常] 结构化报告 |
+|| 漫画/分镜生成 | `workshop/manga/manga.py` | `python -m agents workshop manga` | 剧本→八列分镜表→逐格 prompt→ComfyUI 出图→拼页+台词 |
+|| 视频自动化 | `workshop/video/video.py` | `python -m agents workshop video` | 封装 Wan2.2 + 分镜驱动视频生成 + ffmpeg 拼接 |
 | 质量预设 | `comfy_utils.QUALITY_PRESETS` | `--preset quality|fast|portrait` | 优选参数组合，环境变量 AIGC_PRESET |
 | 视频预设 | `comfy_utils.VIDEO_PRESETS` | `--preset quality|fast|cinematic` | 视频专用预设，环境变量 AIGC_VIDEO_PRESET |
 | 自动门禁 | `comfy_utils.generate_with_quality()` | `--min-score 0.25 --retry 3` | 出图验证 + 不合格自动重试 |

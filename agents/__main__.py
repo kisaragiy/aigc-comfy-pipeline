@@ -448,6 +448,210 @@ def _run_outputs() -> None:
         sys.exit(1)
 
 
+def _run_workshop() -> None:
+    """Handle 'workshop create|engine|inspect|manga|video' subcommands."""
+    if len(sys.argv) < 3:
+        print("用法: python -m agents workshop <subcommand> [args...]")
+        print()
+        print("子命令:")
+        print("  create  \"描述\"   — 一句话出图（引擎 → 多张生成 → 质检 → 选最优）")
+        print("  engine  \"描述\"   — 测试 prompt 引擎（显示优化后提示词）")
+        print("  inspect <图片>   — 逐部位质检")
+        print("  manga   \"剧本\"   — 漫画/分镜生成")
+        print("  video   \"描述\"   — 视频生成")
+        print()
+        print("示例:")
+        print('  python -m agents workshop create "银发少女校服教室窗边逆光" --count 6 --inspect')
+        print('  python -m agents workshop create "prompt" --style anime --ref ref.png')
+        print('  python -m agents workshop engine "赛博朋克少女，霓虹雨夜"')
+        print('  python -m agents workshop inspect output.png')
+        return
+
+    sub = sys.argv[2]
+    args = sys.argv[3:]
+
+    if sub == "create":
+        _workshop_create(args)
+    elif sub == "engine":
+        _workshop_engine(args)
+    elif sub == "inspect":
+        _workshop_inspect(args)
+    elif sub == "manga":
+        _workshop_manga(args)
+    elif sub == "video":
+        from agents.go_video import main as video_main
+        sys.argv = [sys.argv[0]] + args
+        video_main()
+    else:
+        print(f"未知 workshop 子命令: {sub}")
+        _run_workshop()
+
+
+def _workshop_create(args: list[str]) -> None:
+    """python -m agents workshop create <nl_text> [options]"""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="一句话出图：引擎 → 多张生成 → 质检 → 选最优")
+    parser.add_argument("nl_text", nargs="*", help="自然语言描述")
+    parser.add_argument("--count", type=int, default=4, help="生成候选数（默认: 4）")
+    parser.add_argument("--style", default=None, help="画风提示 (anime/photoreal/cg/cosplay/...)")
+    parser.add_argument("--ref", default=None, help="参考图路径（角色特征分析）")
+    parser.add_argument("--preset", default=None, help="质量预设 (quality/balanced/fast/...)")
+    parser.add_argument("--min-score", type=float, default=0.0, help="最低 CLIP 分")
+    parser.add_argument("--retry", type=int, default=0, help="失败重试次数")
+    parser.add_argument("--no-inspect", action="store_true", help="跳过质检")
+    parser.add_argument("--preview", action="store_true", help="预览模式（跳过生成）")
+    parser.add_argument("--verbose", action="store_true", help="详细信息")
+    parsed = parser.parse_args(args)
+
+    nl_text = " ".join(parsed.nl_text) if parsed.nl_text else ""
+    if not nl_text:
+        parser.print_help()
+        return
+
+    from workshop.create import create_from_nl
+
+    result = create_from_nl(
+        nl_text,
+        count=parsed.count,
+        style_hint=parsed.style,
+        ref_path=parsed.ref,
+        preset=parsed.preset,
+        min_score=parsed.min_score,
+        retry=parsed.retry,
+        inspect=not parsed.no_inspect,
+        dry_run=parsed.preview,
+        verbose=parsed.verbose,
+    )
+
+    if parsed.preview:
+        print(f"\n📝 Prompt: {result['prompt']}")
+        print(f"  候选数: {parsed.count}")
+        print("  (dry-run 模式，未提交)")
+        return
+
+    print(f"\n{'='*50}")
+    print(f"📝 最终 Prompt: {result['prompt']}")
+    print(f"  候选: {len(result['candidates'])} 张")
+
+    best = result.get("best", {})
+    if best:
+        print(f"\n🏆 最优:")
+        print(f"  图片: {best.get('image', 'N/A')}")
+        print(f"  Seed: {best.get('seed', '?')}")
+        print(f"  CLIP Score: {best.get('score', -1)}")
+        ins = best.get("inspect", {})
+        if ins:
+            from workshop.inspect import format_report
+            print(f"\n{format_report(ins)}")
+
+    print(f"\n📊 排名:")
+    for i, c in enumerate(result.get("candidates", [])):
+        ins_sum = c.get("inspect", {}).get("summary", "")
+        print(f"  #{i+1} seed={c.get('seed','?')} score={c.get('score', -1)} {ins_sum}")
+
+
+def _workshop_engine(args: list[str]) -> None:
+    """python -m agents workshop engine <nl_text> [--style STYLE]"""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="测试 Prompt 引擎")
+    parser.add_argument("nl_text", nargs="*", help="自然语言描述")
+    parser.add_argument("--style", default=None, help="画风提示")
+    parser.add_argument("--list-presets", action="store_true", help="列出可用预设")
+    parsed = parser.parse_args(args)
+
+    if parsed.list_presets:
+        from workshop.engine import list_presets
+        presets = list_presets()
+        print("可用预设:")
+        print(f"  风格: {', '.join(presets['styles'])}")
+        print(f"  构图: {', '.join(presets['compositions'])}")
+        print(f"  光照: {', '.join(presets['lighting'])}")
+        print(f"  风格关键词: {', '.join(presets['style_keywords'])}")
+        return
+
+    nl_text = " ".join(parsed.nl_text) if parsed.nl_text else ""
+    if not nl_text:
+        parser.print_help()
+        return
+
+    from workshop.engine import nls_to_prompt, STYLE_PRESETS
+
+    # 模板兜底结果
+    result = nls_to_prompt(nl_text, style_hint=parsed.style, ollama_available=False)
+    print(f"\n📝 原始描述: {nl_text}")
+    print(f"\n🔧 风格: {parsed.style or '(自动推测)'}")
+    print(f"\n✅ 优化后 Prompt:")
+    print(f"  {result}")
+
+    # 显示推测
+    from workshop.engine.engine import _detect_style, _detect_composition, _detect_lighting
+    detected = _detect_style(nl_text, parsed.style)
+    comp = _detect_composition(nl_text)
+    light = _detect_lighting(nl_text)
+    print(f"\n📋 引擎推测: 风格={detected} | 构图={comp[:30]}... | 光照={light[:30]}...")
+
+
+def _workshop_inspect(args: list[str]) -> None:
+    """python -m agents workshop inspect <image_path> [--verbose]"""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="逐部位质检")
+    parser.add_argument("image_path", help="图片路径")
+    parser.add_argument("--verbose", action="store_true", help="详细信息")
+    parsed = parser.parse_args(args)
+
+    from workshop.inspect import inspect_image, format_report
+    result = inspect_image(parsed.image_path, verbose=parsed.verbose)
+    report = format_report(result)
+    print(report)
+
+
+def _workshop_manga(args: list[str]) -> None:
+    """python -m agents workshop manga <script_text> [--characters ...]"""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="漫画/分镜生成")
+    parser.add_argument("script_text", nargs="*", help="剧本/场景描述")
+    parser.add_argument("--style", default="anime", help="画风")
+    parser.add_argument("--preview", action="store_true", help="预览")
+    parser.add_argument("--layout", default="auto", help="拼页布局 (auto/4koma)")
+    parsed = parser.parse_args(args)
+
+    script = " ".join(parsed.script_text) if parsed.script_text else ""
+    if not script:
+        parser.print_help()
+        return
+
+    from workshop.manga import script_to_storyboard, storyboard_to_prompts, generate_panels, assemble_page
+
+    # 角色定义
+    chars = {"Knives": {"服饰": "白色校服", "发型": "银白长发", "特征": "猫耳, 红瞳"},
+             "Caster": {"服饰": "黑色连衣裙", "发型": "粉色短发", "特征": "蓝瞳"}}
+
+    print(f"📖 剧本: {script}")
+    print("\n📋 生成分镜表...")
+    storyboard = script_to_storyboard(script, characters=chars, ollama_available=False)
+    for shot in storyboard:
+        print(f"  {shot.get('镜号','?')} | {shot.get('人物','?')} | {shot.get('景別','?')} | {shot.get('台词','')[:30]}")
+
+    print("\n🎨 生成逐格 Prompt...")
+    panels = storyboard_to_prompts(storyboard, chars, style_hint=parsed.style)
+
+    if parsed.preview:
+        for p in panels:
+            print(f"  {p['shot']}: {p['prompt'][:80]}...")
+        return
+
+    print("\n🖼️  逐格生图...")
+    results = generate_panels(panels, dry_run=parsed.preview)
+
+    print("\n📄 拼页...")
+    output = assemble_page(results)
+    print(f"✅ 漫画页: {output}")
+
+
 def main() -> None:
     if len(sys.argv) < 2:
         _show_help()
@@ -490,6 +694,10 @@ def main() -> None:
 
     if command == "models":
         _run_models()
+        return
+
+    if command == "workshop":
+        _run_workshop()
         return
 
     script_map = {
