@@ -301,13 +301,13 @@ QUALITY_PRESETS: dict[str, dict[str, Any]] = {
 
 VIDEO_PRESETS: dict[str, dict[str, Any]] = {
     "quality": {"frames": 81, "fps": 25, "width": 1024, "height": 1024,
-                "steps": 40, "cfg": 7.0},
+                "steps": 40, "cfg": 7.0, "sampler": "euler", "scheduler": "normal"},
     "balanced": {"frames": 49, "fps": 20, "width": 848, "height": 480,
-                 "steps": 30, "cfg": 7.0},
+                 "steps": 30, "cfg": 7.0, "sampler": "euler", "scheduler": "normal"},
     "fast": {"frames": 25, "fps": 15, "width": 512, "height": 288,
-             "steps": 20, "cfg": 5.0},
+             "steps": 20, "cfg": 5.0, "sampler": "euler", "scheduler": "normal"},
     "cinematic": {"frames": 81, "fps": 24, "width": 1280, "height": 720,
-                  "steps": 40, "cfg": 8.0},
+                  "steps": 40, "cfg": 8.0, "sampler": "euler", "scheduler": "normal"},
 }
 
 

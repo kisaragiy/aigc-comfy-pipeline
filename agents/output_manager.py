@@ -9,6 +9,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+_VIDEO_EXTENSIONS = {".mp4", ".webm", ".mov", ".avi", ".mkv"}
+
+
+def _is_video(path: Path) -> bool:
+    return path.suffix.lower() in _VIDEO_EXTENSIONS
+
 # 默认产出目录（可被环境变量 AIGC_OUTPUT_DIR 覆盖）
 DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parents[1] / "outputs"
 
@@ -48,15 +54,19 @@ def save_run(
     out_dir, run_id = _make_run_dir(command)
     img_dir = out_dir / "images"
 
-    # 复制图片
+    # 复制文件
     saved_images: list[str] = []
+    saved_videos: list[str] = []
     for src_path in image_paths:
         src = Path(src_path)
         if not src.is_file():
             continue
         dst = img_dir / src.name
         shutil.copy2(src, dst)
-        saved_images.append(str(dst.name))
+        if _is_video(src):
+            saved_videos.append(str(dst.name))
+        else:
+            saved_images.append(str(dst.name))
 
     # 写 metadata
     meta = {
@@ -64,6 +74,7 @@ def save_run(
         "command": command,
         "timestamp": datetime.now().isoformat(),
         "images": saved_images,
+        "videos": saved_videos,
         "params": metadata,
     }
     (out_dir / "metadata.json").write_text(
@@ -88,6 +99,8 @@ def list_runs() -> list[dict[str, Any]]:
             meta = json.loads(meta_file.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             continue
+        # 兼容旧版：无 videos 字段时补 0
+        meta["video_count"] = len(meta.get("videos", []))
         runs.append(meta)
     return runs
 

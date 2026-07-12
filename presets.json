@@ -20,7 +20,9 @@
       "width": 512,
       "height": 288,
       "steps": 15,
-      "cfg": 4.0
+      "cfg": 4.0,
+      "sampler": "euler",
+      "scheduler": "normal"
     }
   }
 }
