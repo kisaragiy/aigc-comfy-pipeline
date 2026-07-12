@@ -398,6 +398,12 @@ def _generate_gallery_html(result: dict[str, Any], output_dir: str) -> str:
         if auto_neg:
             parts.append(f"⛔ 自动负向: {auto_neg[:30]}")
         engine_html = '<div class="engine">' + " · ".join(parts) + "</div>"
+    # Build JS images array for keyboard navigation
+    js_images: list[str] = []
+    for _rank, img in enumerate(images, 1):
+        if not img.get("error") and img.get("file"):
+            js_images.append(img["file"])
+
     for _rank, img in enumerate(images, 1):
         if img.get("error"):
             rows_html += f"""\n<div class="card error">
@@ -418,8 +424,12 @@ def _generate_gallery_html(result: dict[str, Any], output_dir: str) -> str:
                 pname = part_map.get(pk, pk[:4])
                 pcls = "p-ok" if pv >= 0.8 else "p-warn" if pv >= 0.3 else "p-bad"
                 parts_tags += f"<span class='part {pcls}'>{pname} {pv:.1f}</span>"
+        # Find the index in js_images for keyboard nav
+        file_name = img.get("file", "")
+        nav_idx = js_images.index(file_name) if file_name in js_images else -1
+        onclick = f"openModal({nav_idx})" if nav_idx >= 0 else "this.classList.remove('show')"
         rows_html += f"""\n<div class="card{best_class}">
-  <img src="{img['file']}" loading="lazy" onclick="openModal(this.src)" />
+  <img src="{img['file']}" loading="lazy" onclick="{onclick}" />
   <div class="info">#{_rank} · seed: {img['seed']} {score_tag} {overall_tag} {summary_tag}{best_badge}</div>
   {('<div class="parts">'+parts_tags+'</div>') if parts_tags else ''}
 </div>"""
@@ -459,6 +469,7 @@ h1{{font-size:1.5rem;margin-bottom:8px;color:#e8a87c}}
 #modal{{display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.9);cursor:zoom-out;align-items:center;justify-content:center}}
 #modal.show{{display:flex}}
 #modal img{{max-width:95vw;max-height:95vh;object-fit:contain;border-radius:4px}}
+#modal-counter{{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.6);color:#ccc;padding:4px 14px;border-radius:12px;font-size:.82rem;pointer-events:none}}
 </style></head>
 <body>
 <h1>🖼️ 创作工坊 · Gallery</h1>
@@ -467,9 +478,45 @@ h1{{font-size:1.5rem;margin-bottom:8px;color:#e8a87c}}
 {engine_html}
 <div class="summary-row">{f'质检: {summary}' if summary else ''} · 共 {len(images)} 张<span class="sort-note" title="按综合分降序 · 🏆 最优在前">  已排序</span></div>
 <div class="grid">{rows_html}</div>
-<div id="modal" onclick="this.classList.remove('show')"><img id="modal-img" src="" alt=""/></div>
+|<div id="modal" onclick="this.classList.remove('show')">
+  <div id="modal-counter"></div>
+  <img id="modal-img" src="" alt=""/>
+</div>
 <script>
-function openModal(src){{document.getElementById('modal-img').src=src;document.getElementById('modal').classList.add('show')}}
+var images = {js_images};
+var currentIdx = -1;
+function openModal(idx){{
+    currentIdx = idx;
+    document.getElementById('modal-img').src = images[idx];
+    document.getElementById('modal').classList.add('show');
+    updateCounter();
+}}
+function updateCounter(){{
+    var c = document.getElementById('modal-counter');
+    if (currentIdx >= 0 && images.length > 1) {{
+        c.textContent = (currentIdx + 1) + ' / ' + images.length + ' ← →';
+        c.style.display = 'block';
+    }} else {{
+        c.style.display = 'none';
+    }}
+}}
+document.addEventListener('keydown', function(e){{
+    if (currentIdx < 0) return;
+    if (e.key === 'ArrowLeft' && currentIdx > 0) {{
+        currentIdx--;
+        document.getElementById('modal-img').src = images[currentIdx];
+        updateCounter();
+        e.preventDefault();
+    }} else if (e.key === 'ArrowRight' && currentIdx < images.length - 1) {{
+        currentIdx++;
+        document.getElementById('modal-img').src = images[currentIdx];
+        updateCounter();
+        e.preventDefault();
+    }} else if (e.key === 'Escape') {{
+        document.getElementById('modal').classList.remove('show');
+        currentIdx = -1;
+    }}
+}});
 </script>
 </body></html>"""
 
