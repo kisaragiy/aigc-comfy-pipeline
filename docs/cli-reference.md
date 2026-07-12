@@ -1,6 +1,6 @@
 # CLI 参考文档
 
-> 自动生成于 2026-07-12 21:17
+> 自动生成于 2026-07-12 21:25
 
 AIGC ComfyUI Pipeline v?
 
@@ -169,12 +169,14 @@ options:
 参数网格扫描（Flux.2 Klein，自动对比拼图）
 
 ```
-usage: go_sweep.py [-h] --grid GRID [--model {9b,4b}] [--lora LORA]
-                   [--lora-strength LORA_STRENGTH] [--negative NEGATIVE]
-                   [--prefix PREFIX] [--raw]
+usage: go_sweep.py [-h] --grid GRID [--type {image,video}] [--model {9b,4b}]
+                   [--lora LORA] [--lora-strength LORA_STRENGTH]
+                   [--negative NEGATIVE] [--prefix PREFIX] [--raw] [--ref REF]
+                   [--denoise DENOISE] [--sampler SAMPLER]
+                   [--scheduler SCHEDULER]
                    [prompt]
 
-参数网格扫描 — Flux.2 Klein（自动对比拼图）
+参数网格扫描 — 支持图片(Flux)和视频(Wan2.2)，自动对比拼图
 
 positional arguments:
   prompt                画面描述
@@ -182,12 +184,18 @@ positional arguments:
 options:
   -h, --help            show this help message and exit
   --grid GRID           JSON 网格参数: {"steps":[20,30],"cfg":[1.0,2.0]}
+  --type {image,video}  扫描类型：image(Flux) / video(Wan2.2)
   --model {9b,4b}
   --lora LORA
   --lora-strength LORA_STRENGTH
   --negative NEGATIVE
   --prefix PREFIX
   --raw                 跳过 Ollama
+  --ref REF             参考图（视频 I2V 模式）
+  --denoise DENOISE     视频去噪强度
+  --sampler SAMPLER     视频采样器
+  --scheduler SCHEDULER
+                        视频调度器
 ```
 
 ---
@@ -296,6 +304,7 @@ usage: go_video.py [-h] [--ref REF] [--frames FRAMES] [--fps FPS]
                    [--prefix PREFIX] [--denoise DENOISE] [--sampler SAMPLER]
                    [--scheduler SCHEDULER] [--timeout TIMEOUT]
                    [--preset {quality,balanced,fast,cinematic,quick}]
+                   [--count COUNT]
                    [prompt]
 
 Wan2.2 视频生成（Text-to-Video / Image-to-Video）
@@ -323,6 +332,7 @@ options:
   --timeout TIMEOUT     等待出图超时秒数（默认 1800=30 分钟）
   --preset {quality,balanced,fast,cinematic,quick}
                         视频预设（quality/balanced/fast/cinematic）
+  --count COUNT         批量生成数量（不同 seed，默认 1）
 ```
 
 ---
@@ -528,14 +538,17 @@ options:
 
 ```
 usage: go_gallery.py [-h] [--output OUTPUT] [--serve] [--port PORT]
+                     [--type {all,image,video}]
 
 Output Gallery — 产出画廊
 
 options:
-  -h, --help       show this help message and exit
-  --output OUTPUT  输出 HTML 路径（默认 outputs/gallery.html）
-  --serve          启动 HTTP 服务（浏览器实时查看）
-  --port PORT      HTTP 服务端口（默认 8765）
+  -h, --help            show this help message and exit
+  --output OUTPUT       输出 HTML 路径（默认 outputs/gallery.html）
+  --serve               启动 HTTP 服务（浏览器实时查看）
+  --port PORT           HTTP 服务端口（默认 8765）
+  --type {all,image,video}
+                        过滤类型: all(全部) / image(仅图片) / video(仅视频)
 ```
 
 ---

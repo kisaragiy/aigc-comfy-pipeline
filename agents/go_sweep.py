@@ -25,9 +25,22 @@ from comfy_utils import (
 
 bootstrap_agents_path()
 
-from go_flux import build_flux_workflow  # noqa: E402
-
 from output_manager import save_run  # noqa: E402
+
+# 动态导入的构建函数
+_BUILD_FUNCTIONS: dict[str, Any] = {}
+
+
+def _get_build_fn(sweep_type: str) -> Any:
+    """按类型获取工作流构建函数。"""
+    if sweep_type not in _BUILD_FUNCTIONS:
+        if sweep_type == "video":
+            from go_video import build_video_workflow as fn
+            _BUILD_FUNCTIONS[sweep_type] = fn
+        else:
+            from go_flux import build_flux_workflow as fn
+            _BUILD_FUNCTIONS[sweep_type] = fn
+    return _BUILD_FUNCTIONS[sweep_type]
 
 
 def expand_grid(grid: dict[str, list[Any]]) -> list[dict[str, Any]]:
@@ -55,16 +68,25 @@ def run_sweep(
     prompt: str,
     grid: dict[str, list[Any]],
     *,
+    sweep_type: str = "image",
     model_variant: str = "9b",
     lora_name: str | None = None,
     lora_strength: float = 1.0,
     negative: str = "",
     prefix: str = "sweep",
+    ref_image: str | None = None,
+    denoise: float = 1.0,
+    sampler: str = "euler",
+    scheduler: str = "normal",
 ) -> None:
-    """执行网格扫描，归档并生成对比拼图。"""
+    """执行网格扫描，归档并生成对比结果。"""
+    is_video = sweep_type == "video"
+    build_fn = _get_build_fn(sweep_type)
+
     combinations = expand_grid(grid)
     n = len(combinations)
-    print(f"网格扫描: {n} 个组合")
+    type_label = "视频" if is_video else "图片"
+    print(f"{type_label}网格扫描: {n} 个组合")
     for i, params in enumerate(combinations):
         print(f"  [{i+1}/{n}] {params}")
 
@@ -81,19 +103,43 @@ def run_sweep(
         width_v = params.get("width", 1024)
         height_v = params.get("height", 1024)
 
-        wf, seed_actual = build_flux_workflow(
-            prompt=prompt,
-            negative_prompt=negative,
-            seed=seed_v,
-            steps=steps,
-            cfg=cfg_v,
-            width=width_v,
-            height=height_v,
-            model_variant=model_variant,
-            lora_name=lora_name,
-            lora_strength=lora_strength,
-            filename_prefix=f"{prefix}_{label}",
-        )
+        if is_video:
+            frames = params.get("frames", 49)
+            fps = params.get("fps", 15)
+            denoise_v = params.get("denoise", denoise)
+            sampler_v = params.get("sampler", sampler)
+            scheduler_v = params.get("scheduler", scheduler)
+            fn_prefix = f"{prefix}_video_{label}"
+            wf, seed_actual = build_fn(
+                prompt=prompt,
+                negative=negative,
+                seed=seed_v,
+                steps=steps,
+                cfg=cfg_v,
+                width=width_v,
+                height=height_v,
+                frames=frames,
+                fps=fps,
+                denoise=denoise_v,
+                sampler=sampler_v,
+                scheduler=scheduler_v,
+                prefix=fn_prefix,
+            )
+        else:
+            fn_prefix = f"{prefix}_{label}"
+            wf, seed_actual = build_fn(
+                prompt=prompt,
+                negative_prompt=negative,
+                seed=seed_v,
+                steps=steps,
+                cfg=cfg_v,
+                width=width_v,
+                height=height_v,
+                model_variant=model_variant,
+                lora_name=lora_name,
+                lora_strength=lora_strength,
+                filename_prefix=fn_prefix,
+            )
 
         try:
             result = comfy_post_prompt(wf)
@@ -104,47 +150,53 @@ def run_sweep(
         pid = result.get("prompt_id", "")
         if pid == "dry-run":
             print(f"  [dry-run] 跳过等待")
-            results.append({"params": params, "seed": seed_actual, "prompt_id": pid, "images": []})
+            results.append({"params": params, "seed": seed_actual, "prompt_id": pid, "files": []})
             continue
 
-        print(f"  prompt_id={pid}，等待出图...")
+        print(f"  prompt_id={pid}，等待{'视频' if is_video else '出图'}...")
         try:
-            images = wait_images(pid, base)
+            files = wait_images(pid, base)
         except (TimeoutError, RuntimeError) as exc:
             print(f"  等待失败: {exc}", file=sys.stderr)
-            images = []
+            files = []
 
-        image_paths = []
-        for sub, name in images:
+        file_paths = []
+        for sub, name in files:
             path = (resolve_comfy_root() / "output" / sub / name).resolve()
             if path.is_file():
-                image_paths.append(str(path))
-                print(f"  出图: {name}")
+                file_paths.append(str(path))
+                suffix = "(视频)" if path.suffix.lower() in (".mp4", ".webm", ".mov") else ""
+                print(f"  输出: {name} {suffix}")
 
         results.append({
             "params": params,
             "seed": seed_actual,
             "prompt_id": pid,
-            "images": image_paths,
+            "files": file_paths,
         })
 
     # 归档全部产出
-    all_images = [img for r in results for img in r["images"]]
-    if all_images:
-        save_run("sweep-flux", all_images, {
+    all_files = [f for r in results for f in r["files"]]
+    if all_files:
+        run_cmd = f"sweep-{'video' if is_video else 'flux'}"
+        save_run(run_cmd, all_files, {
             "prompt": prompt,
             "grid": grid,
+            "type": sweep_type,
             "model": model_variant,
             "lora": lora_name,
             "combinations": n,
         })
-        print(f"\n✅ 共 {len(all_images)} 张图已归档")
+        print(f"\n✅ 共 {len(all_files)} 个{'视频' if is_video else '图片'}已归档")
 
-    # 生成对比拼图
-    if all_images:
-        _make_grid(results, prefix)
+    # 生成对比结果
+    if all_files:
+        if is_video:
+            _make_video_html(results, prefix, prompt)
+        else:
+            _make_grid(results, prefix)
     else:
-        print("\n⚠️  无有效出图，跳过对比拼图")
+        print(f"\n⚠️  无有效{'视频' if is_video else '出图'}，跳过对比")
 
 
 def _make_grid(results: list[dict[str, Any]], prefix: str) -> None:
@@ -155,7 +207,7 @@ def _make_grid(results: list[dict[str, Any]], prefix: str) -> None:
         print("[warn] Pillow 未安装，跳过对比拼图。pip install pillow")
         return
 
-    valid = [(r, r["images"][0]) for r in results if r["images"]]
+    valid = [(r, r["files"][0]) for r in results if r["files"]]
     if not valid:
         return
 
@@ -201,9 +253,56 @@ def _make_grid(results: list[dict[str, Any]], prefix: str) -> None:
     print(f"对比拼图: {grid_path}")
 
 
+def _make_video_html(results: list[dict[str, Any]], prefix: str, prompt: str) -> None:
+    """生成视频对比 HTML 页面。"""
+    from datetime import datetime
+
+    valid = [(r, r["files"][0]) for r in results if r["files"]]
+    if not valid:
+        return
+
+    cards: list[str] = []
+    for r, path in valid:
+        label = ", ".join(f"{k}={v}" for k, v in r["params"].items())
+        cards.append(f"""<div class="card">
+  <video controls preload="metadata" muted playsinline src="file:///{Path(path).as_posix()}" />
+  <div class="label">{label}</div>
+</div>""")
+
+    html = f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Video Sweep — {prefix}</title>
+<style>
+* {{ margin: 0; padding: 0; box-sizing: border-box; }}
+body {{ background: #0f1115; color: #e8eaed; font-family: sans-serif; padding: 1rem; }}
+h1 {{ font-size: 1.2rem; margin-bottom: 0.5rem; }}
+.prompt {{ color: #9aa0a6; font-size: 0.85rem; margin-bottom: 1rem; }}
+.grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 1rem; }}
+.card {{ background: #1a1d24; border-radius: 12px; overflow: hidden; border: 1px solid #2a2f3a; }}
+.card video {{ width: 100%; display: block; }}
+.label {{ padding: 0.5rem; font-size: 0.8rem; color: #9aa0a6; }}
+footer {{ margin-top: 1rem; color: #555; font-size: 0.75rem; text-align: center; }}
+</style>
+</head>
+<body>
+<h1>🎬 Video Sweep — {prefix}</h1>
+<div class="prompt">{prompt}</div>
+<div class="grid">{"".join(cards)}</div>
+<footer>generated {datetime.now().strftime("%Y-%m-%d %H:%M")} · {len(valid)} videos</footer>
+</body>
+</html>"""
+
+    out_path = f"{prefix}_video_sweep.html"
+    Path(out_path).write_text(html, encoding="utf-8")
+    print(f"视频对比页面: {out_path}")
+
+
 def main() -> None:
     parser = __import__("argparse").ArgumentParser(
-        description="参数网格扫描 — Flux.2 Klein（自动对比拼图）",
+        description="参数网格扫描 — 支持图片(Flux)和视频(Wan2.2)，自动对比拼图",
     )
     parser.add_argument("prompt", nargs="?", help="画面描述")
     parser.add_argument(
@@ -211,12 +310,21 @@ def main() -> None:
         required=True,
         help='JSON 网格参数: {"steps":[20,30],"cfg":[1.0,2.0]}',
     )
+    parser.add_argument(
+        "--type", choices=["image", "video"], default="image",
+        help="扫描类型：image(Flux) / video(Wan2.2)",
+    )
     parser.add_argument("--model", choices=["9b", "4b"], default="9b")
     parser.add_argument("--lora", default=None)
     parser.add_argument("--lora-strength", type=float, default=1.0)
     parser.add_argument("--negative", default="")
     parser.add_argument("--prefix", default="sweep")
     parser.add_argument("--raw", action="store_true", help="跳过 Ollama")
+    # 视频专用参数
+    parser.add_argument("--ref", default=None, help="参考图（视频 I2V 模式）")
+    parser.add_argument("--denoise", type=float, default=1.0, help="视频去噪强度")
+    parser.add_argument("--sampler", default="euler", help="视频采样器")
+    parser.add_argument("--scheduler", default="normal", help="视频调度器")
     args = parser.parse_args()
 
     user = args.prompt or input("请输入描述: ").strip()
@@ -239,11 +347,16 @@ def main() -> None:
     run_sweep(
         prompt,
         grid,
+        sweep_type=args.type,
         model_variant=args.model,
         lora_name=args.lora,
         lora_strength=args.lora_strength,
         negative=args.negative,
         prefix=args.prefix,
+        ref_image=args.ref,
+        denoise=args.denoise,
+        sampler=args.sampler,
+        scheduler=args.scheduler,
     )
 
 
