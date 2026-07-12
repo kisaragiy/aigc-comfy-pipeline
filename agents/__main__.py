@@ -356,33 +356,47 @@ def _run_outputs() -> None:
     action = sys.argv[2]
 
     if action == "list":
+        show_images = "--images" in sys.argv
         runs = list_runs()
         if not runs:
             print("暂无产出记录。")
             return
-        print(f"\n{'运行 ID':30s} {'命令':10s} {'时间':22s} {'图片':6s} {'视频':6s}")
-        print("-" * 80)
+        header = f"{'运行 ID':30s} {'命令':10s} {'时间':22s} {'图片':6s} {'视频':6s}"
+        if show_images:
+            header += "  预览"
+        print(f"\n{header}")
+        print("-" * (88 if show_images else 80))
         for r in runs:
             rid = r.get("run_id", "?")
             cmd = r.get("command", "?")
             ts = (r.get("timestamp") or "?")[:19]
             n_img = len(r.get("images", []))
             n_vid = r.get("video_count", 0)
-            print(f"{rid:30s} {cmd:10s} {ts:22s} {n_img:6d} {n_vid:6d}")
+            preview = ""
+            if show_images:
+                imgs = r.get("images", [])
+                vids = r.get("videos", [])
+                first = (imgs + vids)[0] if (imgs + vids) else ""
+                preview = f"  {first[:40]}" if first else ""
+            print(f"{rid:30s} {cmd:10s} {ts:22s} {n_img:6d} {n_vid:6d}{preview}")
 
     elif action == "show":
         if len(sys.argv) < 4:
-            print("用法: python -m agents outputs show <run_id> [--info]")
+            print("用法: python -m agents outputs show <run_id> [--info] [--open]")
             return
         run_id = sys.argv[3]
         show_info = "--info" in sys.argv
+        open_dir = "--open" in sys.argv
         meta = show_run(run_id)
         if meta is None:
             print(f"未找到产出: {run_id}")
             sys.exit(1)
+        output_dir = Path(_get_output_dir()) / run_id
         print(f"\n运行 ID:   {meta.get('run_id', '?')}")
         print(f"命令:      {meta.get('command', '?')}")
         print(f"时间:      {(meta.get('timestamp') or '?')[:19]}")
+        if output_dir.is_dir():
+            print(f"目录:      {output_dir}")
         images = meta.get("images", [])
         videos = meta.get("videos", [])
         if images:
@@ -411,6 +425,10 @@ def _run_outputs() -> None:
                 print(f"  {k}: {v}")
         if videos and show_info:
             print("\n💡 提示: 使用 gallery 浏览视频，或 video-process 后处理")
+        if open_dir and output_dir.is_dir():
+            import subprocess
+            subprocess.Popen(["start", str(output_dir)], shell=True)
+            print(f"📂 已打开目录: {output_dir}")
 
     elif action == "clean":
         days = 30
