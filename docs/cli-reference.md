@@ -930,7 +930,7 @@ usage: python -m agents workshop create [-h] [--count COUNT] [--style STYLE]
                                         [--min-score MIN_SCORE] [--retry RETRY]
                                         [--no-inspect] [--preview] [--ollama]
                                         [--output OUTPUT] [--gallery GALLERY]
-                                        [--verbose]
+                                        [--seed SEED] [--verbose]
                                         nl_text [nl_text ...]
 
 参数:
@@ -945,6 +945,7 @@ usage: python -m agents workshop create [-h] [--count COUNT] [--style STYLE]
   --ollama           使用 Ollama 优化 prompt
   --output OUTPUT    结果输出目录（保存 metadata.json + best.png）
   --gallery GALLERY  候选画廊输出目录（生成 index.html 可浏览所有候选图）
+  --seed SEED        起始种子（0=随机，固定种子可复现结果）
   --verbose          详细信息
 
 示例:
@@ -954,6 +955,7 @@ usage: python -m agents workshop create [-h] [--count COUNT] [--style STYLE]
   python -m agents workshop create "prompt" --ollama  # 使用 Ollama 增强
   python -m agents workshop create "prompt" --output ./result  # 保存最优
   python -m agents workshop create "prompt" --gallery ./gallery  # 所有候选 HTML 画廊
+  python -m agents workshop create "银发少女" --seed 42  # 固定种子可复现
 ```
 
 ### `workshop engine`
@@ -999,6 +1001,7 @@ usage: python -m agents workshop inspect [-h] [--verbose] image_path
 usage: python -m agents workshop manga [-h] [--style STYLE] [--preview]
                                        [--layout LAYOUT] [--char CHAR ...]
                                        [--script-file SCRIPT_FILE]
+                                       [--output OUTPUT]
                                        script_text [script_text ...]
 
 参数:
@@ -1007,6 +1010,7 @@ usage: python -m agents workshop manga [-h] [--style STYLE] [--preview]
   --layout LAYOUT         拼页布局 (auto/4koma)
   --char "名:服饰:发型:特征"  角色定义 (可重复，支持 1~4 个)
   --script-file FILE       从文件读取剧本（替代命令行参数）
+  --output DIR             输出目录（保存拼页 + 逐格图 + metadata.json）
   script_text             剧本/场景描述
 
 示例:
@@ -1024,6 +1028,12 @@ usage: python -m agents workshop manga [-h] [--style STYLE] [--preview]
     --char "C:皮甲:棕发:弓手" \
     --char "D:斗篷:红发:盗贼"
   # 4 角色 → 6 镜 (含群像)
+
+  python -m agents workshop manga --script-file script.txt --preview
+  # 从文件读取剧本
+
+  python -m agents workshop manga "教室中，两人相对而立。" --output ./manga-out
+  # 保存拼页 + 逐格图 + metadata.json
 ```
 
 ### `workshop video`
