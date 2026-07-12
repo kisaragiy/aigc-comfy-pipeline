@@ -10,7 +10,8 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.43.0** — 当前：sweep 升级 quality（generate_with_quality + --preset + 门禁）<br>　　　　　　`python -m agents sweep --grid '{\"steps\":[20,30]}' --preset anime --min-score 0.2` <br>　　　　　　`python -m agents sweep --type video --grid '{\"frames\":[49,81]}'` <br>　　　　　　图片/视频均走质量门禁，新增 `--preset`/`--seed`/`--min-score`/`--retry`/`--no-validate`
+- **V0.44.0** — 当前：control 升级 Flux + 双架构支持（--model 9b / 4b / sdxl）<br>　　　　　　`python -m agents control \"prompt\" --ref x.png --type depth --model 9b` <br>　　　　　　`python -m agents control \"prompt\" --ref x.png --type openpose --model sdxl` <br>　　　　　　Flux 模式 16 节点 + ControlNetApply 注入，SDXL 模式保持 10 节点原版，`--preset`/`--seed`/`--min-score`/`--retry` 全部可用
+- **V0.43.0** — 上一版：sweep 升级 quality（generate_with_quality + --preset + 门禁）<br>　　　　　　`python -m agents sweep --grid '{\"steps\":[20,30]}' --preset anime --min-score 0.2` <br>　　　　　　`python -m agents sweep --type video --grid '{\"frames\":[49,81]}'` <br>　　　　　　图片/视频均走质量门禁，新增 `--preset`/`--seed`/`--min-score`/`--retry`/`--no-validate`
 - **V0.42.0** — 上一版：测试覆盖 run.py（30 项）+ outputs 内联预览（--images/--open）<br>　　　　　　`python -m agents outputs list --images` 显示首文件名预览 <br>　　　　　　`python -m agents outputs show <id> --open` 打开产出目录 <br>　　　　　　测试总数 89 → 119 项
 - **V0.41.0** — 上一版：lora/ipa/multi 升级 Flux + 模型管理增强<br>　　　　　　`python -m agents lora/ipa/multi` 增加 `--preset`/`--seed`/`--min-score`/`--retry` <br>　　　　　　`python -m agents models list --disk` 显示磁盘占用 <br>　　　　　　`python -m agents models prune [--force]` 清理孤立模型
 - **V0.40.0** — 上一版：Run 升级 Flux（generate_with_quality + --lora + --preset）<br>　　　　　　`python -m agents run` 等价 `python -m agents flux` 超集 <br>　　　　　　支持 `--preset`/`--lora`/`--model`/`--steps`/`--min-score`/`--retry`
@@ -45,7 +46,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 - V0.5.0 — LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
 - V0.0.XXX — 小修
 
-## 当前版本：V0.43.0
+## 当前版本：V0.44.0
 
 ## 核心能力
 
@@ -74,7 +75,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 | 单元测试 | `tests/` | `pytest tests/` | 119 项测试覆盖核心模块 + 视频管线 + run.py 参数映射 |
 | CLI 文档 | `docs/cli-reference.md` | `python scripts/gen_cli_docs.py` | 16 命令 + 子命令自动生成参考文档 |
 | 高质量工作流 | `workflows/*.json` | `python scripts/build_workflows.py` | 6 个 API 格式工作流，带 _meta 元数据 |
-| ControlNet | `go_control.py` | `python -m agents control` | depth/openpose/softedge/tile/inpaint/lineart 引导生图 |
+| ControlNet | `go_control.py` | `python -m agents control` | depth/openpose/softedge/tile/inpaint/lineart 引导生图，**Flux/SDXL 双架构**，支持 --model 9b/4b/sdxl |
 | 视频生成 | `go_video.py` | `python -m agents video` | Wan2.2 T2V/I2V，帧数/帧率/分辨率控制 |
 | Docker 部署 | `Dockerfile` + `docker-compose.yml` | `docker-compose up` | 三服务容器化（GPU 直通） |
 | Prompt 兜底 | `comfy_utils._fallback_prompt()` | 内置 | Ollama 不可用时模板拼接英文 tag |

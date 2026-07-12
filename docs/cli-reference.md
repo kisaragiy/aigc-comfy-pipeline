@@ -1,6 +1,6 @@
 # CLI 参考文档
 
-> 自动生成于 2026-07-12 23:55
+> 自动生成于 2026-07-13 00:11
 
 AIGC ComfyUI Pipeline v?
 
@@ -317,16 +317,16 @@ ControlNet 引导生图（depth/openpose/softedge/tile/inpaint/lineart）
 ```
 usage: go_control.py [-h] --ref REF
                      [--type {depth,openpose,softedge,tile,inpaint,lineart}]
-                     [--strength STRENGTH] [--negative NEGATIVE] [--seed SEED]
-                     [--steps STEPS] [--cfg CFG] [--width WIDTH]
-                     [--height HEIGHT] [--raw] [--sampler SAMPLER]
-                     [--scheduler SCHEDULER] [--lora LORA]
+                     [--strength STRENGTH] [--model {9b,4b,sdxl}]
+                     [--negative NEGATIVE] [--seed SEED] [--steps STEPS]
+                     [--cfg CFG] [--width WIDTH] [--height HEIGHT] [--raw]
+                     [--sampler SAMPLER] [--scheduler SCHEDULER] [--lora LORA]
                      [--lora-strength LORA_STRENGTH] [--prefix PREFIX]
                      [--preset PRESET] [--min-score MIN_SCORE] [--retry RETRY]
                      [--no-validate]
                      [prompt]
 
-ControlNet 引导生图（Depth/OpenPose/SoftEdge/Tile/Inpaint/LineArt）
+ControlNet 引导生图（Depth/OpenPose/SoftEdge/Tile/Inpaint/LineArt）— 默认 Flux 架构
 
 positional arguments:
   prompt                画面描述
@@ -337,6 +337,7 @@ options:
   --type {depth,openpose,softedge,tile,inpaint,lineart}
                         ControlNet 类型
   --strength STRENGTH   ControlNet 强度
+  --model {9b,4b,sdxl}  模型架构：9b/4b(Flux) / sdxl
   --negative NEGATIVE   负向提示词
   --seed SEED
   --steps STEPS         采样步数（预设自动）
