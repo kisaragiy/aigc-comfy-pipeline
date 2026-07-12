@@ -124,7 +124,7 @@ def storyboard_to_prompts(
             ])
 
         # 调用引擎生成 prompt
-        full_desc = f"{character}, {visual}, {scene}, {camera}"
+        full_desc = f"{character}, {char_prompt}, {visual}, {scene}, {camera}" if char_prompt else f"{character}, {visual}, {scene}, {camera}"
         if dialogue:
             full_desc += f", 正在说: {dialogue}"
 
@@ -450,7 +450,7 @@ def _template_storyboard(
                       "台词": "", "备注": "群像"})
 
     # 特写结尾
-    last_char = names[min(1, n-1)]
+    last_char = names[min(1, n-1)] if n > 0 else "角色A"
     shots.append({"镜号": f"S0{len(shots)+1}", "人物": last_char, "场景": script_text, "景别": "特写",
                   "音频提示": "", "画面描述": f"{last_char} 表情特写",
                   "台词": "", "备注": "情绪节点"})

@@ -540,9 +540,21 @@ def _workshop_create(args: list[str]) -> None:
         gallery_dir=gallery_dir,
     )
 
+    # 引擎推测（也用于 preview 模式）
+    from workshop.engine.engine import _detect_style, _detect_composition, _detect_lighting, _detect_negative
+    detected_style = _detect_style(nl_text, parsed.style)
+    detected_comp = _detect_composition(nl_text)
+    detected_light = _detect_lighting(nl_text)
+    auto_neg = _detect_negative(nl_text)
+    neg_display = result.get("negative_prompt", auto_neg or "")
+    neg_suffix = f" | 负向={neg_display[:40]}..." if neg_display else ""
+
     if parsed.preview:
         print(f"\n📝 Prompt: {result['prompt']}")
+        if neg_display:
+            print(f"  ⛔ 负向: {neg_display[:80]}...")
         print(f"  候选数: {parsed.count}")
+        print(f"\n📋 引擎推测: 风格={detected_style} | 构图={detected_comp[:30]}... | 光照={detected_light[:30]}...{neg_suffix}")
         print("  (dry-run 模式，未提交)")
         return
 
@@ -558,14 +570,6 @@ def _workshop_create(args: list[str]) -> None:
     if parsed.ollama:
         print(f"  (Ollama 增强)")
     print(f"  候选: {len(result['candidates'])} 张")
-
-    # 引擎推测（来自 workshop/engine）
-    from workshop.engine.engine import _detect_style, _detect_composition, _detect_lighting
-    detected_style = _detect_style(nl_text, parsed.style)
-    detected_comp = _detect_composition(nl_text)
-    detected_light = _detect_lighting(nl_text)
-    neg_display = result.get("negative_prompt", "")
-    neg_suffix = f" | 负向={neg_display[:40]}..." if neg_display else ""
     print(f"\n📋 引擎推测: 风格={detected_style} | 构图={detected_comp[:30]}... | 光照={detected_light[:30]}...{neg_suffix}")
 
     best = result.get("best", {})
@@ -825,15 +829,26 @@ def _workshop_manga(args: list[str]) -> None:
 
     print("\n📋 生成分镜表...")
     storyboard = script_to_storyboard(script, characters=chars, ollama_available=False)
+    # 分镜表预览
+    print(f"  {'镜号':<6} {'人物':<10} {'景别':<8} {'画面描述':<28} {'台词':<20} {'备注':<10}")
+    print(f"  {'-'*6} {'-'*10} {'-'*8} {'-'*28} {'-'*20} {'-'*10}")
     for shot in storyboard:
-        print(f"  {shot.get('镜号','?')} | {shot.get('人物','?')} | {shot.get('景別','?')} | {shot.get('台词','')[:30]}")
+        print(f"  {shot.get('镜号','?') + ':':<6} {shot.get('人物','?'):<10} "
+              f"{shot.get('景別','?'):<8} {shot.get('画面描述','')[:26]:<28} "
+              f"{shot.get('台词','')[:18]:<20} {shot.get('备注','')[:8]:<10}")
 
     print("\n🎨 生成逐格 Prompt...")
     panels = storyboard_to_prompts(storyboard, chars, style_hint=parsed.style)
 
     if parsed.preview:
+        # 面板预览：带种子 + 尺寸
+        print(f"  {'镜号':<6} {'角色':<10} {'种子':<12} {'尺寸':<14} {'Prompt (前80字)':<40}")
+        print(f"  {'-'*6} {'-'*10} {'-'*12} {'-'*14} {'-'*40}")
         for p in panels:
-            print(f"  {p['shot']}: {p['prompt'][:80]}...")
+            sz = f"{p['width']}×{p['height']}"
+            print(f"  {p['shot']:<6} {p.get('character','?'):<10} "
+                  f"{p['seed']:<12} {sz:<14} {p['prompt'][:60]:<40}")
+        print(f"\n📊 共 {len(panels)} 格，使用 {'SDXL' if parsed.sdxl else 'Flux'}")
         return
 
     print("\n🖼️  逐格生图...")
