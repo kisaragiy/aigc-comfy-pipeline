@@ -930,7 +930,8 @@ usage: python -m agents workshop create [-h] [--count COUNT] [--style STYLE]
                                         [--min-score MIN_SCORE] [--retry RETRY]
                                         [--no-inspect] [--preview] [--ollama]
                                         [--output OUTPUT] [--gallery GALLERY]
-                                        [--seed SEED] [--verbose]
+                                        [--seed SEED] [--open] [--negative NEGATIVE]
+                                        [--verbose]
                                         nl_text [nl_text ...]
 
 参数:
@@ -947,6 +948,8 @@ usage: python -m agents workshop create [-h] [--count COUNT] [--style STYLE]
   --gallery GALLERY  候选画廊输出目录（默认仅 --output 时自动生成到 <output>/gallery/）
   --seed SEED        起始种子（0=随机，固定种子可复现结果）
   --open             生成后自动打开最优图
+  --negative NEGATIVE
+                        负向提示词（不设置时使用风格预设默认值）
   --verbose          详细信息
 
 示例:
@@ -958,6 +961,9 @@ usage: python -m agents workshop create [-h] [--count COUNT] [--style STYLE]
   python -m agents workshop create "prompt" --gallery ./gallery  # 所有候选 HTML 画廊
   python -m agents workshop create "银发少女" --seed 42  # 固定种子可复现
   python -m agents workshop create "银发少女" --open      # 生成后自动打开最优图
+  python -m agents workshop create "银发少女" --negative "blurry, watermark, bad hands"  # 自定义负向
+  python -m agents workshop create "校服少女" --style anime \
+    --negative "photoreal, 3d, lowres"  # anime 风格排除非目标画风
 ```
 
 ### `workshop engine`
