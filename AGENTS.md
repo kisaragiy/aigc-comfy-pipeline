@@ -10,7 +10,8 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.42.0** — 当前：测试覆盖 run.py（30 项）+ outputs 内联预览（--images/--open）<br>　　　　　　`python -m agents outputs list --images` 显示首文件名预览 <br>　　　　　　`python -m agents outputs show <id> --open` 打开产出目录 <br>　　　　　　测试总数 89 → 119 项
+- **V0.43.0** — 当前：sweep 升级 quality（generate_with_quality + --preset + 门禁）<br>　　　　　　`python -m agents sweep --grid '{\"steps\":[20,30]}' --preset anime --min-score 0.2` <br>　　　　　　`python -m agents sweep --type video --grid '{\"frames\":[49,81]}'` <br>　　　　　　图片/视频均走质量门禁，新增 `--preset`/`--seed`/`--min-score`/`--retry`/`--no-validate`
+- **V0.42.0** — 上一版：测试覆盖 run.py（30 项）+ outputs 内联预览（--images/--open）<br>　　　　　　`python -m agents outputs list --images` 显示首文件名预览 <br>　　　　　　`python -m agents outputs show <id> --open` 打开产出目录 <br>　　　　　　测试总数 89 → 119 项
 - **V0.41.0** — 上一版：lora/ipa/multi 升级 Flux + 模型管理增强<br>　　　　　　`python -m agents lora/ipa/multi` 增加 `--preset`/`--seed`/`--min-score`/`--retry` <br>　　　　　　`python -m agents models list --disk` 显示磁盘占用 <br>　　　　　　`python -m agents models prune [--force]` 清理孤立模型
 - **V0.40.0** — 上一版：Run 升级 Flux（generate_with_quality + --lora + --preset）<br>　　　　　　`python -m agents run` 等价 `python -m agents flux` 超集 <br>　　　　　　支持 `--preset`/`--lora`/`--model`/`--steps`/`--min-score`/`--retry`
 - **V0.39.0** — Run 视频路由 + 产出管理视频信息 <br>　　　　　　`python -m agents run "prompt" --video` 自动路由视频生成 <br>　　　　　　`python -m agents outputs show <id> --info` 显示视频时长/大小
@@ -44,7 +45,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 - V0.5.0 — LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
 - V0.0.XXX — 小修
 
-## 当前版本：V0.42.0
+## 当前版本：V0.43.0
 
 ## 核心能力
 
@@ -63,7 +64,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 | 工作流管理 | `workflow_manager.py` | `python -m agents workflow` | 模板扫描、参数 schema 提取、节点依赖检查、格式转换 |
 | 模型管理 | `model_manager.py` | `python -m agents models` | 列出/查询/检查/下载、**--disk 磁盘占用**、**prune 清理孤立** |
 | Flux.2 Klein 生图 | `go_flux.py` | `python -m agents flux` | 程序化构建 Flux 工作流（9B/4B、LoRA 注入） |
-| 参数扫描 | `go_sweep.py` | `python -m agents sweep` | 网格参数迭代、自动对比拼图 |
+| 参数扫描 | `go_sweep.py` | `python -m agents sweep` | 网格参数迭代、自动对比拼图，**走 generate_with_quality**，支持 `--preset`/`--seed`/`--min-score`/`--retry` |
 | 自动标图 | `go_caption.py` | `python -m agents caption` | Ollama VL 自动生成训练数据 .txt 标注 |
 | 训练编排 | `go_train.py` | `python -m agents train` | 数据验证 + AutoDL 训练命令生成 |
 | 管线报告 | `go_report.py` | `python -m agents report` | 一键验收：ComfyUI/模型/workflow/产出全貌 |

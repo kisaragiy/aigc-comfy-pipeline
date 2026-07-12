@@ -1,6 +1,6 @@
 # CLI 参考文档
 
-> 自动生成于 2026-07-12 23:17
+> 自动生成于 2026-07-12 23:55
 
 AIGC ComfyUI Pipeline v?
 
@@ -229,12 +229,14 @@ options:
 ```
 usage: go_sweep.py [-h] --grid GRID [--type {image,video}] [--model {9b,4b}]
                    [--lora LORA] [--lora-strength LORA_STRENGTH]
-                   [--negative NEGATIVE] [--prefix PREFIX] [--raw] [--ref REF]
+                   [--negative NEGATIVE] [--prefix PREFIX] [--raw]
+                   [--preset PRESET] [--seed SEED] [--min-score MIN_SCORE]
+                   [--retry RETRY] [--no-validate] [--ref REF]
                    [--denoise DENOISE] [--sampler SAMPLER]
                    [--scheduler SCHEDULER]
                    [prompt]
 
-参数网格扫描 — 支持图片(Flux)和视频(Wan2.2)，自动对比拼图
+参数网格扫描 — 支持图片(Flux)和视频(Wan2.2)，自动对比拼图，可选质量门禁
 
 positional arguments:
   prompt                画面描述
@@ -249,6 +251,12 @@ options:
   --negative NEGATIVE
   --prefix PREFIX
   --raw                 跳过 Ollama
+  --preset PRESET       质量预设名（内置或自定义）
+  --seed SEED           随机种子（-1 自动）
+  --min-score MIN_SCORE
+                        最低 CLIP 评分（≤0 跳过，默认跳过）
+  --retry RETRY         质量不合格时最大重试次数
+  --no-validate         跳过质量验证
   --ref REF             参考图（视频 I2V 模式）
   --denoise DENOISE     视频去噪强度
   --sampler SAMPLER     视频采样器

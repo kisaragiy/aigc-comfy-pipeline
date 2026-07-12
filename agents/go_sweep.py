@@ -1,10 +1,13 @@
 """
-参数网格扫描 — Flux.2 Klein 批量迭代 + 自动对比拼图。
+参数网格扫描 — Flux.2 Klein / Wan2.2 批量迭代 + 自动对比拼图。
+支持质量预设 (--preset) 和可选的 CLIP 品质门禁。
 
 用法示例:
   python go_sweep.py "赛博朋克少女" --grid '{"steps":[20,30,40]}'
   python go_sweep.py "prompt" --grid '{"steps":[20,30],"cfg":[1.0,2.0]}'
   python go_sweep.py "prompt" --grid '{"steps":[20,30]}' --model 4b --lora knives_flux_lora.safetensors
+  python go_sweep.py "prompt" --grid '{"steps":[20,30]}' --preset anime
+  python go_sweep.py "prompt" --grid '{"type":"video","frames":[49,81]}'  # 视频参数扫描
 """
 from __future__ import annotations
 
@@ -15,12 +18,13 @@ from pathlib import Path
 from typing import Any
 
 from comfy_utils import (
+    QUALITY_PRESETS,
+    VIDEO_PRESETS,
     bootstrap_agents_path,
     comfy_base_url,
-    comfy_post_prompt,
+    generate_with_quality,
     optimize_prompt,
     resolve_comfy_root,
-    wait_images,
 )
 
 bootstrap_agents_path()
@@ -78,8 +82,16 @@ def run_sweep(
     denoise: float = 1.0,
     sampler: str = "euler",
     scheduler: str = "normal",
+    preset: str | None = None,
+    min_score: float = 0.0,
+    max_retries: int = 0,
+    no_validate: bool = False,
+    seed: int = -1,
 ) -> None:
-    """执行网格扫描，归档并生成对比结果。"""
+    """执行网格扫描，归档并生成对比结果。
+
+    每组合使用 generate_with_quality 提交，支持质量预设和可选 CLIP 门禁。
+    """
     is_video = sweep_type == "video"
     build_fn = _get_build_fn(sweep_type)
 
@@ -87,10 +99,12 @@ def run_sweep(
     n = len(combinations)
     type_label = "视频" if is_video else "图片"
     print(f"{type_label}网格扫描: {n} 个组合")
+    print(f"  {f'预设: {preset}' if preset else '无预设'}"
+          f"  {' 质量门禁: ' + str(min_score) if min_score > 0 else ''}"
+          f"  {' 重试: ' + str(max_retries) if max_retries > 0 else ''}")
     for i, params in enumerate(combinations):
         print(f"  [{i+1}/{n}] {params}")
 
-    base = comfy_base_url()
     results: list[dict[str, Any]] = []
 
     for i, params in enumerate(combinations):
@@ -99,9 +113,9 @@ def run_sweep(
 
         steps = params.get("steps", 20)
         cfg_v = params.get("cfg", 1.0)
-        seed_v = params.get("seed", -1)
         width_v = params.get("width", 1024)
         height_v = params.get("height", 1024)
+        seed_v = params.get("seed", seed)
 
         if is_video:
             frames = params.get("frames", 49)
@@ -110,10 +124,9 @@ def run_sweep(
             sampler_v = params.get("sampler", sampler)
             scheduler_v = params.get("scheduler", scheduler)
             fn_prefix = f"{prefix}_video_{label}"
-            wf, seed_actual = build_fn(
-                prompt=prompt,
+
+            build_kw = dict(
                 negative=negative,
-                seed=seed_v,
                 steps=steps,
                 cfg=cfg_v,
                 width=width_v,
@@ -125,12 +138,12 @@ def run_sweep(
                 scheduler=scheduler_v,
                 prefix=fn_prefix,
             )
+            if ref_image:
+                build_kw["ref_image"] = ref_image
         else:
             fn_prefix = f"{prefix}_{label}"
-            wf, seed_actual = build_fn(
-                prompt=prompt,
+            build_kw = dict(
                 negative_prompt=negative,
-                seed=seed_v,
                 steps=steps,
                 cfg=cfg_v,
                 width=width_v,
@@ -142,31 +155,39 @@ def run_sweep(
             )
 
         try:
-            result = comfy_post_prompt(wf)
+            qr = generate_with_quality(
+                build_fn, prompt,
+                preset=preset,
+                min_score=min_score,
+                max_retries=max_retries,
+                no_validate=no_validate,
+                seed=seed_v,
+                **build_kw,
+            )
         except RuntimeError as exc:
             print(f"  错误: {exc}", file=sys.stderr)
+            results.append({"params": params, "seed": 0, "prompt_id": "", "files": []})
             continue
 
-        pid = result.get("prompt_id", "")
+        pid = qr.get("prompt_id", "")
+        seed_actual = qr.get("seed", 0)
+        file_paths = qr.get("images", [])
+
         if pid == "dry-run":
             print(f"  [dry-run] 跳过等待")
             results.append({"params": params, "seed": seed_actual, "prompt_id": pid, "files": []})
             continue
 
-        print(f"  prompt_id={pid}，等待{'视频' if is_video else '出图'}...")
-        try:
-            files = wait_images(pid, base)
-        except (TimeoutError, RuntimeError) as exc:
-            print(f"  等待失败: {exc}", file=sys.stderr)
-            files = []
+        for fp in file_paths:
+            suffix = " (视频)" if Path(fp).suffix.lower() in (".mp4", ".webm", ".mov") else ""
+            print(f"  输出: {Path(fp).name}{suffix}")
 
-        file_paths = []
-        for sub, name in files:
-            path = (resolve_comfy_root() / "output" / sub / name).resolve()
-            if path.is_file():
-                file_paths.append(str(path))
-                suffix = "(视频)" if path.suffix.lower() in (".mp4", ".webm", ".mov") else ""
-                print(f"  输出: {name} {suffix}")
+        score = qr.get("score")
+        if score is not None:
+            print(f"  CLIP 评分: {score:.3f}")
+        retries_v = qr.get("retries", 0)
+        if retries_v > 0:
+            print(f"  重试次数: {retries_v}")
 
         results.append({
             "params": params,
@@ -185,6 +206,7 @@ def run_sweep(
             "type": sweep_type,
             "model": model_variant,
             "lora": lora_name,
+            "preset": preset,
             "combinations": n,
         })
         print(f"\n✅ 共 {len(all_files)} 个{'视频' if is_video else '图片'}已归档")
@@ -302,7 +324,7 @@ footer {{ margin-top: 1rem; color: #555; font-size: 0.75rem; text-align: center;
 
 def main() -> None:
     parser = __import__("argparse").ArgumentParser(
-        description="参数网格扫描 — 支持图片(Flux)和视频(Wan2.2)，自动对比拼图",
+        description="参数网格扫描 — 支持图片(Flux)和视频(Wan2.2)，自动对比拼图，可选质量门禁",
     )
     parser.add_argument("prompt", nargs="?", help="画面描述")
     parser.add_argument(
@@ -320,6 +342,17 @@ def main() -> None:
     parser.add_argument("--negative", default="")
     parser.add_argument("--prefix", default="sweep")
     parser.add_argument("--raw", action="store_true", help="跳过 Ollama")
+
+    # 质量预设 + 门禁（V0.43.0 新增）
+    parser.add_argument("--preset", default=None, help="质量预设名（内置或自定义）")
+    parser.add_argument("--seed", type=int, default=-1, help="随机种子（-1 自动）")
+    parser.add_argument("--min-score", type=float, default=0.0,
+                        help="最低 CLIP 评分（≤0 跳过，默认跳过）")
+    parser.add_argument("--retry", type=int, default=0,
+                        help="质量不合格时最大重试次数")
+    parser.add_argument("--no-validate", action="store_true",
+                        help="跳过质量验证")
+
     # 视频专用参数
     parser.add_argument("--ref", default=None, help="参考图（视频 I2V 模式）")
     parser.add_argument("--denoise", type=float, default=1.0, help="视频去噪强度")
@@ -357,6 +390,11 @@ def main() -> None:
         denoise=args.denoise,
         sampler=args.sampler,
         scheduler=args.scheduler,
+        preset=args.preset,
+        min_score=args.min_score,
+        max_retries=args.retry,
+        no_validate=args.no_validate,
+        seed=args.seed,
     )
 
 
