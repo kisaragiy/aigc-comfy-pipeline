@@ -322,14 +322,15 @@ def _eye_aspect_ratio(landmarks: list) -> float:
 
 
 def _yolo_face_check(image_path: str) -> dict[str, Any]:
-    """YOLO 面部检测 + 简单推理（无 landmarks 时降级）。"""
+    """OpenCV Haar cascade → YOLO 面部检测降级链。"""
     from agents.go_validate import _check_face
     result = _check_face(image_path)
 
-    # 如果有 face_count，做眼部简单推理
     face_count = result.get("face_count")
     max_conf = result.get("max_confidence", 0)
     ok = result.get("ok", True)
+    method = result.get("method", "none")
+    note = result.get("note", "")
 
     detail = ""
     if face_count is not None:
@@ -337,16 +338,34 @@ def _yolo_face_check(image_path: str) -> dict[str, Any]:
             detail = "未检测到人脸"
         elif face_count > 2:
             detail = f"检测到 {face_count} 张人脸（可能多余）"
+        elif face_count == 1:
+            detail = "1 张人脸"
+        else:
+            detail = f"{face_count} 张人脸"
+    elif note:
+        detail = note
+
+    # 构建眼部信息 — 优先使用 cascade 的 eye_count
+    eyes = {}
+    left_count = result.get("eyes_left", 0)
+    right_count = result.get("eyes_right", 0)
+    if left_count > 0 or right_count > 0:
+        eyes["左眼"] = {"detected": left_count > 0, "closed": False, "distorted": False,
+                        "confidence": max_conf, "count": left_count}
+        eyes["右眼"] = {"detected": right_count > 0, "closed": False, "distorted": False,
+                        "confidence": max_conf, "count": right_count}
+    else:
+        # 无眼部模型可用，做简单推断
+        eyes["左眼"] = {"detected": True, "closed": False, "distorted": False, "confidence": max_conf}
+        eyes["右眼"] = {"detected": True, "closed": False, "distorted": False, "confidence": max_conf}
 
     return {
         "ok": ok,
         "detail": detail or "正常",
         "face_count": face_count,
         "max_confidence": max_conf,
-        "eyes": {
-            "左眼": {"detected": True, "closed": False, "distorted": False, "confidence": max_conf},
-            "右眼": {"detected": True, "closed": False, "distorted": False, "confidence": max_conf},
-        },
+        "method": method,
+        "eyes": eyes,
     }
 
 

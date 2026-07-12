@@ -72,13 +72,14 @@ def _detect_objects(image_path: str, model_path: str) -> list[dict[str, Any]]:
 
 
 def _check_face(image_path: str) -> dict[str, Any]:
-    """人脸检测。"""
+    """人脸检测 — YOLO → OpenCV Haar cascade 降级。"""
     from model_manager import resolve_models_root
 
     models_root = resolve_models_root()
     model_path = models_root / ".." / "ultralytics" / "face_yolov8m.pt" if models_root else None
     alt_path = Path(r"C:\DrawingLive\ComfyUI\models\ultralytics\face_yolov8m.pt")
 
+    # 尝试 YOLO
     for candidate in [model_path, alt_path]:
         if candidate and candidate.is_file():
             dets = _detect_objects(image_path, str(candidate))
@@ -89,31 +90,91 @@ def _check_face(image_path: str) -> dict[str, Any]:
                     "max_confidence": max((f["confidence"] for f in faces), default=0),
                     "detections": faces[:5],
                     "ok": 0 < len(faces) <= 2,
+                    "method": "yolo",
                 }
-    # 如果找不到 YOLO 模型，返回 unknown
-    return {"face_count": None, "ok": True, "note": "YOLO 模型不可用，跳过人脸检测"}
+
+    # 降级到 OpenCV Haar cascade（built-in，无需额外模型文件）
+    try:
+        import cv2
+        img = cv2.imread(image_path)
+        if img is not None:
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+            faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+            face_count = len(faces)
+            max_conf = 0.7 if face_count > 0 else 0  # Haar doesn't give confidence scores
+
+            # 眼部检测（对前 2 张脸做 cascaded eye detection）
+            eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_eye.xml")
+            left_eyes, right_eyes = 0, 0
+            for (x, y, w, h) in faces[:2]:
+                face_roi = gray[y : y + h, x : x + w]
+                eyes = eye_cascade.detectMultiScale(face_roi, scaleFactor=1.1, minNeighbors=3, minSize=(10, 10))
+                for (ex, ey, ew, eh) in eyes:
+                    if ex + ew / 2 < w / 2:
+                        left_eyes += 1
+                    else:
+                        right_eyes += 1
+
+            return {
+                "face_count": face_count,
+                "max_confidence": max_conf,
+                "detections": [{"x": int(x), "y": int(y), "w": int(w), "h": int(h), "confidence": max_conf}
+                               for (x, y, w, h) in faces[:5]],
+                "ok": 0 < face_count <= 2,
+                "method": "haar",
+                "eyes_left": left_eyes,
+                "eyes_right": right_eyes,
+            }
+    except Exception:
+        pass
+
+    # 所有方法都不可用
+    return {"face_count": None, "ok": True, "note": "人脸检测模型不可用，跳过"}
 
 
 def _check_hand(image_path: str) -> dict[str, Any]:
-    """手部检测（检测异常手指）。"""
+    """手部检测 — YOLO → OpenCV 上半身推断降级。"""
     from model_manager import resolve_models_root
 
     models_root = resolve_models_root()
     model_path = models_root / ".." / "ultralytics" / "hand_yolov8s.pt" if models_root else None
     alt_path = Path(r"C:\DrawingLive\ComfyUI\models\ultralytics\hand_yolov8s.pt")
 
+    # 尝试 YOLO
     for candidate in [model_path, alt_path]:
         if candidate and candidate.is_file():
             dets = _detect_objects(image_path, str(candidate))
             if dets and "error" not in dets[0]:
                 hands = [d for d in dets if d.get("class") == 0]
-                # 简化检查：预期 2 只手，过多或过少可能异常
                 return {
                     "hand_count": len(hands),
                     "detections": hands[:5],
                     "ok": len(hands) <= 2,
+                    "method": "yolo",
                 }
-    return {"hand_count": None, "ok": True, "note": "YOLO 模型不可用，跳过于部检测"}
+
+    # 降级到 OpenCV 上半身检测（至少能判断画面中有人需要画手）
+    try:
+        import cv2
+        img = cv2.imread(image_path)
+        if img is not None:
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            upper_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_upperbody.xml")
+            bodies = upper_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=3, minSize=(60, 60))
+            body_count = len(bodies)
+            # 没有手部模型，但可以报告身体数量作为参考
+            return {
+                "hand_count": None,
+                "body_count": body_count,
+                "ok": True,
+                "note": f"手部模型不可用，检测到 {body_count} 个上半身" if body_count > 0 else "未检测到人物",
+                "method": "haar-body",
+            }
+    except Exception:
+        pass
+
+    return {"hand_count": None, "ok": True, "note": "手部检测模型不可用，跳过"}
 
 
 def _image_quality(image_path: str) -> dict[str, Any]:
