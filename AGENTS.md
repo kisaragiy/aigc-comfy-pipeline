@@ -10,7 +10,8 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.65.0** — 当前：workshop inspect --annotate + 批量摘要增强<br>　　　　　　`workshop inspect --annotate` 视觉标注质检结果到图片上<br>　　　　　　`workshop inspect --annotate --open` 标注后自动打开<br>　　　　　　标注内容：左上角综合分/各部位状态 + 底边渐变色状态条<br>　　　　　　`workshop inspect` 批量模式新增失败原因聚合（⚠️ 模糊: 3张 · 崩脸: 2张）<br>　　　　　　`workshop/inspect/inspector.py` 新增 `annotate_image()` 函数<br>　　　　　　`tests/test_workshop_inspect.py` 9 项测试（annotate + format_report + 批量摘要）<br>　　　　　　测试总数 248 → 257 项<br>　　　　　　版本 0.65.0<br>
+- **V0.66.0** — 当前：workshop video CLI + manga gallery 画廊<br>　　　　　　`workshop video <prompt>` 使用 workshop.video 模块生成（替代裸 go_video 委派）<br>　　　　　　支持完整参数：--frames/--fps/--seed/--preset/--preview/--neg/--ref/--output<br>　　　　　　`workshop video --preview` 预览视频参数（帧数/帧率/尺寸/种子/预设）<br>　　　　　　`workshop manga --output` 自动生成 HTML 画廊页（面板+拼页+角色+剧本）<br>　　　　　　`workshop/manga/manga.py` 新增 `generate_manga_gallery()` 函数<br>　　　　　　`agents/__main__.py` 新增 `_workshop_video()` 函数<br>　　　　　　`tests/test_workshop_video_manga_gallery.py` 7 项测试（gallery 5 + video preview 2）<br>　　　　　　测试总数 257 → 264 项<br>　　　　　　版本 0.66.0<br>
+- **V0.65.0** — 上一版：workshop inspect --annotate + 批量摘要增强<br>　　　　　　`workshop inspect --annotate` 视觉标注质检结果到图片上<br>　　　　　　`workshop inspect --annotate --open` 标注后自动打开<br>　　　　　　标注内容：左上角综合分/各部位状态 + 底边渐变色状态条<br>　　　　　　`workshop inspect` 批量模式新增失败原因聚合（⚠️ 模糊: 3张 · 崩脸: 2张）<br>　　　　　　`workshop/inspect/inspector.py` 新增 `annotate_image()` 函数<br>　　　　　　`tests/test_workshop_inspect.py` 9 项测试（annotate + format_report + 批量摘要）<br>　　　　　　测试总数 248 → 257 项<br>　　　　　　版本 0.65.0<br>
 - **V0.64.0** — 上一版：metadata.json 逐候选信息 + Gallery 增强<br>　　　　　　`workshop create --output` metadata.json 新增 `candidates[]` 数组：每候选 seed/score/retries/error/inspect<br>　　　　　　metadata.json 新增 `version` 和 `engine_detection` 字段（引擎推测）<br>　　　　　　Gallery 按综合分降序（最优排首位）+ 排名标签 (#1, #2...)<br>　　　　　　Gallery 新增负向提示词显示 + 引擎推测显示（有数据时）<br>　　　　　　`_maybe_save_output` 新增 `extra_meta` 参数供调用方补充元数据<br>　　　　　　`workshop create` 生成后自动补充引擎推测到已保存的 metadata.json<br>　　　　　　`tests/test_workshop_create.py` 16 项纯函数测试<br>　　　　　　测试总数 232 → 248 项<br>　　　　　　版本 0.64.0<br>
 - **V0.63.0** — 上一版：增强 manga preview + 漫画纯函数测试 + char_prompt 死代码修复<br>　　　　　　`workshop manga --preview` 显示完整分镜表（6 列）+ 面板表（种子/尺寸/Prompt）<br>　　　　　　`workshop create --preview` 新增引擎推测 + 自动负向显示<br>　　　　　　增强 `storyboard_to_prompts`：修复 `char_prompt` 死代码，角色特征注入 prompt<br>　　　　　　`_template_storyboard` 修复空字符 IndexError 边界<br>　　　　　　`workshop/manga/manga.py` 关键 bug 修复<br>　　　　　　`tests/test_workshop_manga.py` 28 项纯函数测试（seed/尺寸/分镜/面板/Prompt）<br>　　　　　　测试总数 204 → 232 项<br>　　　　　　版本 0.63.0<br>
 - **V0.62.0** — 上一版：自动负向检测 + workshop engine --ref<br>　　　　　　`_detect_negative()` 从 NL 文本自动提取负向提示词<br>　　　　　　“不要模糊背景” → `blurry, out of focus` / “别崩手” → `bad hands, deformed hands`<br>　　　　　　支持句式（不要/别/没有/不能有/排除）+ 直接关键词（模糊/崩手/太暗等）<br>　　　　　　`workshop create` 自动检测并追加到 style 预设负向后<br>　　　　　　`workshop engine --ref <image>` 测试参考图分析结果<br>　　　　　　引擎推测输出新增自动负向提示词显示<br>　　　　　　`tests/test_workshop_engine.py` +20 项 `_detect_negative` 测试<br>　　　　　　测试总数 184 → 204 项<br>　　　　　　版本 0.62.0<br>
@@ -60,7 +61,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 - V0.5.0 — LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
 - V0.0.XXX — 小修
 
-## 当前版本：V0.65.0
+## 当前版本：V0.66.0
 
 ## 核心能力
 

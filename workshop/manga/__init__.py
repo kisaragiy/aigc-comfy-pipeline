@@ -5,6 +5,7 @@ from workshop.manga.manga import (
     storyboard_to_prompts,
     generate_panels,
     assemble_page,
+    generate_manga_gallery,
 )
 
-__all__ = ["script_to_storyboard", "storyboard_to_prompts", "generate_panels", "assemble_page"]
+__all__ = ["script_to_storyboard", "storyboard_to_prompts", "generate_panels", "assemble_page", "generate_manga_gallery"]
