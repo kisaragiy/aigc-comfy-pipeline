@@ -961,12 +961,19 @@ usage: python -m agents workshop create [-h] [--count COUNT] [--style STYLE]
 测试 Prompt 引擎，显示自然语言优化后的专业提示词及风格/构图/光照推测。
 
 ```text
-usage: python -m agents workshop engine [-h] [--style STYLE] [--list-presets]
+usage: python -m agents workshop engine [-h] [--style STYLE] [--ollama]
+                                        [--list-presets]
                                         nl_text [nl_text ...]
+
+参数:
+  --style STYLE    画风提示 (anime/photoreal/cg/...)
+  --ollama         使用 Ollama 增强 prompt
+  --list-presets   列出全部预设
 
 示例:
   python -m agents workshop engine "赛博朋克少女，霓虹雨夜"
   python -m agents workshop engine "古风少女竹林抚琴" --style photoreal
+  python -m agents workshop engine "银发少女" --ollama  # 对比模板 vs Ollama
   python -m agents workshop engine --list-presets  # 列出全部预设
 ```
 
