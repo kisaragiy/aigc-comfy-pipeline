@@ -140,6 +140,55 @@ def _extract_model_refs(workflow: dict) -> list[dict[str, str]]:
     return refs
 
 
+# Wan2.2 视频模型定义：(子目录, 文件名, 最小预期大小 MB, 说明)
+VIDEO_MODELS: list[tuple[str, str, float, str]] = [
+    ("diffusion_models", "wan2.2_ti2v_5B_fp16.safetensors", 9000, "Wan2.2 T2V 扩散模型 (5B)"),
+    ("text_encoders", "umt5_xxl_fp8_e4m3fn_scaled.safetensors", 6000, "Wan2.2 文本编码器 (UMT5)"),
+    ("vae", "wan2.2_vae.safetensors", 1000, "Wan2.2 VAE 解码器"),
+]
+
+
+def check_video_models() -> dict[str, Any]:
+    """检查 Wan2.2 视频生成所需模型是否完整。
+
+    Returns:
+        {found: [{name, subdir, size_mb, expected_min, ok, description}],
+         missing: [{name, subdir, description}],
+         all_found, has_corruption}
+    """
+    models_root = resolve_models_root()
+    found: list[dict[str, Any]] = []
+    missing: list[dict[str, Any]] = []
+
+    for subdir, filename, min_size_mb, desc in VIDEO_MODELS:
+        fpath: Path | None = None
+        if models_root:
+            candidate = models_root / subdir / filename
+            if candidate.is_file():
+                fpath = candidate
+        status = {"name": filename, "subdir": subdir, "description": desc}
+        if fpath:
+            size_mb = fpath.stat().st_size / (1024 * 1024)
+            ok = size_mb >= min_size_mb
+            found.append({**status, "size_mb": round(size_mb, 1),
+                          "expected_min": min_size_mb, "ok": ok})
+        else:
+            missing.append(status)
+
+    all_found = len(missing) == 0
+    has_corruption = any(
+        f for f in found if isinstance(f.get("ok"), bool) and not f["ok"]
+    )
+
+    return {
+        "found": found,
+        "missing": missing,
+        "all_found": all_found,
+        "all_healthy": all_found and not has_corruption,
+        "has_corruption": has_corruption,
+    }
+
+
 def check_workflow_models(workflow: dict) -> dict[str, Any]:
     """检查 workflow 所需的模型是否已安装。
 

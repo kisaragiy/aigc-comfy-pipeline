@@ -235,7 +235,32 @@ def _run_models() -> None:
         if len(sys.argv) < 4:
             print("用法: python -m agents models check <workflow_name>")
             return
-        wf_name = sys.argv[3]
+        target = sys.argv[3]
+
+        if target == "video":
+            from agents.model_manager import check_video_models as _cvm
+
+            result = _cvm()
+            print(f"\n=== Wan2.2 视频模型完整性检查 ===\n")
+            print(f"ComfyUI:  {result['all_found'] and '✅ 已连接' or '❌ 未连接'}")
+            for f in result.get("found", []):
+                mark = "✅" if f["ok"] else "⚠️ 文件过小"
+                print(f"  {mark} {f['name']:50s} {f['size_mb']:>7.1f}MB  [{f['subdir']}]")
+            for m in result.get("missing", []):
+                print(f"  ❌ {m['name']:50s} 缺失  [{m['subdir']}]")
+            if result["all_healthy"]:
+                print(f"\n✅ 所有 3 个视频模型完整且健康。")
+            elif result["has_corruption"]:
+                print(f"\n⚠️ 部分模型文件可能损坏（文件过小）:")
+                for f in result.get("found", []):
+                    if not f["ok"]:
+                        print(f"   - {f['name']} ({f['size_mb']}MB < 预期 {f['expected_min']}MB)")
+            else:
+                print(f"\n❌ 缺少 {len(result['missing'])} 个视频模型，视频生成不可用。")
+                print("处理: 从 HuggingFace 下载对应模型到 ComfyUI models 目录。")
+            return
+
+        wf_name = target
         wf = find_workflow(wf_name)
         if wf is None:
             print(f"未找到 workflow: {wf_name}")
@@ -261,7 +286,7 @@ def _run_models() -> None:
 
 
 def _show_models_help() -> None:
-    print("用法: python -m agents models list [category]|info <name>|check <workflow_name>|download <url>")
+    print("用法: python -m agents models list [category]|info <name>|check <workflow_name>|check video|download <url>")
 
 
 def _run_outputs() -> None:
