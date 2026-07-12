@@ -971,11 +971,32 @@ usage: python -m agents workshop inspect [-h] [--verbose] image_path
 剧本→分镜表→逐格生图→拼页+台词。
 
 ```text
-usage: python -m agents workshop manga [-h] [--style STYLE] [--preview] [--layout LAYOUT]
+usage: python -m agents workshop manga [-h] [--style STYLE] [--preview]
+                                       [--layout LAYOUT] [--char CHAR ...]
                                        script_text [script_text ...]
 
+参数:
+  --style STYLE       画风 (默认: anime)
+  --preview           仅预览 prompt
+  --layout LAYOUT     拼页布局 (auto/4koma)
+  --char "名:服饰:发型:特征"  角色定义 (可重复，支持 1~4 个)
+  script_text         剧本/场景描述
+
 示例:
-  python -m agents workshop manga "教室中，两人相对而立。阳光透过窗户洒进来。Knives 平静地说：别再逃了。" --preview
+  python -m agents workshop manga "教室中，两人相对而立。" --preview
+  # 默认角色 Knives / Caster
+
+  python -m agents workshop manga "森林里的追逐" --preview \
+    --char "战士:重甲:金发:巨剑" \
+    --char "法师:法袍:银发:魔法书"
+  # 自定义角色 (2 个 → 4 镜)
+
+  python -m agents workshop manga "四人小队巡逻" --preview \
+    --char "A:盔甲:金发:剑士" \
+    --char "B:法袍:银发:法师" \
+    --char "C:皮甲:棕发:弓手" \
+    --char "D:斗篷:红发:盗贼"
+  # 4 角色 → 6 镜 (含群像)
 ```
 
 ### `workshop video`
