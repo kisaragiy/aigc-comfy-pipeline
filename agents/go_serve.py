@@ -187,7 +187,170 @@ def _run_video(job_id: str, params: dict) -> None:
         jobs[job_id]["error"] = str(e)
 
 
-# FastAPI 导入（可选依赖）
+def _run_control(job_id: str, params: dict) -> None:
+    """后台执行 ControlNet 作业（quality + 门禁）。"""
+    from comfy_utils import generate_with_quality, resolve_comfy_root
+    from go_control import build_controlnet_workflow_flux, build_controlnet_workflow_sdxl
+
+    try:
+        prompt = params.get("prompt", "")
+        if not prompt:
+            raise ValueError("prompt is required")
+        ref = params.get("ref", "")
+        if not ref:
+            raise ValueError("ref (reference image) is required")
+
+        model = params.get("model", "9b")
+        build_fn = build_controlnet_workflow_flux if model != "sdxl" else build_controlnet_workflow_sdxl
+
+        qr = generate_with_quality(
+            build_fn, prompt,
+            preset=params.get("preset"),
+            min_score=params.get("min_score", 0.0),
+            max_retries=params.get("retry", 0),
+            no_validate=params.get("no_validate", False),
+            seed=params.get("seed", -1),
+            steps=params.get("steps"),
+            cfg=params.get("cfg"),
+            width=params.get("width", 1024),
+            height=params.get("height", 1024),
+            model_variant=params.get("model", "9b"),
+            lora_name=params.get("lora"),
+            lora_strength=params.get("lora_strength", 1.0),
+            ref_image=ref,
+            control_type=params.get("type", "depth"),
+            negative_prompt=params.get("negative_prompt", ""),
+            filename_prefix=params.get("prefix", "api_control"),
+        )
+
+        seed = qr["seed"]
+        comfy_root = resolve_comfy_root()
+        image_urls = []
+        for sub, name in qr.get("images", []):
+            path = (comfy_root / "output" / sub / name).resolve()
+            if path.is_file():
+                image_urls.append(f"/outputs/{name}")
+
+        jobs[job_id]["status"] = "completed"
+        jobs[job_id]["result"] = {
+            "seed": seed,
+            "images": image_urls,
+            "score": qr.get("score", -1),
+            "retries": qr.get("retries", 0),
+            "params": {
+                "prompt": prompt,
+                "type": params.get("type"),
+                "model": model,
+                "preset": params.get("preset"),
+            },
+        }
+    except Exception as e:
+        jobs[job_id]["status"] = "failed"
+        jobs[job_id]["error"] = str(e)
+
+
+def _run_sweep(job_id: str, params: dict) -> None:
+    """后台执行参数网格扫描。"""
+    try:
+        prompt = params.get("prompt", "")
+        grid = params.get("grid", {})
+        if not prompt or not grid:
+            raise ValueError("prompt and grid are required")
+
+        from go_sweep import run_sweep
+        run_sweep(
+            prompt, grid,
+            sweep_type=params.get("type", "image"),
+            model_variant=params.get("model", "9b"),
+            lora_name=params.get("lora"),
+            lora_strength=params.get("lora_strength", 1.0),
+            negative=params.get("negative", ""),
+            ref_image=params.get("ref"),
+            denoise=params.get("denoise", 1.0),
+            sampler=params.get("sampler", "euler"),
+            scheduler=params.get("scheduler", "normal"),
+            preset=params.get("preset"),
+            min_score=params.get("min_score", 0.0),
+            max_retries=params.get("retry", 0),
+            no_validate=params.get("no_validate", False),
+            seed=params.get("seed", -1),
+        )
+        jobs[job_id]["status"] = "completed"
+        jobs[job_id]["result"] = {"message": "sweep completed", "grid": grid}
+    except Exception as e:
+        jobs[job_id]["status"] = "failed"
+        jobs[job_id]["error"] = str(e)
+
+
+def _run_abtest(job_id: str, params: dict) -> None:
+    """后台执行 A/B 测试。"""
+    try:
+        prompts = params.get("prompts", [])
+        if len(prompts) < 2:
+            raise ValueError("at least 2 prompts required")
+
+        from go_abtest import run_abtest
+        results = run_abtest(
+            prompts[:2],
+            params.get("seed", -1),
+            model=params.get("model", "9b"),
+            lora=params.get("lora"),
+            lora_strength=params.get("lora_strength", 1.0),
+            steps=params.get("steps", 20),
+            cfg=params.get("cfg", 1.0),
+            preset=params.get("preset"),
+            min_score=params.get("min_score", 0.0),
+            retry=params.get("retry", 0),
+            no_validate=params.get("no_validate", False),
+        )
+        jobs[job_id]["status"] = "completed"
+        jobs[job_id]["result"] = {
+            "results": [
+                {"label": r["label"], "seed": r["seed"], "score": r.get("score")}
+                for r in results
+            ],
+        }
+    except Exception as e:
+        jobs[job_id]["status"] = "failed"
+        jobs[job_id]["error"] = str(e)
+
+
+def _run_bestof(job_id: str, params: dict) -> None:
+    """后台执行 Best of N。"""
+    try:
+        prompt = params.get("prompt", "")
+        if not prompt:
+            raise ValueError("prompt is required")
+
+        from go_abtest import run_bestof
+        results = run_bestof(
+            prompt,
+            params.get("count", 4),
+            model=params.get("model", "9b"),
+            lora=params.get("lora"),
+            lora_strength=params.get("lora_strength", 1.0),
+            steps=params.get("steps", 20),
+            cfg=params.get("cfg", 1.0),
+            preset=params.get("preset"),
+            min_score=params.get("min_score", 0.0),
+            retry=params.get("retry", 0),
+            no_validate=params.get("no_validate", False),
+        )
+        ranked = [r for r in results if r.get("score") is not None]
+        ranked.sort(key=lambda r: r["score"], reverse=True)
+        jobs[job_id]["status"] = "completed"
+        jobs[job_id]["result"] = {
+            "count": len(results),
+            "top_seed": ranked[0]["seed"] if ranked else None,
+            "top_score": ranked[0]["score"] if ranked else None,
+            "results": [
+                {"seed": r["seed"], "score": r.get("score"), "rank": r.get("rank")}
+                for r in results
+            ],
+        }
+    except Exception as e:
+        jobs[job_id]["status"] = "failed"
+        jobs[job_id]["error"] = str(e)
 try:
     from fastapi import FastAPI, BackgroundTasks
     from fastapi.responses import JSONResponse, FileResponse
@@ -200,7 +363,7 @@ except ImportError:
 
 if _HAS_FASTAPI:
 
-    app = FastAPI(title="AIGC Pipeline API", version="0.32.0")
+    app = FastAPI(title="AIGC Pipeline API", version="0.48.0")
 
     @app.post("/api/flux")
     async def api_flux(params: dict, background: BackgroundTasks):
@@ -221,6 +384,34 @@ if _HAS_FASTAPI:
         job_id = uuid.uuid4().hex[:12]
         jobs[job_id] = {"status": "queued", "command": "video", "params": params}
         background.add_task(_run_video, job_id, params)
+        return JSONResponse({"job_id": job_id, "status": "queued"}, status_code=202)
+
+    @app.post("/api/control")
+    async def api_control(params: dict, background: BackgroundTasks):
+        job_id = uuid.uuid4().hex[:12]
+        jobs[job_id] = {"status": "queued", "command": "control", "params": params}
+        background.add_task(_run_control, job_id, params)
+        return JSONResponse({"job_id": job_id, "status": "queued"}, status_code=202)
+
+    @app.post("/api/sweep")
+    async def api_sweep(params: dict, background: BackgroundTasks):
+        job_id = uuid.uuid4().hex[:12]
+        jobs[job_id] = {"status": "queued", "command": "sweep", "params": params}
+        background.add_task(_run_sweep, job_id, params)
+        return JSONResponse({"job_id": job_id, "status": "queued"}, status_code=202)
+
+    @app.post("/api/abtest")
+    async def api_abtest(params: dict, background: BackgroundTasks):
+        job_id = uuid.uuid4().hex[:12]
+        jobs[job_id] = {"status": "queued", "command": "abtest", "params": params}
+        background.add_task(_run_abtest, job_id, params)
+        return JSONResponse({"job_id": job_id, "status": "queued"}, status_code=202)
+
+    @app.post("/api/bestof")
+    async def api_bestof(params: dict, background: BackgroundTasks):
+        job_id = uuid.uuid4().hex[:12]
+        jobs[job_id] = {"status": "queued", "command": "bestof", "params": params}
+        background.add_task(_run_bestof, job_id, params)
         return JSONResponse({"job_id": job_id, "status": "queued"}, status_code=202)
 
     @app.get("/api/jobs/{job_id}")
@@ -292,18 +483,22 @@ def main() -> None:
         sys.exit(1)
 
     port = args.port or int(os.environ.get("PORT", 8765))
-    print(f"🚀 AIGC Pipeline API v0.32.0")
+    print(f"🚀 AIGC Pipeline API v0.48.0")
     print(f"   地址: http://127.0.0.1:{port}")
     print(f"   文档: http://127.0.0.1:{port}/docs")
     print(f"   健康: http://127.0.0.1:{port}/api/health")
     print()
     print(f"   可用端点:")
-    print(f"     POST /api/flux   — Flux.2 Klein 文生图（支持 preset/min_score/retry）")
-    print(f"     POST /api/video  — Wan2.2 视频生成（T2V/I2V，支持 preset/timeout/denoise）")
-    print(f"     POST /api/lora   — SDXL LoRA 文生图")
-    print(f"     GET  /api/jobs   — 作业列表")
-    print(f"     GET  /api/health — 健康检查")
-    print(f"     GET  /api/models — 模型清单")
+    print(f"     POST /api/flux    — Flux.2 Klein 文生图（支持 preset/min_score/retry）")
+    print(f"     POST /api/video   — Wan2.2 视频生成（T2V/I2V，支持 preset/timeout/denoise）")
+    print(f"     POST /api/lora    — SDXL LoRA 文生图")
+    print(f"     POST /api/control — ControlNet 条件生图（ref/type/model，支持 quality 门禁）")
+    print(f"     POST /api/sweep   — 参数网格扫描（grid/type，支持 quality 门禁）")
+    print(f"     POST /api/abtest  — A/B 双 Prompt 对比（prompts[2]，支持 quality 门禁）")
+    print(f"     POST /api/bestof  — Best of N 多轮择优（count/prompt，支持 quality 门禁）")
+    print(f"     GET  /api/jobs    — 作业列表/状态查询")
+    print(f"     GET  /api/health  — 健康检查")
+    print(f"     GET  /api/models  — 模型清单")
     print()
     OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")

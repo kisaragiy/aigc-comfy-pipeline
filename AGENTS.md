@@ -10,7 +10,8 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.47.0** — 当前：AB Test / Best of N 升级 generate_with_quality + 质量门禁<br>　　　　　　`python -m agents abtest --prompts "A" "B" --preset anime --min-score 0.2` <br>　　　　　　`python -m agents bestof "prompt" --count 4 --retry 2 --min-score 0.25` <br>　　　　　　替换直调 `build_flux_workflow` 为 `generate_with_quality`，新增 `--preset`/`--min-score`/`--retry`/`--no-validate`
+- **V0.48.0** — 当前：serve API 升级（新增 control/sweep/abtest/bestof 端点）<br>　　　　　　`POST /api/control` — ControlNet 条件生图，ref/type/model，走 generate_with_quality <br>　　　　　　`POST /api/sweep` — 参数网格扫描，grid/type，走 generate_with_quality <br>　　　　　　`POST /api/abtest` — A/B 双 Prompt 对比，prompts[2]，走 generate_with_quality <br>　　　　　　`POST /api/bestof` — Best of N 多轮择优，count/prompt，走 generate_with_quality<br>　　　　　　API 版本升至 0.48.0，新增 4 个后台异步端点 + quality 门禁全覆盖
+- **V0.47.0** — 上一版：AB Test / Best of N 升级 generate_with_quality + 质量门禁<br>　　　　　　`python -m agents abtest --prompts "A" "B" --preset anime --min-score 0.2` <br>　　　　　　`python -m agents bestof "prompt" --count 4 --retry 2 --min-score 0.25` <br>　　　　　　替换直调 `build_flux_workflow` 为 `generate_with_quality`，新增 `--preset`/`--min-score`/`--retry`/`--no-validate`
 - **V0.46.0** — 上一版：gallery 新增全屏/幻灯片/键盘导航<br>　　　　　　点击图片全屏 Lightbox，← → 翻页，缩略图条，Esc 关闭
 - **V0.45.0** — 上一版：video-process 新增帧提取 (--extract-frames --every / --count)
 - **V0.43.0** — 上一版：sweep 升级 quality（generate_with_quality + --preset + 门禁）<br>　　　　　　`python -m agents sweep --grid '{\"steps\":[20,30]}' --preset anime --min-score 0.2` <br>　　　　　　`python -m agents sweep --type video --grid '{\"frames\":[49,81]}'` <br>　　　　　　图片/视频均走质量门禁，新增 `--preset`/`--seed`/`--min-score`/`--retry`/`--no-validate`
@@ -48,7 +49,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 - V0.5.0 — LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
 - V0.0.XXX — 小修
 
-## 当前版本：V0.47.0
+## 当前版本：V0.48.0
 
 ## 核心能力
 
@@ -84,7 +85,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 | 质量验证 | `go_validate.py` | `python -m agents validate` | CLIP score + 崩脸检测 + 图像质量 |
 || A/B 测试 | `go_abtest.py` | `python -m agents abtest` | 同 seed prompt 对比，**走 generate_with_quality**，支持 `--preset`/`--min-score`/`--retry` |
 || Best of N | `go_abtest.py` | `python -m agents bestof` | 多 seed 自动挑优 + 排名，**质量门禁 + --preset** |
-| API 服务 | `go_serve.py` | `python -m agents serve` | FastAPI REST API，异步作业队列，flux 支持预设/门禁 |
+|| API 服务 | `go_serve.py` | `python -m agents serve` | FastAPI REST API，异步作业队列，flux/lora/video/control/sweep/abtest/bestof 全端点 + quality 门禁 |
 | 质量预设 | `comfy_utils.QUALITY_PRESETS` | `--preset quality|fast|portrait` | 优选参数组合，环境变量 AIGC_PRESET |
 | 视频预设 | `comfy_utils.VIDEO_PRESETS` | `--preset quality|fast|cinematic` | 视频专用预设，环境变量 AIGC_VIDEO_PRESET |
 | 自动门禁 | `comfy_utils.generate_with_quality()` | `--min-score 0.25 --retry 3` | 出图验证 + 不合格自动重试 |
