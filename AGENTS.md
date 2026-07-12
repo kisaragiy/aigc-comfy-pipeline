@@ -10,8 +10,9 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.16.0** — 当前：模型下载
-- V0.15.0 — 上一版：ComfyUI 队列管理
+- **V0.17.0** — 当前：Output Gallery 增强
+- V0.16.0 — 上一版：模型下载
+- V0.15.0 — ComfyUI 队列管理
 - V0.14.0 — 管线验收报告
 - V0.13.0 — 自动标图 + LoRA 训练闭环
 - V0.12.0 — 批量迭代 + 参数扫描
@@ -24,7 +25,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 - V0.5.0 — LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
 - V0.0.XXX — 小修
 
-## 当前版本：V0.16.0
+## 当前版本：V0.17.0
 
 ## 核心能力
 
@@ -48,6 +49,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 | 训练编排 | `go_train.py` | `python -m agents train` | 数据验证 + AutoDL 训练命令生成 |
 | 管线报告 | `go_report.py` | `python -m agents report` | 一键验收：ComfyUI/模型/workflow/产出全貌 |
 | 队列管理 | `go_queue.py` | `python -m agents queue` | 查看/清空/中断队列、释放显存 |
+| 产出画廊 | `go_gallery.py` | `python -m agents gallery` | HTML 产出展示、HTTP 服务模式 |
 
 ## 项目结构
 
@@ -67,6 +69,7 @@ agents/                    # Python 编排脚本（产品）
   go_report.py              #   管线验收报告
   go_queue.py               #   ComfyUI 队列管理
   model_download.py         #   模型下载
+  go_gallery.py             #   输出画廊
   go_knives_lora.py        #   角色 LoRA 文生图（主力脚本）
   go_knives_ipadapter.py   #   IPAdapter 锁脸（复用 go_knives_lora 的构建函数）
   go_multi_char_lora.py    #   多角色同框
@@ -219,3 +222,5 @@ metadata.json 包含完整的生成参数，面试时打开即可证明工程化
 - [ ] `python -m agents queue --help` 显示 4 个子命令
 - [ ] `python -m agents models download --help` 显示下载参数
 - [ ] `python -m agents models download <url> --type lora --preview` 预览
+- [ ] `python -m agents gallery --help` 显示参数
+- [ ] `python -m agents gallery --output /tmp/g.html` 生成 HTML

@@ -12,6 +12,7 @@ Usage:
     python -m agents train --dir <path> --trigger <name>
     python -m agents report [--json]
     python -m agents queue list|clear|interrupt|free
+    python -m agents gallery [--output FILE] [--serve]
     python -m agents outputs list|show <id>|clean [--days N]
     python -m agents workflow list|show <name>|schema <name>|check <name>
     python -m agents models list [category]|info <name>|check <workflow_name>
@@ -358,6 +359,7 @@ def main() -> None:
         "train": "go_train.py",
         "report": "go_report.py",
         "queue": "go_queue.py",
+        "gallery": "go_gallery.py",
     }
 
     if command not in script_map:
@@ -394,6 +396,8 @@ def main() -> None:
             from agents.go_report import main as target_main
         elif command == "queue":
             from agents.go_queue import main as target_main
+        elif command == "gallery":
+            from agents.go_gallery import main as target_main
         else:
             raise ValueError(f"Unknown command: {command}")
         target_main()
@@ -416,6 +420,7 @@ def _show_help() -> None:
         ("train", "LoRA 训练编排（数据验证 + AutoDL 命令生成）"),
         ("report", "管线验收报告（ComfyUI/模型/workflow/产出全貌）"),
         ("queue", "ComfyUI 队列管理（list/clear/interrupt/free）"),
+        ("gallery", "输出画廊（HTML 产出展示）"),
         ("check", "环境检查（ComfyUI / Ollama 连通性）"),
         ("workflow", "工作流模板管理（list / show / schema / check）"),
         ("models", "模型管理（list / info / check）"),
