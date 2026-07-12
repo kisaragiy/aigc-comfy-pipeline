@@ -902,3 +902,83 @@ options:
 ```
 已清理 0 个旧产出目录。
 ```
+
+---
+
+## `workshop`
+
+创作工坊 — 自然语言驱动的 AIGC 创作入口。
+
+```
+usage: python -m agents workshop <subcommand> [args...]
+
+子命令:
+  create  "描述"   — 一句话出图（引擎 → 多张生成 → 质检 → 选最优）
+  engine  "描述"   — 测试 prompt 引擎（显示优化后提示词）
+  inspect <图片>   — 逐部位质检
+  manga   "剧本"   — 漫画/分镜生成
+  video   "描述"   — 视频生成
+```
+
+### `workshop create`
+
+一句话出图：端到端管线 `NL → Prompt引擎 → generate_with_quality×N → 逐张质检 → 综合排序 → 选最优`。
+
+```text
+usage: python -m agents workshop create [-h] [--count COUNT] [--style STYLE]
+                                        [--ref REF] [--preset PRESET]
+                                        [--min-score MIN_SCORE] [--retry RETRY]
+                                        [--no-inspect] [--preview] [--verbose]
+                                        nl_text [nl_text ...]
+
+示例:
+  python -m agents workshop create "银发少女校服教室窗边逆光" --count 6 --inspect
+  python -m agents workshop create "prompt" --style anime --ref ref.png
+  python -m agents workshop create "prompt" --preview  # 仅预览 prompt，不提交
+```
+
+### `workshop engine`
+
+测试 Prompt 引擎，显示自然语言优化后的专业提示词及风格/构图/光照推测。
+
+```text
+usage: python -m agents workshop engine [-h] [--style STYLE] [--list-presets]
+                                        nl_text [nl_text ...]
+
+示例:
+  python -m agents workshop engine "赛博朋克少女，霓虹雨夜"
+  python -m agents workshop engine "古风少女竹林抚琴" --style photoreal
+  python -m agents workshop engine --list-presets  # 列出全部预设
+```
+
+### `workshop inspect`
+
+逐部位质检报告：`[脸:ok] [左眼:ok] [右眼:ok] [手:正常] [脚:ok] [模糊:正常]`
+
+```text
+usage: python -m agents workshop inspect [-h] [--verbose] image_path
+
+示例:
+  python -m agents workshop inspect output/001.png
+  python -m agents workshop inspect output/001.png --verbose
+```
+
+### `workshop manga`
+
+剧本→分镜表→逐格生图→拼页+台词。
+
+```text
+usage: python -m agents workshop manga [-h] [--style STYLE] [--preview] [--layout LAYOUT]
+                                       script_text [script_text ...]
+
+示例:
+  python -m agents workshop manga "教室中，两人相对而立。阳光透过窗户洒进来。Knives 平静地说：别再逃了。" --preview
+```
+
+### `workshop video`
+
+分镜驱动视频生成（封装 Wan2.2 go_video）。
+
+```text
+用法同 python -m agents video [options] [prompt]
+```
