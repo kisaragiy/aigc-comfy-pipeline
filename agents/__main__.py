@@ -279,14 +279,15 @@ def _run_outputs() -> None:
         if not runs:
             print("暂无产出记录。")
             return
-        print(f"\n{'运行 ID':30s} {'命令':10s} {'时间':22s} {'图片':6s}")
-        print("-" * 72)
+        print(f"\n{'运行 ID':30s} {'命令':10s} {'时间':22s} {'图片':6s} {'视频':6s}")
+        print("-" * 80)
         for r in runs:
             rid = r.get("run_id", "?")
             cmd = r.get("command", "?")
             ts = (r.get("timestamp") or "?")[:19]
-            n = len(r.get("images", []))
-            print(f"{rid:30s} {cmd:10s} {ts:22s} {n:6d}")
+            n_img = len(r.get("images", []))
+            n_vid = r.get("video_count", 0)
+            print(f"{rid:30s} {cmd:10s} {ts:22s} {n_img:6d} {n_vid:6d}")
 
     elif action == "show":
         if len(sys.argv) < 4:
@@ -300,7 +301,18 @@ def _run_outputs() -> None:
         print(f"\n运行 ID:   {meta.get('run_id', '?')}")
         print(f"命令:      {meta.get('command', '?')}")
         print(f"时间:      {(meta.get('timestamp') or '?')[:19]}")
-        print(f"图片:      {', '.join(meta.get('images', [])) or '(无)'}")
+        images = meta.get("images", [])
+        videos = meta.get("videos", [])
+        if images:
+            print(f"图片 ({len(images)}):")
+            for fn in images:
+                print(f"  - {fn}")
+        if videos:
+            print(f"视频 ({len(videos)}):")
+            for fn in videos:
+                print(f"  - {fn}")
+        if not images and not videos:
+            print("文件:      (无)")
         params = meta.get("params", {})
         if params:
             print("\n参数:")

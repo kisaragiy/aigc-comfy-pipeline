@@ -49,6 +49,8 @@ def build_video_workflow(
     fps: int = DEFAULT_FPS,
     ref_image: str | None = None,
     denoise: float = 1.0,
+    sampler: str = "euler",
+    scheduler: str = "normal",
     prefix: str = "wan_video",
 ) -> tuple[dict[str, Any], int]:
     """构建 Wan2.2 视频生成工作流。
@@ -64,6 +66,8 @@ def build_video_workflow(
         fps: 帧率
         ref_image: 参考图（I2V 模式，提供时自动构建 I2V 工作流）
         denoise: 去噪强度（I2V 通常 0.85，T2V 固定 1.0）
+        sampler: 采样器名称（默认 euler）
+        scheduler: 调度器名称（默认 normal）
         prefix: 输出文件名前缀
 
     Returns:
@@ -105,7 +109,7 @@ def build_video_workflow(
     # 6. KSampler
     wf["5"] = {"class_type": "KSampler", "inputs": {
         "seed": seed_actual, "steps": steps, "cfg": cfg,
-        "sampler_name": "euler", "scheduler": "normal", "denoise": denoise,
+        "sampler_name": sampler, "scheduler": scheduler, "denoise": denoise,
         "model": ["1", 0], "positive": ["3a", 0],
         "negative": ["3b", 0], "latent_image": [latent_id, 0]}}
 
@@ -140,6 +144,8 @@ def main() -> None:
     parser.add_argument("--prefix", default="wan_video", help="输出文件名前缀")
     parser.add_argument("--denoise", type=float, default=0.85,
                         help="去噪强度（I2V 默认 0.85，T2V 固定 1.0）")
+    parser.add_argument("--sampler", default=None, help="采样器名称（预设自动）")
+    parser.add_argument("--scheduler", default=None, help="调度器名称（预设自动）")
     parser.add_argument("--timeout", type=float, default=1800,
                         help="等待出图超时秒数（默认 1800=30 分钟）")
     parser.add_argument("--preset", choices=list(VIDEO_PRESETS.keys()),
@@ -164,6 +170,7 @@ def main() -> None:
         steps=args.steps, cfg=args.cfg,
         width=args.width, height=args.height,
         frames=args.frames, fps=args.fps,
+        sampler=args.sampler, scheduler=args.scheduler,
         denoise=args.denoise if args.ref else 1.0,
         ref_image=args.ref,
         negative=args.negative,

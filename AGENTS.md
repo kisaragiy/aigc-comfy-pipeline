@@ -10,8 +10,8 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.32.0** — 当前：视频管线完整化（Gallery + Serve + Queue）
-- V0.31.0 — 上一版：I2V 补齐 + 自定义预设 + 视频质量闭环
+- **V0.33.0** — 当前：Output 视频感知 + 视频参数对齐
+- V0.32.0 — 上一版：视频管线完整化（Gallery + Serve + Queue）
 - V0.27.0 — A/B 测试
 - V0.26.0 — Prompt 兜底 + 质量验证
 - V0.25.0 — Docker 部署
@@ -37,7 +37,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 - V0.5.0 — LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
 - V0.0.XXX — 小修
 
-## 当前版本：V0.32.0
+## 当前版本：V0.33.0
 
 ## 核心能力
 
@@ -82,6 +82,8 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 | Gallery 视频 | `go_gallery.py` | `python -m agents gallery` | HTML 画廊自动检测 .mp4 渲染 `<video>` 标签 |
 | 视频 API | `go_serve.py /api/video` | `POST /api/video` | 异步视频作业（T2V/I2V + preset + timeout） |
 | 队列智能感知 | `go_queue.py list` | `python -m agents queue list` | 自动区分 image/video 任务类型 |
+| Output 视频感知 | `output_manager.py` | `python -m agents outputs list` | images/videos 分开统计，show 显示文件列表 |
+| 视频参数对齐 | `go_video.py --sampler --scheduler` | `python -m agents video "..." --sampler dpmpp_2m` | KSampler 参数可自定义，预设含 sampler/scheduler |
 
 ## 项目结构
 
