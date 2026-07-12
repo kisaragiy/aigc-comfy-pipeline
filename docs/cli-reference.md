@@ -943,8 +943,8 @@ usage: python -m agents workshop create [-h] [--count COUNT] [--style STYLE]
   --no-inspect       跳过质检
   --preview          预览模式（跳过生成）
   --ollama           使用 Ollama 优化 prompt
-  --output OUTPUT    结果输出目录（保存 metadata.json + best.png）
-  --gallery GALLERY  候选画廊输出目录（生成 index.html 可浏览所有候选图）
+  --output OUTPUT    结果输出目录（保存 metadata.json + best.png，自动生成 gallery）
+  --gallery GALLERY  候选画廊输出目录（默认仅 --output 时自动生成到 <output>/gallery/）
   --seed SEED        起始种子（0=随机，固定种子可复现结果）
   --open             生成后自动打开最优图
   --verbose          详细信息
@@ -1014,6 +1014,7 @@ usage: python -m agents workshop manga [-h] [--style STYLE] [--preview]
   --script-file FILE       从文件读取剧本（替代命令行参数）
   --output DIR             输出目录（保存拼页 + 逐格图 + metadata.json）
   --retry N                每格失败后最大重试次数（默认 0=不重试）
+  --sdxl                   使用 SDXL 代替 Flux（更快，支持 LoRA）
   script_text             剧本/场景描述
 
 示例:

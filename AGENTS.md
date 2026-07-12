@@ -10,7 +10,8 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.59.0** — 当前：create 引擎推测 + --open<br>　　　　　　`workshop create` 始终显示引擎推测（风格/构图/光照）<br>　　　　　　`workshop create --open` 生成后自动打开最优图<br>　　　　　　`os.startfile` 在默认图片查看器中打开<br>　　　　　　版本 0.59.0<br>
+- **V0.60.0** — 当前：manga --sdxl + auto-gallery<br>　　　　　　`workshop manga --sdxl` 使用 SDXL 代替 Flux（更快/支持 LoRA）<br>　　　　　　`workshop create --output` 自动生成候选画廊（无需单独 --gallery）<br>　　　　　　auto-gallery 保存在 `<output>/gallery/`，仍可手动指定 --gallery<br>　　　　　　版本 0.60.0<br>
+- **V0.59.0** — 上一版：create 引擎推测 + --open<br>　　　　　　`workshop create` 始终显示引擎推测（风格/构图/光照）<br>　　　　　　`workshop create --open` 生成后自动打开最优图<br>　　　　　　`os.startfile` 在默认图片查看器中打开<br>　　　　　　版本 0.59.0<br>
 - **V0.58.0** — 上一版：manga 重试 + create 排行榜<br>　　　　　　`workshop manga --retry N` 每格失败后重试（含递增延迟）<br>　　　　　　`generate_panels` 新增 `max_retries` 参数，空结果也触发重试<br>　　　　　　`workshop create` 输出候选排行榜 🥇🥈🥉（综合分/质检/CLIP）<br>　　　　　　版本 0.58.0<br>
 - **V0.57.0** — 上一版：create --seed + manga --output<br>　　　　　　`workshop create --seed N` 固定种子，可复现结果<br>　　　　　　`workshop manga --output DIR` 保存拼页+逐格图+metadata.json<br>　　　　　　manga 输出目录包含逐格 panel_*.png 和 metadata.json（剧本/角色/路径）<br>　　　　　　版本 0.57.0<br>
 - **V0.56.0** — 上一版：质检批量扫描 + 漫画剧本文件<br>　　　　　　`workshop inspect` 支持通配符/目录批量质检，输出汇总表<br>　　　　　　批量模式显示每张脸/眼/手/脚/模糊/综合分 + 通过率<br>　　　　　　`workshop manga --script-file` 从文件读取剧本<br>　　　　　　单张模式保留原详细报告格式<br>　　　　　　版本 0.56.0<br>
@@ -54,7 +55,7 @@ V0.X.0 = 大功能，V0.0.XXX = 小修。
 - V0.5.0 — LoRA 训练/批处理/IPAdapter/多角色/Flux.2 Klein 均已可用
 - V0.0.XXX — 小修
 
-## 当前版本：V0.59.0
+## 当前版本：V0.60.0
 
 ## 核心能力
 
