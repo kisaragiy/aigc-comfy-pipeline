@@ -1,0 +1,26 @@
+{
+  "QUALITY_PRESETS": {
+    "anime": {
+      "steps": 35,
+      "cfg": 6.0,
+      "sampler": "dpmpp_2m",
+      "scheduler": "karras"
+    },
+    "photoreal": {
+      "steps": 45,
+      "cfg": 8.0,
+      "sampler": "dpmpp_3m_sde",
+      "scheduler": "karras"
+    }
+  },
+  "VIDEO_PRESETS": {
+    "quick": {
+      "frames": 17,
+      "fps": 12,
+      "width": 512,
+      "height": 288,
+      "steps": 15,
+      "cfg": 4.0
+    }
+  }
+}

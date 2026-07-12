@@ -1,10 +1,12 @@
 """ComfyUI / Ollama 共用工具（agents 目录内脚本复用）。"""
 from __future__ import annotations
 
+import json
 import os
 import sys
 import time
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlparse
 
 import requests
@@ -309,6 +311,28 @@ VIDEO_PRESETS: dict[str, dict[str, Any]] = {
 }
 
 
+def _load_custom_presets() -> dict[str, dict[str, Any]]:
+    """从项目根目录 presets.json 加载自定义预设。"""
+    path = AGENTS_DIR.parent / "presets.json"
+    if not path.is_file():
+        return {}
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            return {}
+        return data
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"[warn] 自定义预设加载失败: {exc}", file=sys.stderr)
+        return {}
+
+
+# 合并自定义预设到内置预设表中
+_CUSTOM_PRESETS = _load_custom_presets()
+QUALITY_PRESETS.update(_CUSTOM_PRESETS.get("QUALITY_PRESETS", {}))
+VIDEO_PRESETS.update(_CUSTOM_PRESETS.get("VIDEO_PRESETS", {}))
+
+
 def apply_preset(params: dict[str, Any], preset: str | None = None,
                  presets: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
     """应用预设到参数。用户显式指定的参数优先。
@@ -335,7 +359,10 @@ def apply_preset(params: dict[str, Any], preset: str | None = None,
         if v is not None and k not in ("preset", "min_score", "retry", "no_validate"):
             result[k] = v
 
-    print(f"[info] 预设 {name} → {result}")
+    preset_example = ", ".join(
+        f"{k}={v}" for k, v in result.items() if k in next(iter(table.values()), {}))
+    print(f"[info] 预设 {name} → {preset_example}" if preset_example
+          else f"[info] 预设 {name}")
     return result
 
 
@@ -347,6 +374,7 @@ def generate_with_quality(
     max_retries: int = 0,
     preset: str | None = None,
     no_validate: bool = False,
+    wait_timeout: float = 900.0,
     **kwargs: Any,
 ) -> dict[str, Any]:
     """生成 + 质量验证 + 自动重试。
@@ -358,6 +386,7 @@ def generate_with_quality(
         max_retries: 最大重试次数
         preset: 质量预设名
         no_validate: 强制跳过验证
+        wait_timeout: 等待出图超时秒数（视频需要更长）
         kwargs: 传给 build_fn 的参数
 
     Returns:
@@ -390,7 +419,7 @@ def generate_with_quality(
 
         base = comfy_base_url()
         try:
-            images = wait_images(pid, base)
+            images = wait_images(pid, base, timeout_s=wait_timeout)
         except (TimeoutError, RuntimeError) as exc:
             print(f"  [warn] 等待出图失败: {exc}", file=sys.stderr)
             continue

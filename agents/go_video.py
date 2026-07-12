@@ -9,23 +9,18 @@ Wan2.2 视频生成 — Text-to-Video / Image-to-Video。
 from __future__ import annotations
 
 import argparse
-import os
 import random
 import sys
 from typing import Any
 
 from comfy_utils import (
-    apply_preset,
     VIDEO_PRESETS,
     bootstrap_agents_path,
-    comfy_base_url,
-    comfy_post_prompt,
+    generate_with_quality,
     optimize_prompt,
 )
 
 bootstrap_agents_path()
-
-COMFY_URL = os.environ.get("COMFY_URL", "http://127.0.0.1:8188/prompt")
 
 # Wan2.2 模型文件
 WAN_UNET = "wan2.2_ti2v_5B_fp16.safetensors"
@@ -53,6 +48,7 @@ def build_video_workflow(
     frames: int = DEFAULT_FRAMES,
     fps: int = DEFAULT_FPS,
     ref_image: str | None = None,
+    denoise: float = 1.0,
     prefix: str = "wan_video",
 ) -> tuple[dict[str, Any], int]:
     """构建 Wan2.2 视频生成工作流。
@@ -66,7 +62,8 @@ def build_video_workflow(
         width/height: 视频分辨率
         frames: 总帧数
         fps: 帧率
-        ref_image: 参考图（I2V 模式）
+        ref_image: 参考图（I2V 模式，提供时自动构建 I2V 工作流）
+        denoise: 去噪强度（I2V 通常 0.85，T2V 固定 1.0）
         prefix: 输出文件名前缀
 
     Returns:
@@ -93,16 +90,22 @@ def build_video_workflow(
     wf["4"] = {"class_type": "VAELoader", "inputs": {
         "vae_name": WAN_VAE}}
 
-    # 5. 视频潜空间
-    latent_id = "7"
-    wf[latent_id] = {"class_type": "EmptyLatentVideo", "inputs": {
-        "width": width, "height": height,
-        "frames": frames, "batch_size": 1}}
+    # 5. 视频潜空间 + 参考图（I2V）
+    if ref_image:
+        wf["load_ref"] = {"class_type": "LoadImage", "inputs": {"image": ref_image}}
+        wf["vae_encode"] = {"class_type": "VAEEncode", "inputs": {
+            "pixels": ["load_ref", 0], "vae": ["4", 0]}}
+        latent_id = "vae_encode"
+    else:
+        wf["7"] = {"class_type": "EmptyLatentVideo", "inputs": {
+            "width": width, "height": height,
+            "frames": frames, "batch_size": 1}}
+        latent_id = "7"
 
     # 6. KSampler
     wf["5"] = {"class_type": "KSampler", "inputs": {
         "seed": seed_actual, "steps": steps, "cfg": cfg,
-        "sampler_name": "euler", "scheduler": "normal", "denoise": 1.0,
+        "sampler_name": "euler", "scheduler": "normal", "denoise": denoise,
         "model": ["1", 0], "positive": ["3a", 0],
         "negative": ["3b", 0], "latent_image": [latent_id, 0]}}
 
@@ -135,6 +138,10 @@ def main() -> None:
     parser.add_argument("--negative", default="", help="负向提示词")
     parser.add_argument("--raw", action="store_true", help="跳过 Ollama")
     parser.add_argument("--prefix", default="wan_video", help="输出文件名前缀")
+    parser.add_argument("--denoise", type=float, default=0.85,
+                        help="去噪强度（I2V 默认 0.85，T2V 固定 1.0）")
+    parser.add_argument("--timeout", type=float, default=1800,
+                        help="等待出图超时秒数（默认 1800=30 分钟）")
     parser.add_argument("--preset", choices=list(VIDEO_PRESETS.keys()),
                         default=None, help="视频预设（quality/balanced/fast/cinematic）")
     args = parser.parse_args()
@@ -148,46 +155,36 @@ def main() -> None:
 
     prompt = user if args.raw else optimize_prompt(user)
 
-    vparams = apply_preset(
-        dict(
-            seed=args.seed, steps=args.steps, cfg=args.cfg,
-            width=args.width, height=args.height,
-            frames=args.frames, fps=args.fps,
-        ),
+    qr = generate_with_quality(
+        build_video_workflow, prompt,
+        no_validate=True,
+        wait_timeout=args.timeout,
         preset=args.preset,
-        presets=VIDEO_PRESETS,
-    )
-
-    wf, seed_actual = build_video_workflow(
-        prompt,
-        negative=args.negative,
-        seed=vparams.get("seed", -1),
-        steps=vparams.get("steps", DEFAULT_STEPS),
-        cfg=vparams.get("cfg", DEFAULT_CFG),
-        width=vparams.get("width", DEFAULT_WIDTH),
-        height=vparams.get("height", DEFAULT_HEIGHT),
-        frames=vparams.get("frames", DEFAULT_FRAMES),
-        fps=vparams.get("fps", DEFAULT_FPS),
+        seed=args.seed,
+        steps=args.steps, cfg=args.cfg,
+        width=args.width, height=args.height,
+        frames=args.frames, fps=args.fps,
+        denoise=args.denoise if args.ref else 1.0,
         ref_image=args.ref,
+        negative=args.negative,
         prefix=args.prefix,
     )
 
-    try:
-        result = comfy_post_prompt(wf, prompt_url=COMFY_URL)
-    except RuntimeError as exc:
-        print(exc, file=sys.stderr)
-        sys.exit(1)
-
-    prompt_id = result.get("prompt_id", "")
+    seed_actual = qr["seed"]
+    video_paths = qr.get("images", [])
 
     print(f"\n====================")
-    print(f"Wan2.2 视频已提交")
+    print(f"Wan2.2 视频已{'提交' if not video_paths else '完成'}")
     print(f"====================")
-    print(f"  prompt_id: {prompt_id}")
+    print(f"  prompt_id: {qr.get('prompt_id', '')}")
     print(f"  seed:      {seed_actual}")
-    print(f"  分辨率:    {args.width}x{args.height}")
-    print(f"  帧数:      {args.frames} @ {args.fps}fps = {args.frames // args.fps}s")
-    print(f"  节点数:    {len(wf)}")
+    print(f"  模式:      {'I2V' if args.ref else 'T2V'}")
+    if args.ref:
+        print(f"  参考图:    {args.ref}")
+    if video_paths:
+        print(f"  输出:      {video_paths[0][:100]}" if len(video_paths[0]) > 100
+              else f"  输出:      {video_paths[0]}")
+    print(f"  重试:      {qr.get('retries', 0)}")
 
 
 if __name__ == "__main__":

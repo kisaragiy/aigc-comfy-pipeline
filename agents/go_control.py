@@ -135,8 +135,7 @@ def main() -> None:
     parser.add_argument("--lora", default=None, help="LoRA 权重文件名")
     parser.add_argument("--lora-strength", type=float, default=0.9)
     parser.add_argument("--prefix", default="control")
-    parser.add_argument("--preset", choices=["quality", "balanced", "fast", "portrait"],
-                        default=None, help="质量预设")
+    parser.add_argument("--preset", default=None, help="质量预设（anime/photoreal 等）")
     parser.add_argument("--min-score", type=float, default=0.0,
                         help="最低 CLIP 评分（≤0 跳过验证）")
     parser.add_argument("--retry", type=int, default=0,
