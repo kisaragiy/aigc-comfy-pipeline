@@ -275,6 +275,9 @@ def create_from_nl(
         "candidates": candidates,
         "inspection_summary": summary,
         "had_errors": had_errors,
+        "ref_image": ref_path,
+        "ip_weight": ip_weight,
+        "ip_balance": ip_balance,
     }
 
     _maybe_save_output(result, output_dir)
@@ -324,6 +327,9 @@ def _maybe_save_output(result: dict[str, Any], output_dir: str | None, extra_met
         "prompt": result.get("prompt", ""),
         "negative_prompt": result.get("negative_prompt", ""),
         "candidates_count": len(result.get("candidates", [])),
+        "ref_image": result.get("ref_image"),
+        "ip_weight": result.get("ip_weight"),
+        "ip_balance": result.get("ip_balance"),
         "best": {
             "seed": result.get("best", {}).get("seed", 0),
             "score": result.get("best", {}).get("score", -1),
@@ -431,6 +437,25 @@ def _generate_gallery_html(result: dict[str, Any], output_dir: str) -> str:
         if auto_neg:
             parts.append(f"⛔ 自动负向: {auto_neg[:30]}")
         engine_html = '<div class="engine">' + " · ".join(parts) + "</div>"
+
+    # 参考图展示（可选）
+    ref_path = result.get("ref_image")
+    ref_html = ""
+    if ref_path:
+        ref_rel = Path(ref_path).name
+        try:
+            import shutil
+            ref_dest = out / ref_rel
+            shutil.copy2(ref_path, str(ref_dest))
+            iw = result.get("ip_weight", 0.7)
+            ib = result.get("ip_balance", 0.5)
+            ref_html = f'''
+<div class="ref-section">
+  <div class="ref-label">📎 参考图 · 权重 {iw} · 平衡 {ib}</div>
+  <img src="{ref_rel}" class="ref-img" onclick="window.open('{ref_rel}','_blank')"/>
+</div>'''
+        except Exception:
+            pass
     # Build JS images array for keyboard navigation
     js_images: list[str] = []
     for _rank, img in enumerate(images, 1):
@@ -498,6 +523,11 @@ h1{{font-size:1.5rem;margin-bottom:8px;color:#e8a87c}}
 .best-badge{{background:#e8a87c33;color:#e8a87c}}
 .error-badge{{background:#ff444433;color:#ff4444}}
 .sort-note{{font-size:.75rem;color:#666;margin-left:8px}}
+/* ref section */
+.ref-section{{margin-bottom:16px;padding:10px;background:#16213e;border-radius:8px;text-align:center}}
+.ref-label{{font-size:.82rem;color:#7ec8e3;margin-bottom:6px}}
+.ref-img{{max-height:180px;border-radius:6px;cursor:pointer;border:1px solid #333}}
+.ref-img:hover{{opacity:.9}}
 /* modal */
 #modal{{display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.9);cursor:zoom-out;align-items:center;justify-content:center}}
 #modal.show{{display:flex}}
@@ -508,6 +538,7 @@ h1{{font-size:1.5rem;margin-bottom:8px;color:#e8a87c}}
 </style></head>
 <body>
 <h1>🖼️ 创作工坊 · Gallery</h1>
+{ref_html}
 <div class="prompt">{prompt_escaped}</div>
 {('<div class="negative">⛔ 负向: ' + negative_escaped + '</div>') if negative else ''}
 {engine_html}
