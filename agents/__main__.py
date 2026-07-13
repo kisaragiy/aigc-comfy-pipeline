@@ -480,6 +480,8 @@ def _run_workshop() -> None:
         _workshop_manga(args)
     elif sub == "video":
         _workshop_video(args)
+    elif sub == "extract":
+        _workshop_extract(args)
     else:
         print(f"未知 workshop 子命令: {sub}")
         _run_workshop()
@@ -528,10 +530,18 @@ def _workshop_create(args: list[str]) -> None:
                         help="保存当前参数为工作流模板 (如: --save my_portrait)")
     parser.add_argument("--load", default=None,
                         help="加载工作流模板 (如: --load my_portrait)")
+    parser.add_argument("--save-style", default=None,
+                        help="保存风格包（含 cast + 所有参数）")
+    parser.add_argument("--load-style", default=None,
+                        help="加载风格包（恢复 cast + 所有参数）")
     parser.add_argument("--list-workflows", action="store_true",
                         help="列出已保存的工作流模板")
     parser.add_argument("--smart", action="store_true",
                         help="智能模式: 自动检测内容类型并调参")
+    parser.add_argument("--cast", default=None,
+                        help="人物表 JSON (角色名→外观+ref): --cast cast.json")
+    parser.add_argument("--character", default=None,
+                        help="当前生成的角色名（配合 --cast 使用）")
     parser.add_argument("--batch-file", default=None, help="批量文件路径（每行一条 prompt，空行和 # 注释行跳过）")
     parsed = parser.parse_args(args)
 
@@ -610,6 +620,33 @@ def _workshop_create(args: list[str]) -> None:
         save_path.write_text(_json.dumps(params, ensure_ascii=False, indent=2))
         print(f"  📋 已保存工作流: {parsed.save} ({save_path})")
 
+    # 保存/加载风格包（含 cast + 完整参数）
+    if parsed.save_style:
+        _WORKFLOW_DIR.mkdir(parents=True, exist_ok=True)
+        pkg = {
+            "style": parsed.style, "preset": parsed.preset,
+            "upscale": parsed.upscale if parsed.upscale > 0 else None,
+            "restore_face": parsed.restore_face, "lora": parsed.lora,
+            "lora_strength": parsed.lora_strength, "count": parsed.count,
+            "ip_weight": parsed.ip_weight, "balance": parsed.balance,
+            "min_score": parsed.min_score, "retry": parsed.retry,
+            "cast": parsed.cast, "character": parsed.character,
+        }
+        pkg = {k: v for k, v in pkg.items() if v is not None}
+        import json as _json
+        (_WORKFLOW_DIR / f"{parsed.save_style}.json").write_text(
+            _json.dumps(pkg, ensure_ascii=False, indent=2))
+        print(f"  📦 已保存风格包: {parsed.save_style}")
+    if parsed.load_style:
+        load_path = _WORKFLOW_DIR / f"{parsed.load_style}.json"
+        if load_path.is_file():
+            import json as _json
+            saved = _json.loads(load_path.read_text())
+            for k, v in saved.items():
+                if hasattr(parsed, k) and v is not None:
+                    setattr(parsed, k, v)
+            print(f"  📦 已加载风格包: {parsed.load_style}")
+
     # 批量模式
     if parsed.batch_file:
         _workshop_create_batch(parsed)
@@ -620,6 +657,30 @@ def _workshop_create(args: list[str]) -> None:
         return
 
     from workshop.create import create_from_nl
+
+    # 加载人物表（cast sheet）
+    cast_data = None
+    if parsed.cast:
+        cast_path = Path(parsed.cast)
+        if cast_path.is_file():
+            import json as _json
+            cast_data = _json.loads(cast_path.read_text(encoding="utf-8"))
+            if isinstance(cast_data, dict):
+                chars = cast_data.get("characters", cast_data)
+                # 如果指定了 --character，注入角色描述到 prompt 并设置 ref
+                if parsed.character and parsed.character in chars:
+                    char_info = chars[parsed.character]
+                    if isinstance(char_info, dict):
+                        appearance = char_info.get("appearance", "") or char_info.get("服饰", "")
+                        if appearance and appearance not in nl_text:
+                            nl_text = f"{appearance}, {nl_text}"
+                        if not parsed.ref and char_info.get("ref"):
+                            parsed.ref = char_info["ref"]
+                        print(f"  📋 角色 '{parsed.character}': {appearance[:60]}")
+                    else:
+                        print(f"  📋 角色 '{parsed.character}'")
+        else:
+            print(f"  ⚠️ 人物表不存在: {parsed.cast}")
 
     # 合并自定义预设
     if parsed.preset_define or parsed.preset_file:
@@ -868,6 +929,73 @@ def _workshop_create_batch(parsed) -> None:
                 ok_count += 1
         if ok_count:
             print(f"  ✅ 批量后处理完成: {ok_count}/{len(results)} 张")
+
+
+def _workshop_extract(args: list[str]) -> None:
+    """workshop extract — 从小说文本提取插画场景。"""
+    import argparse
+    parser = argparse.ArgumentParser(description="从文本提取插画场景")
+    parser.add_argument("text_file", help="小说文本文件路径 (.txt)")
+    parser.add_argument("--output", default=None, help="输出 JSON 路径")
+    parser.add_argument("--count", type=int, default=5, help="提取场景数（默认 5）")
+    parsed = parser.parse_args(args)
+
+    path = Path(parsed.text_file)
+    if not path.is_file():
+        print(f"❌ 文件不存在: {parsed.text_file}")
+        return
+
+    text = path.read_text(encoding="utf-8")
+    if len(text) > 8000:
+        text = text[:8000] + "\n...(截断)"
+
+    from agents.comfy_utils import ollama_generate
+
+    prompt = f"""你是一位专业的轻小说插画场景分析师。从以下小说文本中，提取最适合绘制插画的 {parsed.count} 个场景。
+
+对每个场景，请严格按 JSON 格式输出（不要多余文字）：
+{{
+  "scenes": [
+    {{
+      "title": "场景标题",
+      "characters": ["角色名1", "角色名2"],
+      "environment": "场景环境描述（英文）",
+      "composition": "构图描述（英文，如 close-up, wide shot, half-body）",
+      "lighting": "光照描述（英文）",
+      "mood": "情绪氛围（英文）",
+      "description": "详细的画面描述（英文，用于生成 prompt）",
+      "key_visual": "最关键的画面元素"
+    }}
+  ]
+}}
+
+小说文本：
+{text}"""
+    try:
+        result = ollama_generate(prompt, timeout=60)
+        import json as _json
+        import re
+        json_match = re.search(r"\{.*\}", result, re.DOTALL)
+        if json_match:
+            data = _json.loads(json_match.group())
+            scenes = data.get("scenes", [])
+            print(f"\n📖 提取到 {len(scenes)} 个插画场景:\n")
+            for i, s in enumerate(scenes, 1):
+                print(f"  [{i}] {s.get('title', '?')}")
+                print(f"      角色: {', '.join(s.get('characters', []))}")
+                print(f"      环境: {s.get('environment', '?')[:60]}")
+                print(f"      构图: {s.get('composition', '?')}")
+                print(f"      氛围: {s.get('mood', '?')}")
+                print()
+            if parsed.output:
+                out_path = Path(parsed.output)
+                out_path.write_text(_json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+                print(f"  💾 已保存: {out_path}")
+        else:
+            print(f"\n⚠️ 未能解析 JSON，原始输出:\n{result[:500]}")
+    except Exception as exc:
+        print(f"❌ 提取失败: {exc}")
+
 
 def _workshop_engine(args: list[str]) -> None:
     """python -m agents workshop engine <nl_text> [--style STYLE] [--ollama]"""
