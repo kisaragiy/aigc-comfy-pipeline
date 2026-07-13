@@ -312,3 +312,83 @@ def run_autopilot(
     print(f"📊 Autopilot 完成: {len(all_results)}/{len(lines)} 条有新结果")
     print(f"📊 数据库: {db.stats()['runs']} 条总记录")
     return all_results
+
+
+# ── 质量报告 ──────────────────────────────────────────────
+
+def generate_report(db_path: str, output_path: str = "quality_report.html") -> str:
+    """从质量数据库生成 HTML 报告。
+
+    Args:
+        db_path: 质量数据库路径
+        output_path: HTML 输出路径
+
+    Returns:
+        HTML 文件路径
+    """
+    db = QualityDB(db_path)
+    rows = ""
+    best_overall = 0.0
+    best_prompt = ""
+
+    for key, entry in sorted(db.data.items(), key=lambda x: x[0]):
+        prompt = entry.get("prompt", "?")[:60]
+        runs = entry.get("runs", [])
+        if not runs:
+            continue
+        top = runs[0]
+        score = top.get("score", {})
+        combined = score.get("combined", 0)
+        params = top.get("params", {})
+        param_str = ", ".join(f"{k}={v}" for k, v in params.items()) if params else "默认"
+        run_count = len(runs)
+        worst = min(r.get("score", {}).get("combined", 0) for r in runs) if runs else 0
+
+        if combined > best_overall:
+            best_overall = combined
+            best_prompt = prompt
+
+        rows += f"""<tr>
+  <td class="name">{prompt}</td>
+  <td>{combined:.4f}</td>
+  <td>{param_str}</td>
+  <td>{run_count}</td>
+  <td class="bar-cell"><div class="bar" style="width:{combined*100:.0f}%"></div></td>
+</tr>"""
+
+    score_dist = ""
+    scores = [r.get("score", {}).get("combined", 0)
+              for e in db.data.values() for r in e.get("runs", [])]
+    if scores:
+        avg = sum(scores) / len(scores)
+        score_dist = f"平均分: {avg:.4f} | 最高: {max(scores):.4f} | 最低: {min(scores):.4f}"
+
+    html = f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><title>质量报告 · Autopilot</title>
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{background:#1a1a2e;color:#eee;font-family:system-ui,sans-serif;padding:20px}}
+h1{{font-size:1.4rem;margin-bottom:4px;color:#e8a87c}}
+.summary{{color:#aaa;font-size:.85rem;margin-bottom:16px}}
+table{{width:100%;border-collapse:collapse;font-size:.85rem}}
+th,td{{padding:8px 10px;text-align:left;border-bottom:1px solid #333}}
+th{{color:#7ec8e3;font-weight:600}}
+.name{{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+.bar-cell{{width:150px}}
+.bar{{height:16px;background:#4ade80;border-radius:3px;min-width:4px;transition:width .3s}}
+.best{{color:#e8a87c;font-weight:600}}
+</style></head>
+<body>
+<h1>📊 质量报告</h1>
+<div class="summary">
+  共 {db.stats()['prompts']} 个 prompt · {db.stats()['runs']} 次生成 · {score_dist}
+</div>
+<table>
+<tr><th>Prompt</th><th>最佳分</th><th>最优参数</th><th>尝试</th><th>趋势</th></tr>
+{rows}
+</table>
+</body></html>"""
+    Path(output_path).write_text(html, encoding="utf-8")
+    print(f"  🖼️  质量报告: {output_path}")
+    return output_path

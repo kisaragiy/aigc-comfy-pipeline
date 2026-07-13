@@ -540,6 +540,10 @@ def _workshop_create(args: list[str]) -> None:
                         help="列出已保存的工作流模板")
     parser.add_argument("--smart", action="store_true",
                         help="智能模式: 自动检测内容类型并调参")
+    parser.add_argument("--auto", action="store_true",
+                        help="自优化: 从质量 DB 加载最优参数")
+    parser.add_argument("--db", default=None,
+                        help="质量数据库路径 (配合 --auto 使用)")
     parser.add_argument("--variants", type=int, default=1,
                         help="多 prompt 数 (1~5, 不同角度/景别, 默认 1=单 prompt)")
     parser.add_argument("--cast", default=None,
@@ -666,6 +670,30 @@ def _workshop_create(args: list[str]) -> None:
     if not nl_text:
         parser.print_help()
         return
+
+    # 自优化：从质量 DB 加载最优参数
+    if parsed.auto:
+        db_path = parsed.db or "quality.json"
+        if Path(db_path).is_file():
+            from workshop.autopilot import QualityDB
+            db = QualityDB(db_path)
+            best = db.best_params(nl_text)
+            if best:
+                applied = []
+                if "steps" in best:
+                    parsed.steps = best["steps"]
+                    applied.append(f"steps={best['steps']}")
+                if "cfg" in best:
+                    parsed.cfg = best["cfg"]
+                    applied.append(f"cfg={best['cfg']}")
+                if best.get("preset") and not parsed.preset:
+                    parsed.preset = best["preset"]
+                    applied.append(f"preset={best['preset']}")
+                if applied:
+                    print(f"  🤖 自优化: 应用 {', '.join(applied)} (来自 {db_path})")
+            score = db.best_score(nl_text)
+            if score > 0:
+                print(f"  🏆 历史最佳分: {score:.4f}")
 
     from workshop.create import create_from_nl
 
@@ -1133,6 +1161,8 @@ def _workshop_autopilot(args: list[str]) -> None:
     parser.add_argument("--recommend", default=None,
                         help='查询最优参数: --recommend "银发精灵 森林"')
     parser.add_argument("--stats", action="store_true", help="显示数据库统计")
+    parser.add_argument("--report", default=None,
+                        help="生成 HTML 质量报告: --report report.html")
     parser.add_argument("--verbose", action="store_true", help="详细信息")
     parsed = parser.parse_args(args)
 
@@ -1157,6 +1187,12 @@ def _workshop_autopilot(args: list[str]) -> None:
             print(f"🏆 最高分: {score:.4f}")
         else:
             print(f"📋 数据库中无该 prompt 的记录")
+        return
+
+    # 生成质量报告
+    if parsed.report:
+        from workshop.autopilot import generate_report
+        generate_report(parsed.db or "quality.json", parsed.report)
         return
 
     if not parsed.batch_file:
