@@ -450,7 +450,7 @@ def _run_outputs() -> None:
 
 
 def _run_workshop() -> None:
-    """Handle 'workshop create|engine|inspect|manga|video' subcommands."""
+    """Handle 'workshop create|engine|inspect|manga|video|verify|demo' subcommands."""
     if len(sys.argv) < 3:
         print("用法: python -m agents workshop <subcommand> [args...]")
         print()
@@ -460,6 +460,8 @@ def _run_workshop() -> None:
         print("  inspect <图片>   — 逐部位质检")
         print("  manga   \"剧本\"   — 漫画/分镜生成")
         print("  video   \"描述\"   — 视频生成")
+        print("  verify  <目录>   — 一致性验证（比对多张画中同角色质检结果）")
+        print("  demo    \"描述\"   — 面试样张管线（5场景 Gallery + 报告）")
         print()
         print("示例:")
         print('  python -m agents workshop create "银发少女校服教室窗边逆光" --count 6 --inspect')
@@ -485,6 +487,10 @@ def _run_workshop() -> None:
         _workshop_extract(args)
     elif sub == "autopilot":
         _workshop_autopilot(args)
+    elif sub == "verify":
+        _workshop_verify(args)
+    elif sub == "demo":
+        _workshop_demo(args)
     else:
         print(f"未知 workshop 子命令: {sub}")
         _run_workshop()
@@ -1248,6 +1254,93 @@ def _workshop_autopilot(args: list[str]) -> None:
     )
 
 
+def _workshop_verify(args: list[str]) -> None:
+    """workshop verify <candidates_dir|image_dir> — 一致性验证。"""
+    import argparse
+    parser = argparse.ArgumentParser(description="一致性验证：比对多张画中同角色的质检稳定性")
+    parser.add_argument("path", nargs="?", default=".", help="候选目录或图片所在目录")
+    parser.add_argument("--character", default=None, help="角色名（可选，用于报告）")
+    parser.add_argument("--html", action="store_true", help="生成 HTML 报告")
+    parser.add_argument("--threshold", type=float, default=0.15, help="标准差阈值 (默认 0.15)")
+    parser.add_argument("--output", default=None, help="HTML 报告输出路径")
+    parsed = parser.parse_args(args)
+
+    from workshop.consistency import verify_consistency, print_verify_report
+    from pathlib import Path
+    from workshop.inspect.inspector import inspect_image
+
+    target = Path(parsed.path)
+    candidates: list[dict] = []
+
+    if target.is_dir():
+        images = sorted(target.rglob("*.[pj][np][g]")) + sorted(target.rglob("*.webp")) + sorted(target.rglob("*.bmp"))
+        if not images:
+            images = sorted(target.glob("*"))
+        for img_path in images:
+            if img_path.suffix.lower() not in (".png", ".jpg", ".jpeg", ".webp", ".bmp"):
+                continue
+            ins = inspect_image(str(img_path))
+            candidates.append({
+                "image": str(img_path),
+                "seed": img_path.stem,
+                "inspect": ins,
+                "scores": ins,
+            })
+    elif target.is_file():
+        ins = inspect_image(str(target))
+        candidates.append({
+            "image": str(target),
+            "seed": target.stem,
+            "inspect": ins,
+            "scores": ins,
+        })
+    else:
+        print(f"⚠️ 路径不存在: {target}")
+        return
+
+    if len(candidates) < 2:
+        print("⚠️ 一致性验证至少需要 2 张图片")
+        return
+
+    report = verify_consistency(candidates, character_name=parsed.character, threshold_std=parsed.threshold)
+    print_verify_report(report)
+
+    if parsed.html and report.get("html"):
+        out_path = Path(parsed.output or "consistency.html")
+        out_path.write_text(report["html"], encoding="utf-8")
+        print(f"  📊 HTML 报告: {out_path.resolve()}")
+
+
+def _workshop_demo(args: list[str]) -> None:
+    """workshop demo <角色描述> — 面试样张管线。"""
+    import argparse
+    parser = argparse.ArgumentParser(description="面试样张管线：5场景 × N张 Gallery + 质量报告")
+    parser.add_argument("char_desc", nargs="*", help="角色描述（如 '银发精灵 Alice, 蓝瞳, 白色长裙'）")
+    parser.add_argument("--count", type=int, default=1, help="每场景生成数 (默认 1，建议 1~2)")
+    parser.add_argument("--ref", default=None, help="参考图路径")
+    parser.add_argument("--output", default=None, help="输出目录")
+    parser.add_argument("--ollama", action="store_true", help="使用 Ollama 增强 prompt")
+    parsed = parser.parse_args(args)
+
+    char_desc = " ".join(parsed.char_desc) if parsed.char_desc else ""
+    if not char_desc:
+        print("⚠️ 请提供角色描述")
+        parser.print_help()
+        return
+
+    from workshop.demo import run_demo
+    from datetime import datetime
+
+    output_dir = parsed.output or f"demo_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    result = run_demo(
+        char_desc,
+        output_dir,
+        count_per_scene=parsed.count,
+        ref_path=parsed.ref,
+        use_ollama=parsed.ollama,
+    )
+
+
 def _workshop_engine(args: list[str]) -> None:
     """python -m agents workshop engine <nl_text> [--style STYLE] [--ollama]"""
     import argparse
@@ -1724,7 +1817,7 @@ def _workshop_manga(args: list[str]) -> None:
     print(f"  {'-'*6} {'-'*10} {'-'*8} {'-'*28} {'-'*20} {'-'*10}")
     for shot in storyboard:
         print(f"  {shot.get('镜号','?') + ':':<6} {shot.get('人物','?'):<10} "
-              f"{shot.get('景別','?'):<8} {shot.get('画面描述','')[:26]:<28} "
+              f"{shot.get('景别','?'):<8} {shot.get('画面描述','')[:26]:<28} "
               f"{shot.get('台词','')[:18]:<20} {shot.get('备注','')[:8]:<10}")
 
     print("\n🎨 生成逐格 Prompt...")
