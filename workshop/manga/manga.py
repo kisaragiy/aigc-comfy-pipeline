@@ -156,6 +156,9 @@ def generate_panels(
     dry_run: bool = False,
     prefix: str = "manga",
     max_retries: int = 0,
+    char_refs: dict[str, str] | None = None,
+    global_ref: str | None = None,
+    ip_weight: float = 0.7,
 ) -> list[dict[str, Any]]:
     """逐格提交 ComfyUI 出图，失败可重试。
 
@@ -165,6 +168,9 @@ def generate_panels(
         dry_run: 预览模式（跳过提交）
         prefix: 文件前缀
         max_retries: 每格失败后最大重试次数（默认 0=不重试）
+        char_refs: 角色名 → 参考图路径 映射
+        global_ref: 全局参考图（角色无专属 ref 时使用）
+        ip_weight: 参考图影响权重
 
     Returns:
         [{"shot": "S01", "prompt_id": "...", "images": [...], ...}, ...]
@@ -184,6 +190,14 @@ def generate_panels(
 
         if flux:
             from agents.go_flux import build_flux_workflow
+            # 选择该格角色的参考图（优先专属 ref，其次全局 ref）
+            panel_ref = None
+            char_name = panel.get("character", "")
+            if char_refs and char_name in char_refs:
+                panel_ref = char_refs[char_name]
+            elif global_ref:
+                panel_ref = global_ref
+
             workflow = build_flux_workflow(
                 panel["prompt"],
                 seed=panel["seed"],
@@ -193,6 +207,8 @@ def generate_panels(
                 height=panel["height"],
                 model_variant="9b",
                 filename_prefix=f"{prefix}_{panel['shot']}",
+                ref_image=panel_ref,
+                ip_weight=ip_weight,
             )
         else:
             from agents.go_knives_lora import build_sdxl_workflow

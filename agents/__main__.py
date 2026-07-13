@@ -997,6 +997,10 @@ def _workshop_manga(args: list[str]) -> None:
                         help="每格失败后最大重试次数（默认 0=不重试）")
     parser.add_argument("--sdxl", action="store_true",
                         help="使用 SDXL 代替 Flux（更快，支持 LoRA）")
+    parser.add_argument("--ref", action="append", default=None,
+                        help='参考图（角色路径映射或全局）: "Alice=path.png" 或 "path.png"')
+    parser.add_argument("--ip-weight", type=float, default=0.7,
+                        help="参考图影响权重（0.0~1.0，默认 0.7）")
     parsed = parser.parse_args(args)
 
     script = ""
@@ -1061,8 +1065,22 @@ def _workshop_manga(args: list[str]) -> None:
         print(f"\n📊 共 {len(panels)} 格，使用 {'SDXL' if parsed.sdxl else 'Flux'}")
         return
 
-    print("\n🖼️  逐格生图...")
-    results = generate_panels(panels, dry_run=parsed.preview, max_retries=parsed.retry, flux=not parsed.sdxl)
+    # 解析角色参考图映射
+    char_refs = {}
+    global_ref = None
+    if parsed.ref:
+        for r in parsed.ref:
+            r = r.strip()
+            if "=" in r:
+                name, path = r.split("=", 1)
+                char_refs[name.strip()] = path.strip()
+            else:
+                global_ref = r
+
+    print("\\n🖼️  逐格生图...")
+    results = generate_panels(panels, dry_run=parsed.preview, max_retries=parsed.retry,
+                              flux=not parsed.sdxl, char_refs=char_refs,
+                              global_ref=global_ref, ip_weight=parsed.ip_weight)
 
     # 处理 --output
     if parsed.output:
