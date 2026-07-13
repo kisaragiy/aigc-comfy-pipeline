@@ -75,3 +75,43 @@ class TestDryRunMode:
     def test_wait_images_dry_run(self):
         result = wait_images("dry-run", "http://test")
         assert result == []
+
+
+class TestCustomPresets:
+    """测试自定义预设解析。"""
+
+    def test_parse_preset_definitions(self):
+        from comfy_utils import parse_preset_definitions
+        result = parse_preset_definitions("my_preset:steps=30,cfg=7.5")
+        assert "my_preset" in result
+        assert result["my_preset"]["steps"] == 30
+        assert result["my_preset"]["cfg"] == 7.5
+
+    def test_parse_multiple_presets(self):
+        from comfy_utils import parse_preset_definitions
+        result = parse_preset_definitions("a:steps=20;b:steps=40,cfg=8.0")
+        assert "a" in result and "b" in result
+        assert result["a"]["steps"] == 20
+        assert result["b"]["steps"] == 40
+        assert result["b"]["cfg"] == 8.0
+
+    def test_parse_string_value(self):
+        from comfy_utils import parse_preset_definitions
+        result = parse_preset_definitions("p:sampler=euler,scheduler=karras")
+        assert result["p"]["sampler"] == "euler"
+        assert result["p"]["scheduler"] == "karras"
+
+    def test_parse_empty_skipped(self):
+        from comfy_utils import parse_preset_definitions
+        result = parse_preset_definitions("a:steps=20;;;b:steps=30")
+        assert len(result) == 2
+
+    def test_parse_no_name_skipped(self):
+        from comfy_utils import parse_preset_definitions
+        result = parse_preset_definitions(":steps=20")
+        assert len(result) == 0
+
+    def test_load_preset_file_nonexistent(self):
+        from comfy_utils import load_preset_file
+        result = load_preset_file("/nonexistent/presets.json")
+        assert result == {}
