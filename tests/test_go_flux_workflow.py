@@ -57,88 +57,45 @@ class TestBuildFluxWorkflow:
 
 
 class TestIPAdapterWorkflow:
-    """测试 IP-Adapter 工作流节点结构。"""
+    """测试 IP-Adapter 工作流节点结构（当前已禁用）。"""
 
-    def test_ref_image_adds_ipa_nodes(self):
-        """ref_image 参数应添加 IP-Adapter 节点。"""
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
-            ref_path = f.name
-            # 写一个最小 PNG
-            f.write(b"\x89PNG\r\n\x1a\n" + b"\x00" * 100)
-
+    def test_ref_image_does_not_add_ipa_nodes(self):
+        """IP-Adapter 节点已被移除，ref_image 参数不影响工作流。"""
+        ref_path = _create_test_ref()
         try:
             wf, _ = build_flux_workflow("test prompt", ref_image=ref_path)
             node_types = {n["class_type"] for n in wf.values()}
-            assert "LoadImage" in node_types, "ref_image 应添加 LoadImage 节点"
-            assert "IPAdapterModelLoader" in node_types, "ref_image 应添加 IPAdapterModelLoader"
-            assert "CLIPVisionLoader" in node_types, "ref_image 应添加 CLIPVisionLoader"
-            assert "IPAdapterAdvanced" in node_types, "ref_image 应添加 IPAdapterAdvanced"
+            assert "IPAdapterModelLoader" not in node_types
+            assert "CLIPVisionLoader" not in node_types
+            assert "IPAdapterAdvanced" not in node_types
         finally:
             Path(ref_path).unlink(missing_ok=True)
 
-    def test_ipa_adds_more_nodes(self):
-        """ref_image 应比无 ref 多 4 个节点。"""
+    def test_ref_image_node_count_same_as_basic(self):
+        """ref_image 参数不改变节点数（IP-Adapter 已禁用）。"""
         wf_base, _ = build_flux_workflow("test")
-        n_base = len(wf_base)
-
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
-            ref_path = f.name
-            f.write(b"\x89PNG\r\n\x1a\n" + b"\x00" * 100)
-
+        ref_path = _create_test_ref()
         try:
-            wf_ipa, _ = build_flux_workflow("test", ref_image=ref_path)
-            assert len(wf_ipa) - n_base == 4, "ref_image 应恰好添加 4 个新节点 (LoadImage + IPAdapterModelLoader + CLIPVisionLoader + IPAdapterAdvanced)"
+            wf_ref, _ = build_flux_workflow("test", ref_image=ref_path)
+            assert len(wf_ref) == len(wf_base)
         finally:
             Path(ref_path).unlink(missing_ok=True)
 
-    def test_ipa_model_uses_specified_weight(self):
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
-            ref_path = f.name
-            f.write(b"\x89PNG\r\n\x1a\n" + b"\x00" * 100)
-
+    def test_ref_image_params_still_accepted(self):
+        """ref_image 和 ip_weight 参数仍可传入（不影响工作流）。"""
+        ref_path = _create_test_ref()
         try:
-            wf, _ = build_flux_workflow("test", ref_image=ref_path, ip_weight=0.5)
-            for n in wf.values():
-                if n["class_type"] == "IPAdapterAdvanced":
-                    assert n["inputs"]["weight"] == 0.5
-                    assert n["inputs"]["weight_type"] == "linear"
-                    break
-            else:
-                assert False, "未找到 IPAdapterAdvanced 节点"
+            wf, seed = build_flux_workflow("test", ref_image=ref_path, ip_weight=0.5)
+            assert isinstance(wf, dict) and len(wf) > 0
+            assert isinstance(seed, int) and seed > 0
         finally:
             Path(ref_path).unlink(missing_ok=True)
 
-    def test_ipa_clip_vision_connected(self):
-        """IPAdapterAdvanced 的 clip_vision 应连接到 CLIPVisionLoader。"""
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
-            ref_path = f.name
-            f.write(b"\x89PNG\r\n\x1a\n" + b"\x00" * 100)
 
-        try:
-            wf, _ = build_flux_workflow("test", ref_image=ref_path)
-            # Find IPAdapterAdvanced node
-            adv = None
-            loader = None
-            for nid, n in wf.items():
-                if n["class_type"] == "IPAdapterAdvanced":
-                    adv = n
-                if n["class_type"] == "CLIPVisionLoader":
-                    loader = nid
-            assert adv is not None
-            assert loader is not None
-            # clip_vision input should reference the CLIPVisionLoader node
-            assert adv["inputs"]["clip_vision"][0] == loader
-        finally:
-            Path(ref_path).unlink(missing_ok=True)
-
-    def test_ipa_skips_missing_ref(self):
-        """不存在的 ref_image 应跳过 IP-Adapter 且不报错。"""
-        wf, _ = build_flux_workflow("test prompt", ref_image="C:/nonexistent/ref.png")
-        node_types = {n["class_type"] for n in wf.values()}
-        assert "IPAdapterAdvanced" not in node_types
-
-    def test_ipa_node_count_same_as_basic_when_skip(self):
-        """不存在的 ref_image → 节点数与基础工作流相同。"""
-        wf_base, _ = build_flux_workflow("test")
-        wf_skip, _ = build_flux_workflow("test", ref_image="C:/nonexistent/ref.png")
-        assert len(wf_skip) == len(wf_base)
+def _create_test_ref() -> str:
+    """创建临时测试参考图。"""
+    import tempfile
+    f = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+    f.write(b"\x89PNG\r\n\x1a\n" + b"\x00" * 100)
+    f.close()
+    return f.name

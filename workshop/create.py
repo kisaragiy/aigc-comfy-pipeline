@@ -199,11 +199,23 @@ def create_from_nl(
 
         # 提取图片路径
         image_path = ""
-        for sub, name in qr.get("images", []):
-            p = comfy_root / "output" / sub / name
-            if p.is_file():
-                image_path = str(p.resolve())
-                break
+        for img_entry in qr.get("images", []):
+            if isinstance(img_entry, str):
+                # 绝对路径格式（generate_with_quality 返回）
+                p = Path(img_entry)
+                if p.is_file():
+                    image_path = str(p.resolve())
+                    break
+            else:
+                # 旧格式 (subfolder, name) tuple — 兼容
+                try:
+                    sub, name = img_entry
+                    p = comfy_root / "output" / sub / name
+                    if p.is_file():
+                        image_path = str(p.resolve())
+                        break
+                except (ValueError, TypeError):
+                    pass
 
         candidate = {
             "seed": qr.get("seed", 0),
