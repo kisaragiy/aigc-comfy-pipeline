@@ -938,11 +938,10 @@ usage: python -m agents workshop create [-h] [--count COUNT] [--style STYLE]
 参数:
   --count COUNT      生成候选数（默认: 4）
   --style STYLE      画风提示 (anime/photoreal/cg/...)
-  --ref REF          参考图路径（角色特征分析 + IP-Adapter 视觉条件控制）<br>
-                         V0.71: 新增 IP-Adapter 视觉参考 — 文本分析 + 图片条件双通道<br>
-                         Flux IP-Adapter 模型已预装 (XLabs, 936MB)<br>
-                         参考图直接作为视觉条件传入 Flux UNet<br>
-                         推荐与文字描述配合使用，角色相似度显著提升
+  --ref REF          参考图路径（角色特征分析 — Ollama VL 模型增强分析）<br>
+                         V0.71: 结构化 JSON 特征提取（脸型/发型/瞳色/服饰/配件/色调）<br>
+                         注: Flux IP-Adapter 视觉条件控制暂不可用（XLabs 模型与 ComfyUI 节点不兼容）<br>
+                         当前为纯文本分析，参考图仅用于 Ollama 文字描述
   --preset PRESET    质量预设 (quality/balanced/fast/...)
   --min-score SCORE  最低 CLIP 分
   --retry RETRY      失败重试次数

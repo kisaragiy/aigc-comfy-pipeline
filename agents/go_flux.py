@@ -124,55 +124,11 @@ def build_flux_workflow(
         clip_out = [nl, 1]
 
     # ── IP-Adapter 视觉条件控制（可选） ────────────────────────
-    ref_image_path = ref_image
-    if ref_image_path:
-        # 检查参考图是否存在
-        if not __import__("os").path.isfile(ref_image_path):
-            print(f"[WARN] 参考图不存在: {ref_image_path}，跳过 IP-Adapter")
-            ref_image_path = None
-
-    ipa_model_out = model_out  # 默认使用原模型（无 IP-Adapter）
-    if ref_image_path:
-        # LoadImage: 加载参考图
-        n_ref = nxt()
-        wf[n_ref] = {"class_type": "LoadImage", "inputs": {"image": ref_image_path}}
-
-        # IPAdapterModelLoader: 加载 XLabs Flux IP-Adapter 权重
-        n_ipa_loader = nxt()
-        wf[n_ipa_loader] = {
-            "class_type": "IPAdapterModelLoader",
-            "inputs": {
-                "ipadapter_file": "ip-adapter-flux-xlabs.safetensors",
-            },
-        }
-
-        # CLIPVisionLoader: 加载 CLIP Vision 模型（用于编码参考图）
-        n_clip_vision = nxt()
-        wf[n_clip_vision] = {
-            "class_type": "CLIPVisionLoader",
-            "inputs": {
-                "clip_name": "CLIP-ViT-bigG-14-laion2B-39B-b160k.safetensors",
-            },
-        }
-
-        # IPAdapterAdvanced: 应用视觉条件到模型
-        n_ipa = nxt()
-        wf[n_ipa] = {
-            "class_type": "IPAdapterAdvanced",
-            "inputs": {
-                "model": model_out,
-                "ipadapter": [n_ipa_loader, 0],   # output 0 = IPADAPTER weights
-                "clip_vision": [n_clip_vision, 0],  # output 0 = CLIP_VISION model
-                "image": [n_ref, 0],                # output 0 = IMAGE
-                "weight": ip_weight,
-                "weight_type": "linear",
-                "combine_embeds": "concat",
-                "start_at": 0.0,
-                "end_at": 1.0,
-                "embeds_scaling": "V only",
-            },
-        }
-        ipa_model_out = [n_ipa, 0]
+    # ⚠️ 已移除: XLabs Flux IP-Adapter 模型与 comfyui_ipadapter_plus 节点不兼容
+    #   (XLabs 使用 Flux 原生 double_blocks.* keys, 节点仅支持 SD image_proj.* / ip_adapter.*)
+    #   --ref 当前走 Ollama 文本分析（增强版）+ Qwen3 文本编码
+    #   未来需找到兼容的 Flux IP-Adapter 模型（如 h94 官方版）后可重新启用
+    ipa_model_out = model_out
 
     # 4. CLIPTextEncode (positive)
     n4 = nxt()
