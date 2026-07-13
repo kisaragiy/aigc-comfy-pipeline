@@ -496,6 +496,10 @@ def _workshop_create(args: list[str]) -> None:
     parser.add_argument("--ref", default=None, help="参考图路径（角色特征分析 + VAE 视觉参考）")
     parser.add_argument("--ip-weight", type=float, default=0.7, help="参考图影响权重（0.0~1.0，默认 0.7）")
     parser.add_argument("--balance", type=float, default=0.5, help="文字/参考注意力平衡（0~1，默认 0.5）")
+    parser.add_argument("--preset-define", default=None,
+                        help='自定义预设: "name:steps=30,cfg=7.0;name2:steps=20"')
+    parser.add_argument("--preset-file", default=None,
+                        help='从 JSON 文件加载自定义预设')
     parser.add_argument("--preset", default=None, help="质量预设 (quality/balanced/fast/...)")
     parser.add_argument("--min-score", type=float, default=0.0, help="最低 CLIP 分")
     parser.add_argument("--retry", type=int, default=0, help="失败重试次数")
@@ -524,6 +528,11 @@ def _workshop_create(args: list[str]) -> None:
         return
 
     from workshop.create import create_from_nl
+
+    # 合并自定义预设
+    if parsed.preset_define or parsed.preset_file:
+        from agents.comfy_utils import merge_custom_presets
+        merge_custom_presets(preset_defs=parsed.preset_define, preset_file=parsed.preset_file)
 
     # auto-gallery: 有 --output 但无 --gallery 时，在 output 目录自动生成
     gallery_dir = parsed.gallery

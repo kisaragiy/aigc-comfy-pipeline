@@ -12,7 +12,10 @@ from urllib.parse import urlparse
 import requests
 
 AGENTS_DIR = Path(__file__).resolve().parent
-DEFAULT_COMFY_URL = os.environ.get("COMFY_URL", "http://127.0.0.1:8188/prompt")
+_COMFY_HOST = os.environ.get("COMFY_HOST", "127.0.0.1")
+_COMFY_PORT = os.environ.get("COMFY_PORT", "8188")
+_DEFAULT_COMFY_URL = f"http://{_COMFY_HOST}:{_COMFY_PORT}/prompt"
+DEFAULT_COMFY_URL = os.environ.get("COMFY_URL", _DEFAULT_COMFY_URL)
 DEFAULT_OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434/api/generate")
 DEFAULT_OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen3:14b")
 
@@ -331,6 +334,82 @@ def _load_custom_presets() -> dict[str, dict[str, Any]]:
 _CUSTOM_PRESETS = _load_custom_presets()
 QUALITY_PRESETS.update(_CUSTOM_PRESETS.get("QUALITY_PRESETS", {}))
 VIDEO_PRESETS.update(_CUSTOM_PRESETS.get("VIDEO_PRESETS", {}))
+
+
+def parse_preset_definitions(raw: str) -> dict[str, dict[str, Any]]:
+    """解析预设定义字符串为预设表。
+
+    格式:  "name:key=val,key=val"  可重复用 ; 分隔
+    示例:  "anime_portrait:steps=35,cfg=7.5,sampler=euler"
+           "fast_hd:steps=15,cfg=5.0,width=1280,height=720"
+    """
+    presets: dict[str, dict[str, Any]] = {}
+    for part in raw.split(";"):
+        part = part.strip()
+        if not part:
+            continue
+        if ":" not in part:
+            print(f"[warn] 忽略预设定义（缺少名称）: {part}", file=sys.stderr)
+            continue
+        name, kv_str = part.split(":", 1)
+        name = name.strip()
+        if not name:
+            continue
+        params: dict[str, Any] = {}
+        for kv in kv_str.split(","):
+            kv = kv.strip()
+            if "=" not in kv:
+                continue
+            k, v = kv.split("=", 1)
+            k = k.strip()
+            if not k:
+                continue
+            v = v.strip()
+            try:
+                if "." in v:
+                    params[k] = float(v)
+                else:
+                    params[k] = int(v)
+            except ValueError:
+                params[k] = v
+        if params:
+            presets[name] = params
+    return presets
+
+
+def load_preset_file(path: str) -> dict[str, dict[str, Any]]:
+    """从 JSON 文件加载预设。"""
+    fp = Path(path)
+    if not fp.is_file():
+        print(f"[warn] 预设文件不存在: {path}", file=sys.stderr)
+        return {}
+    try:
+        with open(fp, encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            return {}
+        return data
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"[warn] 预设文件加载失败: {exc}", file=sys.stderr)
+        return {}
+
+
+def merge_custom_presets(
+    preset_defs: str | None = None,
+    preset_file: str | None = None,
+) -> None:
+    """合并自定义预设到全局 QUALITY_PRESETS / VIDEO_PRESETS。"""
+    presets: dict[str, dict[str, Any]] = {}
+    if preset_defs:
+        presets.update(parse_preset_definitions(preset_defs))
+    if preset_file:
+        presets.update(load_preset_file(preset_file))
+    for name, params in presets.items():
+        if any(k in params for k in ("frames", "fps")):
+            VIDEO_PRESETS[name] = params
+        else:
+            QUALITY_PRESETS[name] = params
+        print(f"[info] 自定义预设 '{name}' 已注册: {params}")
 
 
 def apply_preset(params: dict[str, Any], preset: str | None = None,
