@@ -354,3 +354,88 @@ if __name__ == "__main__":
     except (RuntimeError, FileNotFoundError) as exc:
         print(f"错误: {exc}", file=sys.stderr)
         sys.exit(1)
+
+
+# ═══════════════════════════════════════════════════════════════
+# 后处理工作流 — 超分 + 修脸
+# ═══════════════════════════════════════════════════════════════
+
+def build_upscale_workflow(
+    input_image: str,
+    *,
+    upscale_factor: float = 2.0,
+    method: str = "lanczos",
+    prefix: str = "upscaled",
+) -> dict[str, Any]:
+    """构建 ComfyUI 超分工作流。
+
+    Args:
+        input_image: 输入图片路径
+        upscale_factor: 放大倍数（2.0/4.0）
+        method: 插值方法 (lanczos/nearest/bilinear/bicubic)
+        prefix: 输出前缀
+
+    Returns:
+        workflow_dict
+    """
+    nid = [0]
+    def nxt() -> str:
+        nid[0] += 1
+        return str(nid[0])
+
+    wf: dict[str, Any] = {}
+    n1 = nxt()
+    wf[n1] = {"class_type": "LoadImage", "inputs": {"image": input_image}}
+    n2 = nxt()
+    wf[n2] = {"class_type": "ImageScaleBy", "inputs": {
+        "image": [n1, 0], "upscale_by": upscale_factor, "method": method}}
+    n3 = nxt()
+    wf[n3] = {"class_type": "SaveImage", "inputs": {
+        "images": [n2, 0], "filename_prefix": prefix}}
+    return wf
+
+
+def build_restore_face_workflow(
+    input_image: str,
+    *,
+    model_name: str = "GFPGANv1.4.pth",
+    prefix: str = "restored",
+) -> dict[str, Any]:
+    """构建 ComfyUI 修脸工作流（使用 MTB RestoreFace）。
+
+    Args:
+        input_image: 输入图片路径
+        model_name: 修脸模型 (GFPGANv1.4.pth / codeformer-v0.1.0.pth)
+        prefix: 输出前缀
+
+    Returns:
+        workflow_dict
+    """
+    nid = [0]
+    def nxt() -> str:
+        nid[0] += 1
+        return str(nid[0])
+
+    wf: dict[str, Any] = {}
+    # LoadImage
+    n1 = nxt()
+    wf[n1] = {"class_type": "LoadImage", "inputs": {"image": input_image}}
+    # Load face enhance model
+    n2 = nxt()
+    wf[n2] = {"class_type": "MTB_LoadFaceEnhanceModel", "inputs": {
+        "model_name": model_name}}
+    # Restore face
+    n3 = nxt()
+    wf[n3] = {"class_type": "MTB_RestoreFace", "inputs": {
+        "image": [n1, 0],
+        "model": [n2, 0],
+        "aligned": False,
+        "only_center_face": False,
+        "weight": 0.5,
+        "save_tmp_steps": False,
+        "preserve_alpha": True,
+    }}
+    n4 = nxt()
+    wf[n4] = {"class_type": "SaveImage", "inputs": {
+        "images": [n3, 0], "filename_prefix": prefix}}
+    return wf
