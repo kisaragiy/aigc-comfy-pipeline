@@ -17,9 +17,14 @@ from typing import Any
 # ── 风格预设库 ──────────────────────────────────────────
 STYLE_PRESETS: dict[str, dict[str, str]] = {
     "anime": {
-        "quality": "masterpiece, best quality, ultra-detailed, anime key visual",
-        "style": "anime style, cel shading, clean lineart, vibrant colors",
+        "quality": "masterpiece, best quality, ultra-detailed, anime key visual, vibrant illustration",
+        "style": "anime style, cel shading, clean lineart, vibrant colors, expressive eyes, detailed hair",
         "negative": "lowres, bad anatomy, bad hands, text, error, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry",
+    },
+    "anime_commercial": {
+        "quality": "masterpiece, best quality, absurdres, 8k, detailed anime illustration, key visual quality, magazine cover style",
+        "style": "anime commercial art style, cel shading with soft shadows, smooth gradient shading, detailed lineart, vibrant saturated colors, layered depth, atmospheric background, expressive eyes with highlights, detailed hair strands, professional illustration",
+        "negative": "lowres, bad anatomy, bad hands, text, error, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, ugly, deformed, bad proportions, extra limbs, fused fingers, missing fingers, extra fingers, mutated hands, poorly drawn face, bad eyes, cross-eyed, nsfw",
     },
     "photoreal": {
         "quality": "photorealistic, 8k, highly detailed, sharp focus, natural skin texture",
@@ -125,6 +130,7 @@ STYLE_KEYWORDS: dict[str, str] = {
     "洛可可": "rococo style, ornate decoration, pastel colors, aristocratic, elegant curves",
     "像素": "pixel art, 8-bit style, retro game aesthetic, blocky pixels, limited color palette",
     "水墨": "ink wash painting, sumi-e, minimal brush strokes, monochrome, flowing ink",
+    "商业": "commercial illustration, professional quality, key visual, magazine cover style, polished, refined, high budget production value, vibrant anime style, detailed background, lush rendering",
 }
 
 # ── 模板化系统 ──────────────────────────────────────────
@@ -455,6 +461,10 @@ def _detect_style(text: str, hint: str | None = None) -> str:
         ("动漫", "anime"),
         ("动画", "anime"),
         ("日系", "anime"),
+        ("商业", "anime_commercial"),
+        ("商插", "anime_commercial"),
+        ("杂志", "anime_commercial"),
+        ("key visual", "anime_commercial"),
         ("写实", "photoreal"),
         ("真人", "photoreal"),
         ("摄影", "photography"),
