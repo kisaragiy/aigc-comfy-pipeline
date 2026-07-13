@@ -159,6 +159,7 @@ def generate_panels(
     char_refs: dict[str, str] | None = None,
     global_ref: str | None = None,
     ip_weight: float = 0.7,
+    preset: str | None = None,
 ) -> list[dict[str, Any]]:
     """逐格提交 ComfyUI 出图，失败可重试。
 
@@ -198,18 +199,16 @@ def generate_panels(
             elif global_ref:
                 panel_ref = global_ref
 
-            workflow = build_flux_workflow(
-                panel["prompt"],
-                seed=panel["seed"],
-                steps=20,
-                cfg=3.5,
-                width=panel["width"],
-                height=panel["height"],
-                model_variant="9b",
-                filename_prefix=f"{prefix}_{panel['shot']}",
-                ref_image=panel_ref,
-                ip_weight=ip_weight,
-            )
+            from agents.comfy_utils import apply_preset
+            base_params = {
+                "steps": 20, "cfg": 3.5,
+                "width": panel["width"], "height": panel["height"],
+                "model_variant": "9b",
+                "filename_prefix": f"{prefix}_{panel['shot']}",
+                "ref_image": panel_ref, "ip_weight": ip_weight,
+            }
+            params = apply_preset(base_params, preset) if preset else base_params
+            workflow = build_flux_workflow(panel["prompt"], seed=panel["seed"], **params)
         else:
             from agents.go_knives_lora import build_sdxl_workflow
             workflow = build_sdxl_workflow(
