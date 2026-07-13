@@ -513,6 +513,11 @@ def _workshop_create(args: list[str]) -> None:
     parser.add_argument("--negative", default=None, help="负向提示词（不设置时使用风格预设默认值）")
     parser.add_argument("--verbose", action="store_true", help="详细信息")
     parser.add_argument("--clean", action="store_true", help="生成前清理输出目录旧文件")
+    parser.add_argument("--upscale", type=float, default=0.0,
+                        help="超分倍数 (2.0/4.0, 0=不超分)")
+    parser.add_argument("--restore-face", default=None, nargs="?",
+                        const="GFPGANv1.4.pth",
+                        help='修脸模型 (GFPGANv1.4.pth / codeformer-v0.1.0.pth)')
     parser.add_argument("--batch-file", default=None, help="批量文件路径（每行一条 prompt，空行和 # 注释行跳过）")
     parsed = parser.parse_args(args)
 
@@ -642,6 +647,48 @@ def _workshop_create(args: list[str]) -> None:
     had_err = result.get("had_errors", False)
     if had_err:
         print(f"\n⚠️ 部分候选生成失败（ComfyUI 可能不稳定）")
+
+    # ── 后处理：超分 + 修脸 ─────────────────────────────────
+    if best and best.get("image"):
+        img_path = best["image"]
+        needs_restore = parsed.restore_face is not None
+        needs_upscale = parsed.upscale > 0
+
+        if needs_upscale or needs_restore:
+            from agents.comfy_utils import comfy_post_prompt, comfy_base_url, wait_images
+            current_img = img_path
+
+            # 超分
+            if needs_upscale:
+                from agents.go_flux import build_upscale_workflow
+                print(f"\n🔍 超分 {parsed.upscale}x ...")
+                wf = build_upscale_workflow(current_img, upscale_factor=parsed.upscale)
+                r = comfy_post_prompt(wf)
+                pid = r.get("prompt_id", "")
+                if pid:
+                    imgs = wait_images(pid, comfy_base_url(), timeout_s=300)
+                    current_img = str(Path(comfy_base_url()).parent.parent / "output" / imgs[0][0] / imgs[0][1]) if imgs else current_img
+                    print(f"  ✅ 超分完成: {current_img}")
+
+            # 修脸
+            if needs_restore:
+                from agents.go_flux import build_restore_face_workflow
+                print(f"\n🔧 修脸 ({parsed.restore_face}) ...")
+                wf = build_restore_face_workflow(current_img, model_name=parsed.restore_face)
+                r = comfy_post_prompt(wf)
+                pid = r.get("prompt_id", "")
+                if pid:
+                    imgs = wait_images(pid, comfy_base_url(), timeout_s=300)
+                    if imgs:
+                        from agents.comfy_utils import resolve_comfy_root
+                        cr = resolve_comfy_root()
+                        current_img = str(cr / "output" / imgs[0][0] / imgs[0][1])
+                        print(f"  ✅ 修脸完成: {current_img}")
+
+            # 更新 result 中的 best image
+            if current_img != img_path:
+                best["image"] = current_img
+                best["post_processed"] = True
 
     if parsed.open and best and best.get("image"):
         # 优先打开 gallery（完整上下文），否则打开最优图

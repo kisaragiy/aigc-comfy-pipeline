@@ -300,6 +300,8 @@ QUALITY_PRESETS: dict[str, dict[str, Any]] = {
     "fast": {"steps": 15, "cfg": 5.0, "sampler": "euler", "scheduler": "normal"},
     "portrait": {"width": 896, "height": 1152, "cfg": 7.5,
                  "sampler": "dpmpp_2m", "scheduler": "karras"},
+    "commercial": {"steps": 50, "cfg": 7.5, "sampler": "dpmpp_3m_sde",
+                   "scheduler": "karras", "width": 1216, "height": 832},
 }
 
 VIDEO_PRESETS: dict[str, dict[str, Any]] = {

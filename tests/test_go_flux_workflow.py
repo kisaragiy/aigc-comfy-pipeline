@@ -11,7 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "agents"))
 
-from go_flux import build_flux_workflow, MODEL_CONFIGS
+from go_flux import build_flux_workflow, MODEL_CONFIGS, build_upscale_workflow, build_restore_face_workflow
 
 
 class TestBuildFluxWorkflow:
@@ -131,3 +131,36 @@ def _create_test_ref() -> str:
     f.write(b"\x89PNG\r\n\x1a\n" + b"\x00" * 100)
     f.close()
     return f.name
+
+
+class TestPostProcessWorkflows:
+    """测试超分 + 修脸工作流构建。"""
+
+    def test_upscale_workflow_nodes(self):
+        wf = build_upscale_workflow("test.png")
+        types = {n["class_type"] for n in wf.values()}
+        assert "LoadImage" in types
+        assert "ImageScaleBy" in types
+        assert "SaveImage" in types
+
+    def test_upscale_workflow_count(self):
+        wf = build_upscale_workflow("test.png", upscale_factor=4.0)
+        assert len(wf) == 3
+
+    def test_upscale_passes_factor(self):
+        wf = build_upscale_workflow("test.png", upscale_factor=2.0)
+        for n in wf.values():
+            if n["class_type"] == "ImageScaleBy":
+                assert n["inputs"]["upscale_by"] == 2.0
+
+    def test_restore_face_workflow_nodes(self):
+        wf = build_restore_face_workflow("test.png")
+        types = {n["class_type"] for n in wf.values()}
+        assert "LoadImage" in types
+        assert "MTB_LoadFaceEnhanceModel" in types
+        assert "MTB_RestoreFace" in types
+        assert "SaveImage" in types
+
+    def test_restore_face_workflow_count(self):
+        wf = build_restore_face_workflow("test.png")
+        assert len(wf) == 4
