@@ -588,4 +588,56 @@ def annotate_image(image_path: str, result: dict[str, Any]) -> str:
     # 标注文件名: path_stem_annotated.png
     out_path = path.parent / f"{path.stem}_annotated.png"
     cv2.imencode(".png", img)[1].tofile(str(out_path))
+    print(f"  🖼️ 标注图: {out_path}")
     return str(out_path.resolve())
+
+
+def check_consistency(
+    gen_path: str,
+    ref_path: str | None = None,
+) -> dict[str, Any]:
+    """验证生成图与参考图的一致性。
+
+    Args:
+        gen_path: 生成图片路径
+        ref_path: 参考图片路径（可选）
+
+    Returns:
+        {"consistency": 0.0~1.0, "face_match": 0~1, "color_sim": 0~1, ...}
+    """
+    result: dict[str, Any] = {"consistency": 0.0, "face_match": 0.0, "color_sim": 0.0}
+
+    if not ref_path or not Path(ref_path).is_file():
+        return result
+
+    import cv2
+    import numpy as np
+
+    gen = cv2.imread(gen_path)
+    ref = cv2.imread(ref_path)
+    if gen is None or ref is None:
+        return result
+
+    # 1. 颜色直方图相似度
+    gen_hist = cv2.calcHist([gen], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
+    ref_hist = cv2.calcHist([ref], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
+    cv2.normalize(gen_hist, gen_hist)
+    cv2.normalize(ref_hist, ref_hist)
+    color_sim = cv2.compareHist(gen_hist, ref_hist, cv2.HISTCMP_CORREL)
+    result["color_sim"] = max(0.0, min(1.0, color_sim))
+
+    # 2. 人脸检测（看是否都有人脸）
+    face_cascade = cv2.CascadeClassifier(
+        cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+    gen_faces = face_cascade.detectMultiScale(gen, 1.1, 4)
+    ref_faces = face_cascade.detectMultiScale(ref, 1.1, 4)
+    has_gen_face = len(gen_faces) > 0
+    has_ref_face = len(ref_faces) > 0
+    if has_ref_face:
+        result["face_match"] = 1.0 if has_gen_face else 0.0
+    else:
+        result["face_match"] = 0.5  # ref 没脸时中性
+
+    # 综合分
+    result["consistency"] = result["color_sim"] * 0.4 + result["face_match"] * 0.6
+    return result

@@ -201,6 +201,82 @@ def nls_to_prompt(
     return _template_fallback(nl_text, style_hint)
 
 
+# ── 多 prompt 生成 ─────────────────────────────────────────
+
+_VARIANT_TEMPLATES: list[dict[str, str]] = [
+    {"focus": "portrait", "camera": "close-up, face focus, head and shoulders framing, detailed facial features, expressive eyes"},
+    {"focus": "half_body", "camera": "upper body, cowboy shot, waist up, clear view of outfit and posture"},
+    {"focus": "full_body", "camera": "full body shot, standing pose, entire figure visible from head to toe"},
+    {"focus": "wide", "camera": "wide shot, environmental view, subject in context of surroundings, establishing composition"},
+    {"focus": "action", "camera": "dynamic action shot, dramatic angle, motion emphasis, energetic composition"},
+]
+
+
+def generate_prompt_variants(
+    nl_text: str,
+    style_hint: str | None = None,
+    *,
+    ref_analysis: dict[str, Any] | None = None,
+    count: int = 3,
+    ollama_available: bool = True,
+) -> list[dict[str, Any]]:
+    """生成多个不同侧重的 prompt。
+
+    Args:
+        nl_text: 用户描述
+        style_hint: 风格提示
+        ref_analysis: ref_analyze_to_prompt() 的分析结果（可选）
+        count: 生成数 (1~5)
+        ollama_available: Ollama 是否可用
+
+    Returns:
+        [{"prompt": "...", "focus": "portrait", "camera": "..."}, ...]
+    """
+    # 先获取基础 prompt
+    base = nls_to_prompt(nl_text, style_hint, ollama_available=ollama_available)
+
+    results = []
+    templates = _VARIANT_TEMPLATES[:count]
+
+    # 提取风格/光照信息（如果有 ref 分析）
+    style_info = ""
+    lighting_info = ""
+    if ref_analysis:
+        style_info = ref_analysis.get("style_desc", "")
+        lighting_info = ref_analysis.get("lighting", "")
+        if ref_analysis.get("colors"):
+            style_info += f", {ref_analysis['colors'][:80]}"
+
+    for vt in templates:
+        # 构建不同侧重的 prompt
+        parts = [base]
+        if vt["focus"] == "portrait":
+            parts.append("portrait, face focus, detailed facial features, expressive eyes")
+        elif vt["focus"] == "half_body":
+            parts.append("half body, upper body framing")
+        elif vt["focus"] == "full_body":
+            parts.append("full body, standing pose, whole figure")
+        elif vt["focus"] == "wide":
+            parts.append("wide shot, environmental, establishing composition")
+        elif vt["focus"] == "action":
+            parts.append("dynamic action shot, dramatic angle, motion emphasis")
+
+        # 注入风格/光照
+        if style_info:
+            parts.append(style_info[:80])
+        if lighting_info:
+            parts.append(lighting_info[:80])
+
+        prompt = ", ".join(dict.fromkeys(p.strip() for p in parts if p.strip()))
+        results.append({
+            "prompt": prompt,
+            "focus": vt["focus"],
+            "camera": vt["camera"],
+        })
+
+    return results
+
+
 def ref_analyze_to_prompt(
     ref_path: str,
     nl_text: str,

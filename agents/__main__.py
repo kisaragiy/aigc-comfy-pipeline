@@ -538,6 +538,8 @@ def _workshop_create(args: list[str]) -> None:
                         help="列出已保存的工作流模板")
     parser.add_argument("--smart", action="store_true",
                         help="智能模式: 自动检测内容类型并调参")
+    parser.add_argument("--variants", type=int, default=1,
+                        help="多 prompt 数 (1~5, 不同角度/景别, 默认 1=单 prompt)")
     parser.add_argument("--cast", default=None,
                         help="人物表 JSON (角色名→外观+ref): --cast cast.json")
     parser.add_argument("--character", default=None,
@@ -720,6 +722,7 @@ def _workshop_create(args: list[str]) -> None:
         ip_balance=parsed.balance,
         lora_name=parsed.lora,
         lora_strength=parsed.lora_strength,
+        variants=parsed.variants,
     )
 
     # 引擎推测（也用于 preview 模式）
