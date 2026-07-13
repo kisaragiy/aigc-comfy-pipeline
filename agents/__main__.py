@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Any
 
 HERE = Path(__file__).resolve().parent
 
@@ -546,6 +547,16 @@ def _workshop_create(args: list[str]) -> None:
                         help="质量数据库路径 (配合 --auto 使用)")
     parser.add_argument("--variants", type=int, default=1,
                         help="多 prompt 数 (1~5, 不同角度/景别, 默认 1=单 prompt)")
+    parser.add_argument("--steps", type=int, default=20,
+                        help="采样步数 (默认 20)")
+    parser.add_argument("--cfg", type=float, default=7.0,
+                        help="CFG 引导强度 (Flux 默认 1.0, SDXL 默认 7.0)")
+    parser.add_argument("--auto-retry", type=int, default=0,
+                        help="质量自动重试次数 (综合分低于阈值时自动微调参数重试)")
+    parser.add_argument("--quality-threshold", type=float, default=0.4,
+                        help="质量达标阈值 (0~1, 综合分低于此值时触发 auto-retry, 默认 0.4)")
+    parser.add_argument("--filter", default=None,
+                        help='Gallery 筛选规则 (如: "min_score=0.6;pass_quality" 或 "min_face=0.5;min_hand=0.3")')
     parser.add_argument("--cast", default=None,
                         help="人物表 JSON (角色名→外观+ref): --cast cast.json")
     parser.add_argument("--character", default=None,
@@ -731,6 +742,20 @@ def _workshop_create(args: list[str]) -> None:
     if not gallery_dir and parsed.output:
         gallery_dir = str(Path(parsed.output) / "gallery")
 
+    # 解析 filter 规则字符串 → dict
+    filter_rules: dict[str, Any] | None = None
+    if parsed.filter:
+        filter_rules = {}
+        for part in parsed.filter.split(";"):
+            part = part.strip()
+            if not part:
+                continue
+            if "=" in part:
+                key, val = part.split("=", 1)
+                filter_rules[key.strip()] = val.strip()
+            else:
+                filter_rules[part] = True
+
     result = create_from_nl(
         nl_text,
         count=parsed.count,
@@ -753,6 +778,12 @@ def _workshop_create(args: list[str]) -> None:
         lora_name=parsed.lora,
         lora_strength=parsed.lora_strength,
         variants=parsed.variants,
+        steps=parsed.steps,
+        cfg=parsed.cfg,
+        auto_retry=parsed.auto_retry,
+        quality_threshold=parsed.quality_threshold,
+        db_path=parsed.db,
+        filter_rules=filter_rules,
     )
 
     # 引擎推测（也用于 preview 模式）
