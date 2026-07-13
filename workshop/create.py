@@ -461,6 +461,8 @@ def _generate_gallery_html(result: dict[str, Any], output_dir: str) -> str:
     for _rank, img in enumerate(images, 1):
         if not img.get("error") and img.get("file"):
             js_images.append(img["file"])
+    import json
+    js_parts = json.dumps([{k: v for k, v in img.items() if k in ("parts", "overall")} for img in images])
 
     for _rank, img in enumerate(images, 1):
         if img.get("error"):
@@ -532,6 +534,16 @@ h1{{font-size:1.5rem;margin-bottom:8px;color:#e8a87c}}
 #modal{{display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.9);cursor:zoom-out;align-items:center;justify-content:center}}
 #modal.show{{display:flex}}
 #modal img{{max-width:95vw;max-height:95vh;object-fit:contain;border-radius:4px}}
+#modal-zoom-container{{display:flex;align-items:center;justify-content:center;width:100%;height:100%;overflow:hidden;cursor:zoom-in}}
+#modal-zoom-inner{{position:relative;transition:transform .1s ease;transform-origin:center center;will-change:transform}}
+#modal-zoom-inner img{{display:block;max-width:95vw;max-height:95vh;object-fit:contain;border-radius:4px;user-select:none;-webkit-user-drag:none}}
+#modal-overlay{{position:absolute;inset:0;pointer-events:none}}
+.ov-badge{{position:absolute;padding:2px 6px;border-radius:4px;font-size:.72rem;font-weight:600;transform:translate(-50%,-50%);white-space:nowrap}}
+.ov-ok{{background:#1a3a2acc;color:#4ade80;border:1px solid #4ade8080}}
+.ov-warn{{background:#3a3a1acc;color:#facc15;border:1px solid #facc1580}}
+.ov-bad{{background:#3a1a1acc;color:#f87171;border:1px solid #f8717180}}
+.ov-ov{{background:#1a2a3acc;color:#7ec8e3;border:1px solid #7ec8e380;transform:none}}
+#modal-zoom-level{{position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.7);color:#ccc;padding:2px 10px;border-radius:8px;font-size:.75rem;display:none;pointer-events:none}}
 #modal-counter{{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.6);color:#ccc;padding:4px 14px;border-radius:12px;font-size:.82rem;pointer-events:none}}
 #modal-dl{{position:fixed;top:20px;right:20px;background:rgba(0,0,0,.6);color:#eee;text-decoration:none;padding:6px 14px;border-radius:8px;font-size:1.1rem;cursor:pointer;z-index:1001;border:1px solid rgba(255,255,255,.2);transition:background .15s}}
 #modal-dl:hover{{background:rgba(80,80,80,.8)}}
@@ -545,65 +557,122 @@ h1{{font-size:1.5rem;margin-bottom:8px;color:#e8a87c}}
 <div class="summary-row">{f'质检: {summary}' if summary else ''} · 共 {len(images)} 张<span class="sort-note" title="按综合分降序 · 🏆 最优在前">  已排序</span></div>
 <div class="grid">{rows_html}</div>
 |<div id="modal" onclick="closeModal(event)">
-  <div id="modal-counter"></div>
-  <img id="modal-img" src="" alt=""/>
-  <a id="modal-dl" href="#" download="gallery.png" onclick="event.stopPropagation();" title="下载当前图片">⬇</a>
-</div>
-<script>
-var images = {js_images};
-var currentIdx = -1;
-function closeModal(e){{
-    if (e.target === e.currentTarget || e.target.id === 'modal-img') {{
-        document.getElementById('modal').classList.remove('show');
-        currentIdx = -1;
-    }}
-}}
-function openModal(idx){{
-    currentIdx = idx;
-    document.getElementById('modal-img').src = images[idx];
-    document.getElementById('modal').classList.add('show');
-    updateCounter();
-    updateDownload();
-}}
-function updateCounter(){{
-    var c = document.getElementById('modal-counter');
-    if (currentIdx >= 0 && images.length > 1) {{
-        c.textContent = (currentIdx + 1) + ' / ' + images.length + ' ← →';
-        c.style.display = 'block';
-    }} else {{
-        c.style.display = 'none';
-    }}
-}}
-function updateDownload(){{
-    var dl = document.getElementById('modal-dl');
-    if (currentIdx >= 0 && images[currentIdx]) {{
-        dl.href = images[currentIdx];
-        dl.download = images[currentIdx].split('/').pop() || 'gallery.png';
-        dl.style.display = 'block';
-    }} else {{
-        dl.style.display = 'none';
-    }}
-}}
-document.addEventListener('keydown', function(e){{
-    if (currentIdx < 0) return;
-    if (e.key === 'ArrowLeft' && currentIdx > 0) {{
-        currentIdx--;
-        document.getElementById('modal-img').src = images[currentIdx];
-        updateCounter();
-        updateDownload();
-        e.preventDefault();
-    }} else if (e.key === 'ArrowRight' && currentIdx < images.length - 1) {{
-        currentIdx++;
-        document.getElementById('modal-img').src = images[currentIdx];
-        updateCounter();
-        updateDownload();
-        e.preventDefault();
-    }} else if (e.key === 'Escape') {{
-        document.getElementById('modal').classList.remove('show');
-        currentIdx = -1;
-    }}
-}});
-</script>
+|  <div id="modal-counter"></div>
+|  <div id="modal-zoom-container" ondblclick="resetZoom()">
+|    <div id="modal-zoom-inner">
+|      <img id="modal-img" src="" alt="" draggable="false"/>
+|      <div id="modal-overlay"></div>
+|    </div>
+|  </div>
+|  <a id="modal-dl" href="#" download="gallery.png" onclick="event.stopPropagation();" title="下载当前图片">⬇</a>
+|  <div id="modal-zoom-level"></div>
+|</div>
+|<script>
+|var images = {js_images};
+|var partsData = {js_parts};
+|var currentIdx = -1;
+|var zoom = 1, panX = 0, panY = 0, isPanning = false, startX, startY;
+|var container = document.getElementById('modal-zoom-container');
+|var inner = document.getElementById('modal-zoom-inner');
+|var mImg = document.getElementById('modal-img');
+|var overlay = document.getElementById('modal-overlay');
+|var zoomLevel = document.getElementById('modal-zoom-level');
+|
+|function closeModal(e){{
+|    if (e.target === e.currentTarget || e.target.id === 'modal-img' || e.target.id === 'modal-zoom-container' || e.target.id === 'modal-zoom-inner') {{
+|        document.getElementById('modal').classList.remove('show');
+|        currentIdx = -1; resetZoom();
+|    }}
+|}}
+|function openModal(idx){{
+|    currentIdx = idx; resetZoom();
+|    mImg.src = images[idx];
+|    document.getElementById('modal').classList.add('show');
+|    updateCounter(); updateDownload(); updateOverlay();
+|}}
+|function updateCounter(){{
+|    var c = document.getElementById('modal-counter');
+|    if (currentIdx >= 0 && images.length > 1) {{
+|        c.textContent = (currentIdx + 1) + ' / ' + images.length + ' ← →';
+|        c.style.display = 'block';
+|    }} else {{ c.style.display = 'none'; }}
+|}}
+|function updateDownload(){{
+|    var dl = document.getElementById('modal-dl');
+|    if (currentIdx >= 0 && images[currentIdx]) {{
+|        dl.href = images[currentIdx];
+|        dl.download = images[currentIdx].split('/').pop() || 'gallery.png';
+|        dl.style.display = 'block';
+|    }} else {{ dl.style.display = 'none'; }}
+|}}
+|function updateOverlay(){{
+|    overlay.innerHTML = '';
+|    if (currentIdx < 0 || !partsData[currentIdx]) return;
+|    var p = partsData[currentIdx].parts || {{}};
+|    var parts_list = [
+|        ['Face', 0.5, 0.2], ['L-Eye', 0.35, 0.3], ['R-Eye', 0.65, 0.3],
+|        ['Hand', 0.5, 0.7], ['Foot', 0.5, 0.85], ['Blur', 0.85, 0.05]
+|    ];
+|    parts_list.forEach(function(item){{
+|        var key = item[0], x = item[1], y = item[2];
+|        var val = p[key];
+|        if (val === undefined) return;
+|        var badge = document.createElement('span');
+|        badge.className = 'ov-badge ' + (val >= 0.8 ? 'ov-ok' : val >= 0.3 ? 'ov-warn' : 'ov-bad');
+|        badge.textContent = key + ' ' + val.toFixed(1);
+|        badge.style.left = (x * 100) + '%'; badge.style.top = (y * 100) + '%';
+|        overlay.appendChild(badge);
+|    }});
+|    var ov = partsData[currentIdx].overall || 0;
+|    if (ov > 0) {{
+|        var ob = document.createElement('span');
+|        ob.className = 'ov-badge ov-ov';
+|        ob.textContent = '综合 ' + ov.toFixed(2);
+|        ob.style.left = '3%'; ob.style.top = '3%';
+|        overlay.appendChild(ob);
+|    }}
+|}}
+|// Zoom & Pan
+|function applyTransform(){{
+|    inner.style.transform = 'scale(' + zoom + ') translate(' + panX + 'px,' + panY + 'px)';
+|    zoomLevel.textContent = (zoom * 100).toFixed(0) + '%';
+|    zoomLevel.style.display = zoom > 1 ? 'block' : 'none';
+|}}
+|function resetZoom(){{
+|    zoom = 1; panX = 0; panY = 0; applyTransform();
+|}}
+|container.addEventListener('wheel', function(e){{
+|    e.preventDefault();
+|    var delta = e.deltaY > 0 ? -0.1 : 0.1;
+|    zoom = Math.max(0.5, Math.min(10, zoom + delta));
+|    applyTransform();
+|}});
+|container.addEventListener('mousedown', function(e){{
+|    if (zoom > 1) {{ isPanning = true; startX = e.clientX - panX; startY = e.clientY - panY; inner.style.cursor = 'grabbing'; }}
+|}});
+|window.addEventListener('mousemove', function(e){{
+|    if (!isPanning) return;
+|    panX = e.clientX - startX; panY = e.clientY - startY;
+|    inner.style.transform = 'scale(' + zoom + ') translate(' + panX + 'px,' + panY + 'px)';
+|}});
+|window.addEventListener('mouseup', function(){{
+|    isPanning = false; inner.style.cursor = 'default';
+|}});
+|// Keyboard nav
+|document.addEventListener('keydown', function(e){{
+|    if (currentIdx < 0) return;
+|    if (e.key === 'ArrowLeft' && currentIdx > 0) {{
+|        currentIdx--; mImg.src = images[currentIdx]; resetZoom();
+|        updateCounter(); updateDownload(); updateOverlay(); e.preventDefault();
+|    }} else if (e.key === 'ArrowRight' && currentIdx < images.length - 1) {{
+|        currentIdx++; mImg.src = images[currentIdx]; resetZoom();
+|        updateCounter(); updateDownload(); updateOverlay(); e.preventDefault();
+|    }} else if (e.key === 'Escape') {{
+|        document.getElementById('modal').classList.remove('show');
+|        currentIdx = -1; resetZoom();
+|    }}
+|}});
+|</script>
 </body></html>"""
 
     gallery_file = out / "index.html"
