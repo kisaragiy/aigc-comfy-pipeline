@@ -59,6 +59,15 @@ def create_from_nl(
     lora_name: str | None = None,
     lora_strength: float = 1.0,
     variants: int = 1,
+    # ── 步骤 / CFG（生成参数） ──
+    steps: int = 20,
+    cfg: float = 7.0,
+    # ── 自动重试 ──
+    auto_retry: int = 0,
+    quality_threshold: float = 0.4,
+    db_path: str | None = None,
+    # ── Gallery 筛选 ──
+    filter_rules: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """自然语言描述 → 生成多张候选 → 质检排序 → 返回最优。
 
@@ -216,6 +225,8 @@ def create_from_nl(
                 ip_balance=ip_balance,
                 lora_name=lora_name,
                 lora_strength=lora_strength,
+                steps=steps,
+                cfg=cfg,
             )
         except Exception as exc:
             had_errors = True
@@ -281,6 +292,123 @@ def create_from_nl(
             else:
                 c["inspect"] = {"status": "error", "error": "无图片"}
 
+    # ── 4b. Auto-retry: 质量不达标 → 微调参数重新生成 ──
+    if auto_retry > 0 and candidates:
+        from workshop.autopilot import QualityDB
+        qdb = QualityDB(db_path or "quality.json") if db_path else None
+        # 收集所有有效候选的综合分
+        scored = [(c.get("inspect", {}).get("scores", {}).get("overall", 0), c)
+                  for c in candidates if not c.get("error") and c.get("inspect", {}).get("status") != "error"]
+        if not scored:
+            scored = [(0.0, c) for c in candidates if not c.get("error")]
+
+        best_overall = max(s[0] for s in scored) if scored else 0.0
+        # 用第一个 variant 的 prompt 做重试基准
+        retry_base_prompt = prompt_variants[0]["prompt"] if prompt_variants else final_prompt
+
+        for retry_round in range(auto_retry):
+            if best_overall >= quality_threshold:
+                if verbose:
+                    print(f"    ✅ 质量达标 (综合: {best_overall:.2f} ≥ {quality_threshold}), 跳过重试")
+                break
+
+            # 微调参数
+            retry_steps = min(80, steps + 5 * (retry_round + 1))
+            retry_cfg_step = 0.3 if retry_round % 2 == 0 else -0.3
+            retry_cfg = max(0.5, min(20.0, cfg + retry_cfg_step))
+            retry_seed = -1
+
+            print(f"    🔄 重试 {retry_round + 1}/{auto_retry} (steps={retry_steps}, cfg={retry_cfg:.1f})...")
+            try:
+                qr = generate_with_quality(
+                    build_flux_workflow, retry_base_prompt,
+                    preset=preset,
+                    min_score=min_score,
+                    max_retries=retry,
+                    no_validate=no_validate,
+                    seed=retry_seed,
+                    negative_prompt=negative_prompt,
+                    filename_prefix=f"retry_{retry_round + 1:02d}",
+                    ref_image=ref_path,
+                    ip_weight=ip_weight,
+                    ip_balance=ip_balance,
+                    lora_name=lora_name,
+                    lora_strength=lora_strength,
+                    steps=retry_steps,
+                    cfg=retry_cfg,
+                )
+            except Exception as exc:
+                print(f"      ❌ 重试生成失败: {exc}")
+                continue
+
+            # 提取图片
+            retry_image = ""
+            for img_entry in qr.get("images", []):
+                if isinstance(img_entry, str):
+                    p = Path(img_entry)
+                    if p.is_file():
+                        retry_image = str(p.resolve())
+                        break
+                else:
+                    try:
+                        sub, name = img_entry
+                        p = comfy_root / "output" / sub / name
+                        if p.is_file():
+                            retry_image = str(p.resolve())
+                            break
+                    except (ValueError, TypeError):
+                        pass
+
+            new_candidate = {
+                "seed": qr.get("seed", 0),
+                "image": retry_image,
+                "score": qr.get("score", -1),
+                "retries": qr.get("retries", 0),
+                "auto_retry_round": retry_round + 1,
+            }
+
+            # 质检
+            if inspect and retry_image:
+                from workshop.inspect import inspect_image
+                try:
+                    ir = inspect_image(retry_image, prompt=retry_base_prompt, use_mediapipe=False)
+                    new_candidate["inspect"] = ir
+                except Exception as exc:
+                    new_candidate["inspect"] = {"status": "error", "error": str(exc)}
+            elif not retry_image:
+                new_candidate["inspect"] = {"status": "error", "error": "无图片"}
+
+            # 更新综合分
+            ins_scores = new_candidate.get("inspect", {}).get("scores", {})
+            new_overall = ins_scores.get("overall", 0) if new_candidate.get("inspect") else 0
+            best_overall = max(best_overall, new_overall)
+            score_str = f"score={qr.get('score', -1):.2f}" if qr.get("score", -1) >= 0 else "score=?"
+            img_tag = "✅" if retry_image else "❌"
+            print(f"      {img_tag} seed={new_candidate['seed']} {score_str} 综合={new_overall:.2f}")
+
+            candidates.append(new_candidate)
+
+            # 记录到 quality DB
+            if qdb and retry_image:
+                try:
+                    ins2 = new_candidate.get("inspect", {})
+                    db_score = {
+                        "overall": ins2.get("scores", {}).get("overall", 0),
+                        "clip": qr.get("score", 0),
+                        "combined": new_overall * 0.5 + max(0, qr.get("score", 0)) * 0.5,
+                    }
+                    qdb.record(retry_base_prompt + f" (retry#{retry_round+1})",
+                               {"steps": retry_steps, "cfg": retry_cfg, "preset": preset},
+                               db_score)
+                except Exception:
+                    pass
+
+        # 重试完成后更新 best_overall 的提示
+        if best_overall >= quality_threshold:
+            print(f"    ✅ 最终质量达标 (综合: {best_overall:.2f})")
+        else:
+            print(f"    ⚠️ 最终质量 {best_overall:.2f} < 阈值 {quality_threshold}, 保留最优")
+
     # 5. 排序选最优
     def _rank_key(c: dict[str, Any]) -> tuple:
         ins = c.get("inspect", {})
@@ -312,9 +440,21 @@ def create_from_nl(
     _maybe_save_output(result, output_dir)
     _register_output(result)  # 自动注册到产出管理系统
 
+    # ── Gallery 筛选 ──
+    if filter_rules and result.get("candidates"):
+        filtered = _filter_candidates(result["candidates"], filter_rules)
+        if len(filtered) < len(result["candidates"]):
+            removed = len(result["candidates"]) - len(filtered)
+            if verbose:
+                print(f"  🔍 Gallery 筛选: 移除 {removed} 张 (规则={filter_rules})")
+        # 保留筛选后的 candidates 用于 gallery，但 result 中的 best/candidates 不变
+        gallery_candidates = filtered
+    else:
+        gallery_candidates = result.get("candidates", [])
+
     # 生成 gallery HTML
-    if gallery_dir and result.get("candidates"):
-        gallery_path = _generate_gallery_html(result, gallery_dir)
+    if gallery_dir and gallery_candidates:
+        gallery_path = _generate_gallery_html(result, gallery_dir, gallery_candidates)
         if gallery_path:
             print(f"  🖼️  Gallery: {gallery_path}")
 
@@ -406,7 +546,7 @@ def _register_output(result: dict[str, Any]) -> None:
         pass  # output_manager 不可用时静默跳过
 
 
-def _generate_gallery_html(result: dict[str, Any], output_dir: str) -> str:
+def _generate_gallery_html(result: dict[str, Any], output_dir: str, candidates_override: list[dict[str, Any]] | None = None) -> str:
     """生成全候选 HTML 画廊（self-contained），返回输出路径。
 
     候选按综合分降序排列（最优在前），引擎推测信息显示在页面标题区。
@@ -414,7 +554,7 @@ def _generate_gallery_html(result: dict[str, Any], output_dir: str) -> str:
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
 
-    candidates = result.get("candidates", [])
+    candidates = candidates_override if candidates_override is not None else result.get("candidates", [])
     best_img = result.get("best", {}).get("image", "")
 
     # 复制所有候选图到 gallery 目录
@@ -813,6 +953,73 @@ def _make_slug(text: str, max_len: int = 16) -> str:
     cleaned = re.sub(r'[\\/:*?"<>|]', "", text).strip()
     # 取前 max_len 个字符
     return cleaned[:max_len] or "prompt"
+
+
+def _filter_candidates(candidates: list[dict[str, Any]], rules: dict[str, Any]) -> list[dict[str, Any]]:
+    """按质量规则筛选候选列表。
+
+    支持规则:
+      - min_score=0.7: 综合分 ≥ 0.7
+      - pass_quality=True: 质检全部通过 (status=ok)
+      - min_face=0.5: 脸部分数 ≥ 0.5
+      - min_hand=0.3: 手部分数 ≥ 0.3
+      - min_clip=0.6: CLIP 分数 ≥ 0.6
+
+    规则可组合（同时满足）。
+    """
+    # 解析规则
+    parsed: dict[str, Any] = {}
+    for key, val in rules.items():
+        if key == "pass_quality":
+            parsed[key] = True
+        elif key in ("min_score", "min_face", "min_hand", "min_foot", "min_blur", "min_clip"):
+            parsed[key] = float(val)
+
+    def _passes(c: dict[str, Any]) -> bool:
+        if c.get("error"):
+            return False
+        ins = c.get("inspect", {})
+        if not ins or ins.get("status") == "error":
+            # 如果规则要求严格质检通过，有错误的淘汰
+            if parsed.get("pass_quality"):
+                return False
+            # 否则保留（分数部分取 0）
+        scores = ins.get("scores", {}) if ins else {}
+
+        if "pass_quality" in parsed and ins.get("status") not in ("ok", ""):
+            return False
+
+        if "min_score" in parsed:
+            overall = scores.get("overall", 0)
+            if overall < parsed["min_score"]:
+                return False
+
+        if "min_face" in parsed:
+            if scores.get("脸", 0) < parsed["min_face"]:
+                return False
+
+        if "min_hand" in parsed:
+            if scores.get("手", 0) < parsed["min_hand"]:
+                return False
+
+        if "min_foot" in parsed:
+            if scores.get("脚", 0) < parsed["min_foot"]:
+                return False
+
+        if "min_blur" in parsed:
+            if scores.get("模糊", 0) < parsed["min_blur"]:
+                return False
+
+        if "min_clip" in parsed:
+            clip = c.get("score", 0)
+            if clip < 0:
+                clip = 0
+            if clip < parsed["min_clip"]:
+                return False
+
+        return True
+
+    return [c for c in candidates if _passes(c)]
 
 
 def create_batch(
