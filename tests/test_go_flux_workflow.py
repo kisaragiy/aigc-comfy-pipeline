@@ -70,13 +70,14 @@ class TestIPAdapterWorkflow:
             wf, _ = build_flux_workflow("test prompt", ref_image=ref_path)
             node_types = {n["class_type"] for n in wf.values()}
             assert "LoadImage" in node_types, "ref_image 应添加 LoadImage 节点"
-            assert "IPAdapterUnifiedLoader" in node_types, "ref_image 应添加 IPAdapterUnifiedLoader"
+            assert "IPAdapterModelLoader" in node_types, "ref_image 应添加 IPAdapterModelLoader"
+            assert "CLIPVisionLoader" in node_types, "ref_image 应添加 CLIPVisionLoader"
             assert "IPAdapterAdvanced" in node_types, "ref_image 应添加 IPAdapterAdvanced"
         finally:
             Path(ref_path).unlink(missing_ok=True)
 
     def test_ipa_adds_more_nodes(self):
-        """ref_image 应比无 ref 多 3 个节点。"""
+        """ref_image 应比无 ref 多 4 个节点。"""
         wf_base, _ = build_flux_workflow("test")
         n_base = len(wf_base)
 
@@ -86,7 +87,7 @@ class TestIPAdapterWorkflow:
 
         try:
             wf_ipa, _ = build_flux_workflow("test", ref_image=ref_path)
-            assert len(wf_ipa) - n_base == 3, "ref_image 应恰好添加 3 个新节点"
+            assert len(wf_ipa) - n_base == 4, "ref_image 应恰好添加 4 个新节点 (LoadImage + IPAdapterModelLoader + CLIPVisionLoader + IPAdapterAdvanced)"
         finally:
             Path(ref_path).unlink(missing_ok=True)
 
@@ -104,6 +105,29 @@ class TestIPAdapterWorkflow:
                     break
             else:
                 assert False, "未找到 IPAdapterAdvanced 节点"
+        finally:
+            Path(ref_path).unlink(missing_ok=True)
+
+    def test_ipa_clip_vision_connected(self):
+        """IPAdapterAdvanced 的 clip_vision 应连接到 CLIPVisionLoader。"""
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            ref_path = f.name
+            f.write(b"\x89PNG\r\n\x1a\n" + b"\x00" * 100)
+
+        try:
+            wf, _ = build_flux_workflow("test", ref_image=ref_path)
+            # Find IPAdapterAdvanced node
+            adv = None
+            loader = None
+            for nid, n in wf.items():
+                if n["class_type"] == "IPAdapterAdvanced":
+                    adv = n
+                if n["class_type"] == "CLIPVisionLoader":
+                    loader = nid
+            assert adv is not None
+            assert loader is not None
+            # clip_vision input should reference the CLIPVisionLoader node
+            assert adv["inputs"]["clip_vision"][0] == loader
         finally:
             Path(ref_path).unlink(missing_ok=True)
 

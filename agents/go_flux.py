@@ -137,13 +137,21 @@ def build_flux_workflow(
         n_ref = nxt()
         wf[n_ref] = {"class_type": "LoadImage", "inputs": {"image": ref_image_path}}
 
-        # IPAdapterUnifiedLoader: 加载 IP-Adapter + CLIP Vision 模型
+        # IPAdapterModelLoader: 加载 XLabs Flux IP-Adapter 权重
         n_ipa_loader = nxt()
         wf[n_ipa_loader] = {
-            "class_type": "IPAdapterUnifiedLoader",
+            "class_type": "IPAdapterModelLoader",
             "inputs": {
-                "model_name": "ip-adapter-flux-xlabs.safetensors",
-                "preset": "flux",
+                "ipadapter_file": "ip-adapter-flux-xlabs.safetensors",
+            },
+        }
+
+        # CLIPVisionLoader: 加载 CLIP Vision 模型（用于编码参考图）
+        n_clip_vision = nxt()
+        wf[n_clip_vision] = {
+            "class_type": "CLIPVisionLoader",
+            "inputs": {
+                "clip_name": "CLIP-ViT-bigG-14-laion2B-39B-b160k.safetensors",
             },
         }
 
@@ -153,13 +161,15 @@ def build_flux_workflow(
             "class_type": "IPAdapterAdvanced",
             "inputs": {
                 "model": model_out,
-                "ipadapter": [n_ipa_loader, 1],  # output 1 = ipadapter stack
-                "image": [n_ref, 0],
+                "ipadapter": [n_ipa_loader, 0],   # output 0 = IPADAPTER weights
+                "clip_vision": [n_clip_vision, 0],  # output 0 = CLIP_VISION model
+                "image": [n_ref, 0],                # output 0 = IMAGE
                 "weight": ip_weight,
                 "weight_type": "linear",
-                "noise": 0.0,
+                "combine_embeds": "concat",
                 "start_at": 0.0,
                 "end_at": 1.0,
+                "embeds_scaling": "V only",
             },
         }
         ipa_model_out = [n_ipa, 0]
