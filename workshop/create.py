@@ -54,6 +54,8 @@ def create_from_nl(
     verbose: bool = False,
     gallery_dir: str | None = None,
     clean: bool = False,
+    ip_weight: float = 0.7,
+    ip_balance: float = 0.5,
 ) -> dict[str, Any]:
     """自然语言描述 → 生成多张候选 → 质检排序 → 返回最优。
 
@@ -184,6 +186,8 @@ def create_from_nl(
                 negative_prompt=negative_prompt,
                 filename_prefix=f"create_{i:02d}",
                 ref_image=ref_path,
+                ip_weight=ip_weight,
+                ip_balance=ip_balance,
             )
         except Exception as exc:
             had_errors = True

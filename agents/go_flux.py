@@ -59,12 +59,13 @@ def build_flux_workflow(
     sampler: str = "euler",
     scheduler: str = "normal",
     filename_prefix: str = "flux_klein",
-    ref_image: str | None = None,  # NEW: 参考图路径（IP-Adapter 视觉条件控制）
-    ip_weight: float = 0.7,        # IP-Adapter 权重
+    ref_image: str | None = None,  # 参考图路径（Flux.2 Klein 原生视觉参考）
+    ip_weight: float = 0.7,        # 参考图影响权重（传给 RefLatentController.strength）
+    ip_balance: float = 0.5,       # 文字/参考注意力平衡（Flux2KleinTextRefBalance）
 ) -> tuple[dict[str, Any], int]:
     """构建 Flux.2 Klein API 格式工作流。
 
-    支持 LoRA 注入和 IP-Adapter 视觉参考（ref_image）。
+    支持 LoRA 注入和 Flux.2 Klein 原生视觉参考（ReferenceLatent + RefLatentController）。
 
     Args:
         prompt: 正向提示词
@@ -79,8 +80,10 @@ def build_flux_workflow(
         sampler: 采样器名称
         scheduler: 调度器
         filename_prefix: 输出文件名前缀
-        ref_image: 参考图路径（IP-Adapter 视觉条件控制，None=禁用）
-        ip_weight: IP-Adapter 权重（0.0~1.0，默认 0.7）
+        ref_image: 参考图路径（None=禁用）
+        ip_weight: 参考图影响权重（0.0~1.0，传给 RefLatentController.strength，默认 0.7）
+        ip_balance: 文字/参考注意力平衡（0~1，传给 Flux2KleinTextRefBalance，默认 0.5）
+        0=纯参考图，1=纯文字，0.5=平衡
 
     Returns:
         (workflow_dict, actual_seed)
@@ -144,39 +147,55 @@ def build_flux_workflow(
             "conditioning": [nn, 0]}}
         neg_conditioning = [nz, 0]
 
-    # ── Flux.2 Klein 原生视觉参考（可选） ────────────────────
-    # 参考图 → VAE 编码 → ReferenceLatent 注入 conditioning → RefLatentController 注意力控制
-    ref_cond_out = [n4, 0]  # 默认正 conditioning（无 ref 时）
-    ref_model_out = model_out  # 默认模型（无 ref 时）
+    # ── Flux.2 Klein 原生视觉参考管线（可选） ─────────────────
+    # 正负双通道: ReferenceLatent × 2 → RefLatentController → TextRefBalance
+    ref_cond_out = [n4, 0]
+    ref_model_out = model_out
+    ref_neg_out = neg_conditioning
+    ref_active = False
+
     if ref_image:
         if not __import__("os").path.isfile(ref_image):
             print(f"[WARN] 参考图不存在: {ref_image}，跳过视觉参考")
         else:
-            # LoadImage: 加载参考图
+            ref_active = True
+            # LoadImage + VAEEncode（正负双通道共享）
             n_ref_img = nxt()
             wf[n_ref_img] = {"class_type": "LoadImage", "inputs": {"image": ref_image}}
-
-            # VAEEncode: 参考图 → latent
             n_ref_vae = nxt()
             wf[n_ref_vae] = {"class_type": "VAEEncode", "inputs": {
                 "pixels": [n_ref_img, 0], "vae": [n3, 0]}}
 
-            # ReferenceLatent: 将 VAE 编码的参考 latent 注入到 conditioning
-            n_ref_lat = nxt()
-            wf[n_ref_lat] = {"class_type": "ReferenceLatent", "inputs": {
+            # 正通道: ReferenceLatent(CLIPTextEncode, latent) → 控制器
+            n_ref_pos = nxt()
+            wf[n_ref_pos] = {"class_type": "ReferenceLatent", "inputs": {
                 "conditioning": [n4, 0], "latent": [n_ref_vae, 0]}}
 
-            # Flux2KleinRefLatentController: 注意力权重控制（参考图影响生成）
+            # 负通道: ReferenceLatent(neg_conditioning, latent) → CFGGuider
+            n_ref_neg = nxt()
+            wf[n_ref_neg] = {"class_type": "ReferenceLatent", "inputs": {
+                "conditioning": neg_conditioning, "latent": [n_ref_vae, 0]}}
+            ref_neg_out = [n_ref_neg, 0]
+
+            # RefLatentController: 注意力权重注入
             n_ref_ctrl = nxt()
             wf[n_ref_ctrl] = {"class_type": "Flux2KleinRefLatentController", "inputs": {
                 "model": model_out,
-                "conditioning": [n_ref_lat, 0],
+                "conditioning": [n_ref_pos, 0],
                 "strength": ip_weight,
                 "reference_index": 0,
             }}
 
-            ref_cond_out = [n_ref_ctrl, 1]  # CODNITIONING output
-            ref_model_out = [n_ref_ctrl, 0]  # MODEL output
+            # TextRefBalance: 文字 vs 参考注意力平衡
+            n_ref_bal = nxt()
+            wf[n_ref_bal] = {"class_type": "Flux2KleinTextRefBalance", "inputs": {
+                "model": [n_ref_ctrl, 0],
+                "conditioning": [n_ref_ctrl, 1],
+                "balance": ip_balance,
+            }}
+
+            ref_cond_out = [n_ref_bal, 1]
+            ref_model_out = [n_ref_bal, 0]
 
     # 6. EmptyFlux2LatentImage
     n6 = nxt()
@@ -204,7 +223,7 @@ def build_flux_workflow(
     wf[n10] = {"class_type": "CFGGuider", "inputs": {
         "model": ref_model_out,
         "positive": ref_cond_out,
-        "negative": neg_conditioning,
+        "negative": ref_neg_out,
         "cfg": cfg}}
 
     # 11. SamplerCustomAdvanced

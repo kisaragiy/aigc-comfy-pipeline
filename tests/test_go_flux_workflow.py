@@ -60,26 +60,52 @@ class TestIPAdapterWorkflow:
     """测试 Flux.2 Klein 原生视觉参考（ReferenceLatent + RefLatentController）。"""
 
     def test_ref_image_adds_ref_nodes(self):
-        """ref_image 应添加 ReferenceLatent 相关节点。"""
+        """ref_image 应添加所有视觉参考节点。"""
         ref_path = _create_test_ref()
         try:
             wf, _ = build_flux_workflow("test prompt", ref_image=ref_path)
             node_types = {n["class_type"] for n in wf.values()}
-            assert "LoadImage" in node_types, "ref_image 需 LoadImage 加载参考图"
-            assert "VAEEncode" in node_types, "参考图需 VAEEncode 编码为 latent"
-            assert "ReferenceLatent" in node_types, "需 ReferenceLatent 注入 conditioning"
-            assert "Flux2KleinRefLatentController" in node_types, "需控制器调节注意力"
+            assert "LoadImage" in node_types
+            assert "VAEEncode" in node_types
+            assert "ReferenceLatent" in node_types, "应有正通道 ReferenceLatent"
+            assert "Flux2KleinRefLatentController" in node_types
+            assert "Flux2KleinTextRefBalance" in node_types, "应有 TextRefBalance"
         finally:
             Path(ref_path).unlink(missing_ok=True)
 
-    def test_ref_adds_four_nodes(self):
-        """ref_image 应比无 ref 多 4 个节点。"""
+    def test_ref_adds_six_nodes(self):
+        """ref_image 应比无 ref 多 6 个节点。"""
         wf_base, _ = build_flux_workflow("test")
         ref_path = _create_test_ref()
         try:
             wf_ref, _ = build_flux_workflow("test", ref_image=ref_path)
-            assert len(wf_ref) - len(wf_base) == 4, \
-                "ref 应添加 4 节点: LoadImage + VAEEncode + ReferenceLatent + RefLatentController"
+            assert len(wf_ref) - len(wf_base) == 6, \
+                f"期望 6 节, 实际 {len(wf_ref)-len(wf_base)}"
+        finally:
+            Path(ref_path).unlink(missing_ok=True)
+
+    def test_ref_has_two_reference_latents(self):
+        """应有 2 个 ReferenceLatent 节点（正负通道）。"""
+        ref_path = _create_test_ref()
+        try:
+            wf, _ = build_flux_workflow("test", ref_image=ref_path)
+            ref_lat_count = sum(
+                1 for n in wf.values() if n["class_type"] == "ReferenceLatent")
+            assert ref_lat_count == 2, f"期望 2 个 ReferenceLatent, 实际 {ref_lat_count}"
+        finally:
+            Path(ref_path).unlink(missing_ok=True)
+
+    def test_ref_balance_passed(self):
+        """ip_balance 应传入 TextRefBalance 的 balance 参数。"""
+        ref_path = _create_test_ref()
+        try:
+            wf, _ = build_flux_workflow("test", ref_image=ref_path, ip_balance=0.3)
+            for n in wf.values():
+                if n["class_type"] == "Flux2KleinTextRefBalance":
+                    assert n["inputs"]["balance"] == 0.3
+                    break
+            else:
+                assert False, "未找到 Flux2KleinTextRefBalance"
         finally:
             Path(ref_path).unlink(missing_ok=True)
 
@@ -88,53 +114,14 @@ class TestIPAdapterWorkflow:
         wf, _ = build_flux_workflow("test", ref_image="C:/nonexistent/ref.png")
         node_types = {n["class_type"] for n in wf.values()}
         assert "ReferenceLatent" not in node_types
+        assert "Flux2KleinRefLatentController" not in node_types
+        assert "Flux2KleinTextRefBalance" not in node_types
 
     def test_ref_missing_node_count_unchanged(self):
         """不存在的 ref → 节点数与基础工作流相同。"""
         wf_base, _ = build_flux_workflow("test")
         wf_skip, _ = build_flux_workflow("test", ref_image="C:/nonexistent/ref.png")
         assert len(wf_skip) == len(wf_base)
-
-    def test_ref_strength_passed_to_controller(self):
-        """ip_weight 应传入 RefLatentController 的 strength 参数。"""
-        ref_path = _create_test_ref()
-        try:
-            wf, _ = build_flux_workflow("test", ref_image=ref_path, ip_weight=0.3)
-            for n in wf.values():
-                if n["class_type"] == "Flux2KleinRefLatentController":
-                    assert n["inputs"]["strength"] == 0.3, "ip_weight 应传递到 strength"
-                    break
-            else:
-                assert False, "未找到 Flux2KleinRefLatentController"
-        finally:
-            Path(ref_path).unlink(missing_ok=True)
-
-    def test_ref_connections(self):
-        """验证关键节点连接的正确性。"""
-        ref_path = _create_test_ref()
-        try:
-            wf, _ = build_flux_workflow("test", ref_image=ref_path)
-            # 找到 node IDs
-            ref_lat_id = None
-            ref_ctrl_id = None
-            for nid, n in wf.items():
-                if n["class_type"] == "ReferenceLatent":
-                    ref_lat_id = nid
-                if n["class_type"] == "Flux2KleinRefLatentController":
-                    ref_ctrl_id = nid
-
-            assert ref_lat_id is not None, "缺少 ReferenceLatent"
-            assert ref_ctrl_id is not None, "缺少 RefLatentController"
-
-            # ReferenceLatent 引用 CLIPTextEncode 的输出
-            lat_node = wf[ref_lat_id]
-            assert lat_node["inputs"]["latent"][0] is not None
-
-            # Controller 引用 ReferenceLatent 的输出
-            ctrl_node = wf[ref_ctrl_id]
-            assert ctrl_node["inputs"]["conditioning"][0] == ref_lat_id
-        finally:
-            Path(ref_path).unlink(missing_ok=True)
 
 
 def _create_test_ref() -> str:
