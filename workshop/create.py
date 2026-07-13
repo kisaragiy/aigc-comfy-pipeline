@@ -487,18 +487,20 @@ def _generate_gallery_html(result: dict[str, Any], output_dir: str) -> str:
         parts_tags = ""
         if parts:
             part_map = {"脸": "Face", "左眼": "L-Eye", "右眼": "R-Eye", "手": "Hand", "脚": "Foot", "模糊": "Blur"}
+            score_bar = ""
             for pk, pv in parts.items():
                 pname = part_map.get(pk, pk[:4])
-                pcls = "p-ok" if pv >= 0.8 else "p-warn" if pv >= 0.3 else "p-bad"
-                parts_tags += f"<span class='part {pcls}'>{pname} {pv:.1f}</span>"
-        # Find the index in js_images for keyboard nav
+                bar_w = int(pv * 60)
+                bar_cls = "bar-ok" if pv >= 0.8 else "bar-warn" if pv >= 0.3 else "bar-bad"
+                score_bar += f'<span class="sbar"><span class="sbar-label">{pname}</span><span class="sbar-track"><span class="sbar-fill {bar_cls}" style="width:{bar_w}px"></span></span><span class="sbar-val">{pv:.1f}</span></span>'
+            parts_tags = f'<div class="score-bar">{score_bar}</div>'
         file_name = img.get("file", "")
         nav_idx = js_images.index(file_name) if file_name in js_images else -1
         onclick = f"openModal({nav_idx})" if nav_idx >= 0 else "this.classList.remove('show')"
         rows_html += f"""\n<div class="card{best_class}">
   <img src="{img['file']}" loading="lazy" onclick="{onclick}" />
   <div class="info">#{_rank} · seed: {img['seed']} {copy_btn} {score_tag} {overall_tag} {summary_tag}{best_badge}</div>
-  {('<div class="parts">'+parts_tags+'</div>') if parts_tags else ''}
+  {parts_tags}
 </div>"""
 
     html = f"""<!DOCTYPE html>
@@ -539,6 +541,16 @@ h1{{font-size:1.5rem;margin-bottom:8px;color:var(--heading)}}
 .copy-seed{{cursor:pointer;font-size:.85rem;padding:0 4px;user-select:none;opacity:.6}}
 .copy-seed:hover{{opacity:1}}
 .sort-note{{font-size:.75rem;color:var(--summary);margin-left:8px}}
+/* score bar */
+.score-bar{{display:flex;flex-wrap:wrap;gap:2px 6px;padding:4px 10px 6px}}
+.sbar{{display:inline-flex;align-items:center;gap:2px;font-size:.68rem}}
+.sbar-label{{color:var(--summary);min-width:28px}}
+.sbar-track{{display:inline-block;width:60px;height:6px;background:var(--card);border-radius:3px;overflow:hidden}}
+.sbar-fill{{height:100%;border-radius:3px;transition:width .3s}}
+.bar-ok{{background:#4ade80}}
+.bar-warn{{background:#facc15}}
+.bar-bad{{background:#f87171}}
+.sbar-val{{color:var(--summary);min-width:20px}}
 .ref-section{{margin-bottom:16px;padding:10px;background:var(--card);border-radius:8px;text-align:center}}
 .ref-label{{font-size:.82rem;color:var(--ref-label);margin-bottom:6px}}
 .ref-img{{max-height:180px;border-radius:6px;cursor:pointer;border:1px solid var(--fg);opacity:.8}}

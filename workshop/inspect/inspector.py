@@ -559,23 +559,25 @@ def annotate_image(image_path: str, result: dict[str, Any]) -> str:
 
     # 左上信息区: 半透明背景
     info_y = gap
-    cv2.rectangle(img, (4, 4), (int(w * 0.45), info_y + 20 + len(parts) * gap), dark_bg, -1)
+    cv2.rectangle(img, (4, 4), (int(w * 0.5), info_y + 20 + (len(parts) + 1) * gap), dark_bg, -1)
     cv2.putText(img, f"OVERALL: {overall:.2f}  [{status}]", (8, info_y + 12),
                 font, font_scale, color, thickness)
 
-    # 各部位分数
+    # 各部位分数 + 置信度
     part_names = {"脸": "Face", "左眼": "L-Eye", "右眼": "R-Eye", "手": "Hand",
                   "脚": "Foot", "模糊": "Blur"}
     for i, (part, info) in enumerate(parts.items()):
         pname = part_names.get(part, part[:6])
         s = info.get("status", "?")
+        score = info.get("score", 0) if "score" in info else info.get("confidence", 0)
         is_ok = s in ("ok", "正常")
         is_bad = s in ("崩了", "模糊", "异常")
         c = (0, 200, 0) if is_ok else (0, 0, 200) if is_bad else (200, 200, 0)
         y = info_y + 20 + (i + 1) * gap
-        cv2.putText(img, f"{pname}: {s}", (8, y), font, font_scale * 0.85, c, thickness)
+        score_str = f" [{score:.2f}]" if score > 0 else ""
+        cv2.putText(img, f"{pname}: {s}{score_str}", (8, y), font, font_scale * 0.85, c, thickness)
 
-    # 底边状态条: 整体边框
+    # 底边渐变状态条
     bar_h = max(6, int(h * 0.02))
     cv2.rectangle(img, (0, h - bar_h), (w, h), color, -1)
     # 覆盖部分边框色块: 左绿右红混合显示
