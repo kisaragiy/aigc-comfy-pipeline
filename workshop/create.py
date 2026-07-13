@@ -499,42 +499,45 @@ def _generate_gallery_html(result: dict[str, Any], output_dir: str) -> str:
 <html lang="zh-CN">
 <head><meta charset="UTF-8"><title>创作工坊 · Gallery</title>
 <style>
+:root, .dark{{--bg:#1a1a2e;--fg:#eee;--card:#16213e;--prompt:#999;--neg:#d4a5a5;--prompt-bg:#16213e;--neg-bg:#1f1f35;--engine:#7ec8e3;--engine-bg:#1f1f35;--summary:#aaa;--best:#e8a87c;--best-shadow:rgba(232,168,124,.3);--score:#7ec8e3;--overall:#a8e6cf;--summary-color:#d4a5a5;--heading:#e8a87c;--ref-label:#7ec8e3;--error:#666;--placeholder:#555;--modal-bg:rgba(0,0,0,.9);--dl-bg:rgba(0,0,0,.6);--dl-color:#eee;--dl-border:rgba(255,255,255,.2);--dl-hover:rgba(80,80,80,.8);--counter-bg:rgba(0,0,0,.6);--zoom-bg:rgba(0,0,0,.7)}}
+.light{{--bg:#f5f5f7;--fg:#1d1d1f;--card:#ffffff;--prompt:#555;--neg:#b91c1c;--prompt-bg:#f0f0f2;--neg-bg:#fee2e2;--engine:#0369a1;--engine-bg:#e0f2fe;--summary:#666;--best:#d97706;--best-shadow:rgba(217,119,6,.2);--score:#0369a1;--overall:#059669;--summary-color:#b91c1c;--heading:#d97706;--ref-label:#0369a1;--error:#999;--placeholder:#ccc;--modal-bg:rgba(255,255,255,.95);--dl-bg:rgba(255,255,255,.8);--dl-color:#333;--dl-border:rgba(0,0,0,.2);--dl-hover:rgba(200,200,200,.9);--counter-bg:rgba(0,0,0,.5);--zoom-bg:rgba(0,0,0,.5)}}
 *{{margin:0;padding:0;box-sizing:border-box}}
-body{{background:#1a1a2e;color:#eee;font-family:system-ui,sans-serif;padding:20px}}
-h1{{font-size:1.5rem;margin-bottom:8px;color:#e8a87c}}
-.prompt{{color:#999;font-size:.85rem;margin-bottom:8px;padding:10px;background:#16213e;border-radius:8px;word-break:break-all}}
-.negative{{color:#d4a5a5;font-size:.82rem;margin-bottom:4px;padding:4px 10px;background:#1f1f35;border-radius:6px;word-break:break-all}}
-.engine{{color:#7ec8e3;font-size:.82rem;margin-bottom:12px;padding:4px 10px;background:#1f1f35;border-radius:6px}}
-.summary-row{{margin-bottom:16px;font-size:.9rem;color:#aaa}}
+body{{background:var(--bg);color:var(--fg);font-family:system-ui,sans-serif;padding:20px}}
+h1{{font-size:1.5rem;margin-bottom:8px;color:var(--heading)}}
+.toolbar{{display:flex;gap:8px;align-items:center;margin-bottom:8px}}
+.theme-btn{{background:var(--card);color:var(--fg);border:1px solid var(--fg);border-radius:6px;padding:4px 10px;font-size:.8rem;cursor:pointer;opacity:.7}}
+.theme-btn:hover{{opacity:1}}
+.prompt{{color:var(--prompt);font-size:.85rem;margin-bottom:8px;padding:10px;background:var(--prompt-bg);border-radius:8px;word-break:break-all}}
+.negative{{color:var(--neg);font-size:.82rem;margin-bottom:4px;padding:4px 10px;background:var(--neg-bg);border-radius:6px;word-break:break-all}}
+.engine{{color:var(--engine);font-size:.82rem;margin-bottom:12px;padding:4px 10px;background:var(--engine-bg);border-radius:6px}}
+.summary-row{{margin-bottom:16px;font-size:.9rem;color:var(--summary)}}
 .grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}}
-.card{{background:#16213e;border-radius:10px;overflow:hidden;border:2px solid transparent;transition:transform .15s}}
+.card{{background:var(--card);border-radius:10px;overflow:hidden;border:2px solid transparent;transition:transform .15s}}
 .card:hover{{transform:translateY(-2px)}}
-.card.best{{border-color:#e8a87c;box-shadow:0 0 12px rgba(232,168,124,.3)}}
+.card.best{{border-color:var(--best);box-shadow:0 0 12px var(--best-shadow)}}
 .card img{{width:100%;height:auto;display:block;cursor:pointer}}
-.card.error{{padding:20px;text-align:center;color:#666}}
-.img-placeholder{{font-size:2rem;padding:40px 0;color:#555}}
+.card.error{{padding:20px;text-align:center;color:var(--error)}}
+.img-placeholder{{font-size:2rem;padding:40px 0;color:var(--placeholder)}}
 .info{{padding:8px 10px;font-size:.8rem;display:flex;flex-wrap:wrap;gap:4px;align-items:center}}
 .parts{{padding:0 10px 8px;display:flex;flex-wrap:wrap;gap:3px}}
 .part{{padding:1px 6px;border-radius:4px;font-size:.72rem;font-weight:600}}
 .p-ok{{background:#1a3a2a;color:#4ade80}}
 .p-warn{{background:#3a3a1a;color:#facc15}}
 .p-bad{{background:#3a1a1a;color:#f87171}}
-.score{{color:#7ec8e3}}
-.overall{{color:#a8e6cf}}
-.summary{{color:#d4a5a5}}
+.score{{color:var(--score)}}
+.overall{{color:var(--overall)}}
+.summary{{color:var(--summary-color)}}
 .badge{{font-size:.7rem;padding:2px 6px;border-radius:4px}}
-.best-badge{{background:#e8a87c33;color:#e8a87c}}
+.best-badge{{background:#e8a87c33;color:var(--best)}}
 .error-badge{{background:#ff444433;color:#ff4444}}
-.sort-note{{font-size:.75rem;color:#666;margin-left:8px}}
-/* ref section */
-.ref-section{{margin-bottom:16px;padding:10px;background:#16213e;border-radius:8px;text-align:center}}
-.ref-label{{font-size:.82rem;color:#7ec8e3;margin-bottom:6px}}
-.ref-img{{max-height:180px;border-radius:6px;cursor:pointer;border:1px solid #333}}
-.ref-img:hover{{opacity:.9}}
+.sort-note{{font-size:.75rem;color:var(--summary);margin-left:8px}}
+.ref-section{{margin-bottom:16px;padding:10px;background:var(--card);border-radius:8px;text-align:center}}
+.ref-label{{font-size:.82rem;color:var(--ref-label);margin-bottom:6px}}
+.ref-img{{max-height:180px;border-radius:6px;cursor:pointer;border:1px solid var(--fg);opacity:.8}}
+.ref-img:hover{{opacity:1}}
 /* modal */
-#modal{{display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.9);cursor:zoom-out;align-items:center;justify-content:center}}
+#modal{{display:none;position:fixed;inset:0;z-index:1000;background:var(--modal-bg);cursor:zoom-out;align-items:center;justify-content:center}}
 #modal.show{{display:flex}}
-#modal img{{max-width:95vw;max-height:95vh;object-fit:contain;border-radius:4px}}
 #modal-zoom-container{{display:flex;align-items:center;justify-content:center;width:100%;height:100%;overflow:hidden;cursor:zoom-in}}
 #modal-zoom-inner{{position:relative;transition:transform .1s ease;transform-origin:center center;will-change:transform}}
 #modal-zoom-inner img{{display:block;max-width:95vw;max-height:95vh;object-fit:contain;border-radius:4px;user-select:none;-webkit-user-drag:none}}
@@ -544,13 +547,17 @@ h1{{font-size:1.5rem;margin-bottom:8px;color:#e8a87c}}
 .ov-warn{{background:#3a3a1acc;color:#facc15;border:1px solid #facc1580}}
 .ov-bad{{background:#3a1a1acc;color:#f87171;border:1px solid #f8717180}}
 .ov-ov{{background:#1a2a3acc;color:#7ec8e3;border:1px solid #7ec8e380;transform:none}}
-#modal-zoom-level{{position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.7);color:#ccc;padding:2px 10px;border-radius:8px;font-size:.75rem;display:none;pointer-events:none}}
-#modal-counter{{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.6);color:#ccc;padding:4px 14px;border-radius:12px;font-size:.82rem;pointer-events:none}}
-#modal-dl{{position:fixed;top:20px;right:20px;background:rgba(0,0,0,.6);color:#eee;text-decoration:none;padding:6px 14px;border-radius:8px;font-size:1.1rem;cursor:pointer;z-index:1001;border:1px solid rgba(255,255,255,.2);transition:background .15s}}
-#modal-dl:hover{{background:rgba(80,80,80,.8)}}
+#modal-zoom-level{{position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:var(--zoom-bg);color:var(--fg);padding:2px 10px;border-radius:8px;font-size:.75rem;display:none;pointer-events:none}}
+#modal-counter{{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:var(--counter-bg);color:var(--fg);padding:4px 14px;border-radius:12px;font-size:.82rem;pointer-events:none}}
+#modal-dl{{position:fixed;top:20px;right:20px;background:var(--dl-bg);color:var(--dl-color);text-decoration:none;padding:6px 14px;border-radius:8px;font-size:1.1rem;cursor:pointer;z-index:1001;border:1px solid var(--dl-border);transition:background .15s}}
+#modal-dl:hover{{background:var(--dl-hover)}}
+#modal-slide-status{{position:fixed;top:20px;left:20px;background:var(--dl-bg);color:var(--dl-color);padding:4px 12px;border-radius:8px;font-size:.78rem;display:none;pointer-events:none}}
 </style></head>
-<body>
-<h1>🖼️ 创作工坊 · Gallery</h1>
+<body class="dark">
+<div class="toolbar">
+  <h1>🖼️ 创作工坊 · Gallery</h1>
+  <button class="theme-btn" onclick="toggleTheme()" title="切换主题">☀️</button>
+</div>
 {ref_html}
 <div class="prompt">{prompt_escaped}</div>
 {('<div class="negative">⛔ 负向: ' + negative_escaped + '</div>') if negative else ''}
@@ -565,9 +572,10 @@ h1{{font-size:1.5rem;margin-bottom:8px;color:#e8a87c}}
 |      <div id="modal-overlay"></div>
 |    </div>
 |  </div>
-|  <a id="modal-dl" href="#" download="gallery.png" onclick="event.stopPropagation();" title="下载当前图片">⬇</a>
-|  <div id="modal-zoom-level"></div>
-|</div>
+<a id="modal-dl" href="#" download="gallery.png" onclick="event.stopPropagation();" title="下载当前图片">⬇</a>
+<div id="modal-zoom-level"></div>
+<div id="modal-slide-status">▶ 播放中</div>
+</div>
 |<script>
 |var images = {js_images};
 |var partsData = {js_parts};
@@ -659,20 +667,54 @@ h1{{font-size:1.5rem;margin-bottom:8px;color:#e8a87c}}
 |window.addEventListener('mouseup', function(){{
 |    isPanning = false; inner.style.cursor = 'default';
 |}});
-|// Keyboard nav
-|document.addEventListener('keydown', function(e){{
-|    if (currentIdx < 0) return;
-|    if (e.key === 'ArrowLeft' && currentIdx > 0) {{
-|        currentIdx--; mImg.src = images[currentIdx]; resetZoom();
-|        updateCounter(); updateDownload(); updateOverlay(); e.preventDefault();
-|    }} else if (e.key === 'ArrowRight' && currentIdx < images.length - 1) {{
-|        currentIdx++; mImg.src = images[currentIdx]; resetZoom();
-|        updateCounter(); updateDownload(); updateOverlay(); e.preventDefault();
-|    }} else if (e.key === 'Escape') {{
-|        document.getElementById('modal').classList.remove('show');
-|        currentIdx = -1; resetZoom();
-|    }}
-|}});
+// Theme toggle
+function toggleTheme(){{
+    var b = document.body;
+    if (b.className === 'dark') {{
+        b.className = 'light'; localStorage.setItem('gallery-theme', 'light');
+    }} else {{
+        b.className = 'dark'; localStorage.setItem('gallery-theme', 'dark');
+    }}
+}}
+(function(){{
+    var t = localStorage.getItem('gallery-theme');
+    if (t) document.body.className = t;
+    document.querySelector('.theme-btn').textContent = t === 'light' ? '🌙' : '☀️';
+}})();
+// Slideshow
+var slideTimer = null;
+function toggleSlide(){{
+    if (slideTimer) {{ clearInterval(slideTimer); slideTimer = null; document.getElementById('modal-slide-status').style.display = 'none'; return; }}
+    if (currentIdx < 0 || images.length < 2) return;
+    document.getElementById('modal-slide-status').style.display = 'block';
+    slideTimer = setInterval(function(){{
+        if (currentIdx < images.length - 1) {{
+            currentIdx++; mImg.src = images[currentIdx]; resetZoom();
+            updateCounter(); updateDownload(); updateOverlay();
+        }} else {{
+            clearInterval(slideTimer); slideTimer = null;
+            document.getElementById('modal-slide-status').style.display = 'none';
+        }}
+    }}, 3000);
+}}
+// Update keyboard nav to support slideshow
+document.addEventListener('keydown', function(e){{
+    if (currentIdx < 0) return;
+    if (e.key === ' ') {{ e.preventDefault(); toggleSlide(); return; }}
+    if (e.key === 'ArrowLeft' && currentIdx > 0) {{
+        if (slideTimer) toggleSlide();
+        currentIdx--; mImg.src = images[currentIdx]; resetZoom();
+        updateCounter(); updateDownload(); updateOverlay(); e.preventDefault();
+    }} else if (e.key === 'ArrowRight' && currentIdx < images.length - 1) {{
+        if (slideTimer) toggleSlide();
+        currentIdx++; mImg.src = images[currentIdx]; resetZoom();
+        updateCounter(); updateDownload(); updateOverlay(); e.preventDefault();
+    }} else if (e.key === 'Escape') {{
+        if (slideTimer) toggleSlide();
+        document.getElementById('modal').classList.remove('show');
+        currentIdx = -1; resetZoom();
+    }}
+}});
 |</script>
 </body></html>"""
 
