@@ -204,6 +204,10 @@ def ref_analyze_to_prompt(
     character_desc = ""
     style_desc = ""
     ref_prompt = ""
+    composition = ""
+    lighting = ""
+    colors = ""
+    background = ""
 
     # 1. 分析参考图（需要 VL 模型）
     if ollama_available:
@@ -211,6 +215,10 @@ def ref_analyze_to_prompt(
             analysis = _ollama_vl_analyze(ref_path, url=ollama_url, model=ollama_model or "qwen2.5vl:7b")
             character_desc = analysis.get("character", "")
             style_desc = analysis.get("style", "")
+            composition = analysis.get("composition", "")
+            lighting = analysis.get("lighting", "")
+            colors = analysis.get("colors", "")
+            background = analysis.get("background", "")
         except Exception:
             pass  # 分析失败后纯用 NL
 
@@ -218,13 +226,27 @@ def ref_analyze_to_prompt(
         # 无法分析图片时，提取 NL 中可能的人物描述
         character_desc = nl_text
 
-    # 2. 组合 prompt
+    # 2. 组合 prompt — 优先使用 IP-Adapter 视觉条件，文字只需补充特征
     base_prompt = nls_to_prompt(nl_text, ollama_available=ollama_available)
-    if character_desc:
-        # 将角色特征融合
-        ref_prompt = f"{character_desc}, {base_prompt}"
-    else:
-        ref_prompt = base_prompt
+
+    # 角色锚定描述（不含构图/光照等 — IP-Adapter 处理视觉，文字只做辅助）
+    anchor_desc = character_desc[:300]  # 保持紧凑
+    if style_desc:
+        anchor_desc = f"{anchor_desc}, {style_desc}"
+
+    # 视觉增强描述（构图/光照/颜色 — 帮助 Flux 理解意图）
+    vision_terms = []
+    if lighting:
+        vision_terms.append(lighting[:80])
+    if composition:
+        vision_terms.append(composition[:80])
+    if colors:
+        vision_terms.append(colors[:120])
+    if vision_terms:
+        anchor_desc = f"{anchor_desc}, {', '.join(vision_terms)}"
+
+    # 合并用户 NL + 角色锚定
+    ref_prompt = f"{character_desc[:200]}, {base_prompt}"
 
     # 3. 提取风格用语
     style_terms = ", ".join(_extract_keywords(nl_text))
@@ -233,7 +255,11 @@ def ref_analyze_to_prompt(
         "prompt": ref_prompt,
         "character_desc": character_desc,
         "style_desc": style_desc or style_terms,
-        "ref_prompt": f"{character_desc}, masterpiece, best quality, detailed face",
+        "ref_prompt": f"{anchor_desc}, masterpiece, best quality",
+        "composition": composition,
+        "lighting": lighting,
+        "colors": colors,
+        "background": background,
     }
 
 
@@ -324,12 +350,24 @@ def _ollama_vl_analyze(
     if not ollama_url.endswith("/api/generate"):
         ollama_url = ollama_url.rstrip("/") + "/api/generate"
     prompt = (
-        "请分析这张图片，并严格按 JSON 格式输出，不要多余文字。\n"
-        "JSON 键:\n"
-        '  "character": 角色外观的详细英文描述（发型/发色/瞳色/服装/姿势/表情）\n'
-        '  "style":    画风的英文描述（写实/二次元/插画/CG/油画等）\n'
-        '  "composition": 构图的英文描述（全身/半身/特写/仰视等）\n'
-        '  "lighting":  光照的英文描述（逆光/侧光/自然光/舞台光等）\n'
+        "Analyze this image in detail. Return ONLY valid JSON, no extra text.\\n"
+        "JSON keys (ALL required):\\n"
+        '  "character": VERY DETAILED English description of the character — '
+        'face_shape (oval/round/square/heart), eye_shape (big/almond/slant/narrow), '
+        'eyebrow_style (thin/thick/arched/straight), nose_shape (small/pointed/bridge), '
+        'lip_style (full/thin/small/smirk), hair_style (long/short/braided/twintails/ponytail/straight/wavy/curly/bangs), '
+        'hair_color, eye_color, skin_tone (fair/light/tan/dark), '
+        'outfit_top (type/color/collar/sleeves/patterns), '
+        'outfit_bottom (type/color/length), '
+        'footwear (type/color), '
+        'accessories (headwear/necklace/earrings/glasses/gloves/belt), '
+        'distinctive_features (birthmarks/scars/tattoos/unusual markings/unique props). '
+        'Be as specific as possible (e.g. "long straight silver hair with blunt bangs framing the face, large round crimson eyes, fair skin, wearing a white military-style coat with gold trim and red accents, black gloves, distinctive blue gem pendant on a silver chain")\\n'
+        '  "style":    Art style in English (realistic / 2D anime / cel-shaded / CG render / oil painting / watercolor / sketch / pixel art) + artist references if recognizable\\n'
+        '  "composition": Composition in English (full body / half body / close-up / bust / waist-up / cowgirl / worm-eye / dutch angle / symmetrical / rule of thirds)\\n'
+        '  "lighting":  Lighting in English (backlight / rim light / side light / soft diffused / dramatic / natural window light / stage spotlight / volumetric / neon)\\n'
+        '  "colors":    Dominant color palette in English (e.g. "cool tones: silver, cyan, dark blue, with warm gold accents. High contrast between white uniform and dark background")\\n'
+        '  "background": Background description (solid color / gradient / scenery / abstract / dark / light / blurred)\\n'
     )
 
     # Ollama VL 支持 base64 图片
