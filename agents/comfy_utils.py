@@ -302,6 +302,10 @@ QUALITY_PRESETS: dict[str, dict[str, Any]] = {
                  "sampler": "dpmpp_2m", "scheduler": "karras"},
     "commercial": {"steps": 50, "cfg": 7.5, "sampler": "dpmpp_3m_sde",
                    "scheduler": "karras", "width": 1216, "height": 832},
+    "illustration": {"width": 856, "height": 1200, "cfg": 7.5,
+                     "sampler": "dpmpp_2m", "scheduler": "karras"},
+    "lightnovel": {"width": 856, "height": 1200, "steps": 40, "cfg": 7.5,
+                   "sampler": "dpmpp_3m_sde", "scheduler": "karras"},
 }
 
 VIDEO_PRESETS: dict[str, dict[str, Any]] = {
