@@ -123,13 +123,6 @@ def build_flux_workflow(
         model_out = [nl, 0]
         clip_out = [nl, 1]
 
-    # ── IP-Adapter 视觉条件控制（可选） ────────────────────────
-    # ⚠️ 已移除: XLabs Flux IP-Adapter 模型与 comfyui_ipadapter_plus 节点不兼容
-    #   (XLabs 使用 Flux 原生 double_blocks.* keys, 节点仅支持 SD image_proj.* / ip_adapter.*)
-    #   --ref 当前走 Ollama 文本分析（增强版）+ Qwen3 文本编码
-    #   未来需找到兼容的 Flux IP-Adapter 模型（如 h94 官方版）后可重新启用
-    ipa_model_out = model_out
-
     # 4. CLIPTextEncode (positive)
     n4 = nxt()
     wf[n4] = {"class_type": "CLIPTextEncode", "inputs": {
@@ -150,6 +143,40 @@ def build_flux_workflow(
         wf[nz] = {"class_type": "ConditioningZeroOut", "inputs": {
             "conditioning": [nn, 0]}}
         neg_conditioning = [nz, 0]
+
+    # ── Flux.2 Klein 原生视觉参考（可选） ────────────────────
+    # 参考图 → VAE 编码 → ReferenceLatent 注入 conditioning → RefLatentController 注意力控制
+    ref_cond_out = [n4, 0]  # 默认正 conditioning（无 ref 时）
+    ref_model_out = model_out  # 默认模型（无 ref 时）
+    if ref_image:
+        if not __import__("os").path.isfile(ref_image):
+            print(f"[WARN] 参考图不存在: {ref_image}，跳过视觉参考")
+        else:
+            # LoadImage: 加载参考图
+            n_ref_img = nxt()
+            wf[n_ref_img] = {"class_type": "LoadImage", "inputs": {"image": ref_image}}
+
+            # VAEEncode: 参考图 → latent
+            n_ref_vae = nxt()
+            wf[n_ref_vae] = {"class_type": "VAEEncode", "inputs": {
+                "pixels": [n_ref_img, 0], "vae": [n3, 0]}}
+
+            # ReferenceLatent: 将 VAE 编码的参考 latent 注入到 conditioning
+            n_ref_lat = nxt()
+            wf[n_ref_lat] = {"class_type": "ReferenceLatent", "inputs": {
+                "conditioning": [n4, 0], "latent": [n_ref_vae, 0]}}
+
+            # Flux2KleinRefLatentController: 注意力权重控制（参考图影响生成）
+            n_ref_ctrl = nxt()
+            wf[n_ref_ctrl] = {"class_type": "Flux2KleinRefLatentController", "inputs": {
+                "model": model_out,
+                "conditioning": [n_ref_lat, 0],
+                "strength": ip_weight,
+                "reference_index": 0,
+            }}
+
+            ref_cond_out = [n_ref_ctrl, 1]  # CODNITIONING output
+            ref_model_out = [n_ref_ctrl, 0]  # MODEL output
 
     # 6. EmptyFlux2LatentImage
     n6 = nxt()
@@ -175,8 +202,8 @@ def build_flux_workflow(
     # 10. CFGGuider
     n10 = nxt()
     wf[n10] = {"class_type": "CFGGuider", "inputs": {
-        "model": ipa_model_out,
-        "positive": [n4, 0],
+        "model": ref_model_out,
+        "positive": ref_cond_out,
         "negative": neg_conditioning,
         "cfg": cfg}}
 
