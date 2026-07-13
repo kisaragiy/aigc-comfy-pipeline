@@ -482,6 +482,7 @@ def _generate_gallery_html(result: dict[str, Any], output_dir: str) -> str:
         summary_tag = f"<span class='summary'>{img['summary']}</span>" if img.get("summary") else ""
         overall_tag = f"<span class='overall'>综合: {img.get('overall', 0):.2f}</span>" if img.get('overall', 0) > 0 else ""
         best_badge = " <span class='badge best-badge'>🏆 最优</span>" if img.get("best") else ""
+        copy_btn = f"<span class='copy-seed' onclick='navigator.clipboard.writeText(\"{img['seed']}\");this.textContent=\"✅\"'>📋</span>" if img.get("seed") != "?" else ""
         parts = img.get("parts", {})
         parts_tags = ""
         if parts:
@@ -496,7 +497,7 @@ def _generate_gallery_html(result: dict[str, Any], output_dir: str) -> str:
         onclick = f"openModal({nav_idx})" if nav_idx >= 0 else "this.classList.remove('show')"
         rows_html += f"""\n<div class="card{best_class}">
   <img src="{img['file']}" loading="lazy" onclick="{onclick}" />
-  <div class="info">#{_rank} · seed: {img['seed']} {score_tag} {overall_tag} {summary_tag}{best_badge}</div>
+  <div class="info">#{_rank} · seed: {img['seed']} {copy_btn} {score_tag} {overall_tag} {summary_tag}{best_badge}</div>
   {('<div class="parts">'+parts_tags+'</div>') if parts_tags else ''}
 </div>"""
 
@@ -535,6 +536,8 @@ h1{{font-size:1.5rem;margin-bottom:8px;color:var(--heading)}}
 .badge{{font-size:.7rem;padding:2px 6px;border-radius:4px}}
 .best-badge{{background:#e8a87c33;color:var(--best)}}
 .error-badge{{background:#ff444433;color:#ff4444}}
+.copy-seed{{cursor:pointer;font-size:.85rem;padding:0 4px;user-select:none;opacity:.6}}
+.copy-seed:hover{{opacity:1}}
 .sort-note{{font-size:.75rem;color:var(--summary);margin-left:8px}}
 .ref-section{{margin-bottom:16px;padding:10px;background:var(--card);border-radius:8px;text-align:center}}
 .ref-label{{font-size:.82rem;color:var(--ref-label);margin-bottom:6px}}
