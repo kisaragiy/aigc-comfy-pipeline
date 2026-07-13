@@ -482,6 +482,8 @@ def _run_workshop() -> None:
         _workshop_video(args)
     elif sub == "extract":
         _workshop_extract(args)
+    elif sub == "autopilot":
+        _workshop_autopilot(args)
     else:
         print(f"未知 workshop 子命令: {sub}")
         _run_workshop()
@@ -1114,6 +1116,61 @@ def _workshop_extract(args: list[str]) -> None:
             print(f"\n⚠️ 未能解析 JSON，原始输出:\n{result[:500]}")
     except Exception as exc:
         print(f"❌ 提取失败: {exc}")
+
+
+def _workshop_autopilot(args: list[str]) -> None:
+    """workshop autopilot — 自动扫参 + 空闲跑批 + 质量数据库。"""
+    import argparse
+    parser = argparse.ArgumentParser(description="Autopilot: 自动扫参 + 空闲跑批")
+    parser.add_argument("batch_file", nargs="?", help="批量文件路径（每行一条 prompt）")
+    parser.add_argument("--grid", default="steps:20,30;cfg:5.0,7.0",
+                        help='参数网格: "steps:20,30;cfg:5.0,7.0"')
+    parser.add_argument("--db", default="quality.json",
+                        help="质量数据库路径 (默认: quality.json)")
+    parser.add_argument("--ref", default=None, help="参考图路径")
+    parser.add_argument("--idle", action="store_true",
+                        help="空闲模式: 每批之间等待 ComfyUI 空闲")
+    parser.add_argument("--recommend", default=None,
+                        help='查询最优参数: --recommend "银发精灵 森林"')
+    parser.add_argument("--stats", action="store_true", help="显示数据库统计")
+    parser.add_argument("--verbose", action="store_true", help="详细信息")
+    parsed = parser.parse_args(args)
+
+    from workshop.autopilot import QualityDB, run_autopilot
+
+    # 仅显示统计
+    if parsed.stats:
+        db = QualityDB(parsed.db)
+        s = db.stats()
+        print(f"📊 质量数据库: {parsed.db}")
+        print(f"  不同 prompt: {s['prompts']}")
+        print(f"  总运行次数: {s['runs']}")
+        return
+
+    # 查询最优参数
+    if parsed.recommend:
+        db = QualityDB(parsed.db)
+        best = db.best_params(parsed.recommend)
+        score = db.best_score(parsed.recommend)
+        if best:
+            print(f"📋 最优参数: {best}")
+            print(f"🏆 最高分: {score:.4f}")
+        else:
+            print(f"📋 数据库中无该 prompt 的记录")
+        return
+
+    if not parsed.batch_file:
+        parser.print_help()
+        return
+
+    run_autopilot(
+        parsed.batch_file,
+        grid_str=parsed.grid,
+        db_path=parsed.db,
+        ref_path=parsed.ref,
+        idle_mode=parsed.idle,
+        verbose=parsed.verbose,
+    )
 
 
 def _workshop_engine(args: list[str]) -> None:
