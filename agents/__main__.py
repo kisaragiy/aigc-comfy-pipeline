@@ -543,6 +543,8 @@ def _workshop_create(args: list[str]) -> None:
     parser.add_argument("--character", default=None,
                         help="当前生成的角色名（配合 --cast 使用）")
     parser.add_argument("--batch-file", default=None, help="批量文件路径（每行一条 prompt，空行和 # 注释行跳过）")
+    parser.add_argument("--from-scenes", default=None,
+                        help="从 scenes JSON 批量生成插画（workshop extract 输出）")
     parsed = parser.parse_args(args)
 
     nl_text = " ".join(parsed.nl_text) if parsed.nl_text else ""
@@ -650,6 +652,11 @@ def _workshop_create(args: list[str]) -> None:
     # 批量模式
     if parsed.batch_file:
         _workshop_create_batch(parsed)
+        return
+
+    # 插画场景批量模式
+    if parsed.from_scenes:
+        _workshop_create_from_scenes(parsed)
         return
 
     if not nl_text:
@@ -929,6 +936,115 @@ def _workshop_create_batch(parsed) -> None:
                 ok_count += 1
         if ok_count:
             print(f"  ✅ 批量后处理完成: {ok_count}/{len(results)} 张")
+
+
+def _workshop_create_from_scenes(parsed) -> None:
+    """从 scenes JSON 批量生成插画。"""
+    import json as _json
+    scenes_path = Path(parsed.from_scenes)
+    if not scenes_path.is_file():
+        print(f"❌ scenes 文件不存在: {parsed.from_scenes}")
+        return
+
+    data = _json.loads(scenes_path.read_text(encoding="utf-8"))
+    scenes = data.get("scenes", data) if isinstance(data, dict) else data
+    if not scenes:
+        print("❌ 未找到场景数据")
+        return
+
+    # 加载 cast（可选）
+    cast_data = None
+    if parsed.cast:
+        cast_path = Path(parsed.cast)
+        if cast_path.is_file():
+            cast_data = _json.loads(cast_path.read_text(encoding="utf-8"))
+            cast_data = cast_data.get("characters", cast_data) if isinstance(cast_data, dict) else cast_data
+
+    from workshop.create import create_from_nl
+
+    total = len(scenes)
+    ok = 0
+    fail = 0
+
+    # 输出目录
+    out_root = Path(parsed.output) if parsed.output else Path.cwd() / "_illustrations"
+    out_root.mkdir(parents=True, exist_ok=True)
+
+    print(f"\n📖 插画批量生成: {total} 个场景\n")
+
+    for i, scene in enumerate(scenes, 1):
+        title = scene.get("title", f"Scene {i}")
+        chars = scene.get("characters", [])
+        env = scene.get("environment", "")
+        comp = scene.get("composition", "")
+        light = scene.get("lighting", "")
+        mood = scene.get("mood", "")
+        desc = scene.get("description", scene.get("key_visual", ""))
+
+        # 组装 prompt
+        parts = [desc, env, comp, light, mood]
+        nl_text = ", ".join(p for p in parts if p)
+
+        if not nl_text:
+            print(f"  [{i}/{total}] ❌ {title}: 缺少画面描述")
+            fail += 1
+            continue
+
+        # 查找角色的 ref（如果有 cast）
+        ref_path = None
+        character_name = None
+        if cast_data and chars:
+            for ch in chars:
+                if ch in cast_data:
+                    cinfo = cast_data[ch]
+                    if isinstance(cinfo, dict):
+                        ref_path = cinfo.get("ref") or cinfo.get("ref_path")
+                        character_name = ch
+                        break
+
+        scene_dir = str(out_root / f"{i:02d}_{_slugify(title)}")
+        print(f"  [{i}/{total}] 🎨 {title}")
+        if character_name:
+            print(f"      角色: {character_name}")
+
+        try:
+            result = create_from_nl(
+                nl_text,
+                count=parsed.count or 1,
+                style_hint=parsed.style,
+                ref_path=ref_path or parsed.ref,
+                preset=parsed.preset,
+                min_score=parsed.min_score,
+                retry=parsed.retry,
+                no_validate=True,
+                inspect=False,
+                seed=parsed.seed,
+                negative_prompt=parsed.negative or "",
+                use_ollama=parsed.ollama,
+                output_dir=scene_dir,
+                verbose=parsed.verbose,
+                ip_weight=parsed.ip_weight,
+                ip_balance=parsed.balance,
+                lora_name=parsed.lora,
+                lora_strength=parsed.lora_strength,
+            )
+            best = result.get("best", {})
+            status = "✅" if best.get("image") else "❌"
+            print(f"      {status} {best.get('image','')[:60]}")
+            ok += 1
+        except Exception as exc:
+            print(f"      ❌ {exc}")
+            fail += 1
+
+    print(f"\n📊 完成: {total} 场景 | ✅ {ok} 成功 | ❌ {fail} 失败")
+    print(f"📁 输出: {out_root}")
+
+
+def _slugify(text: str, max_len: int = 24) -> str:
+    """文本 → 安全目录名。"""
+    import re
+    cleaned = re.sub(r'[\\/:*?"<>|]', "", text).strip()
+    return cleaned[:max_len] or "scene"
 
 
 def _workshop_extract(args: list[str]) -> None:
