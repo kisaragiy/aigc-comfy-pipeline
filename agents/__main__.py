@@ -1092,8 +1092,15 @@ def _workshop_manga(args: list[str]) -> None:
         panel_paths = {}
         for i, r in enumerate(results):
             img_path = None
-            for sub, name in r.get("images", []):
-                p = resolve_comfy_root() / "output" / sub / name
+            for img_entry in r.get("images", []):
+                if isinstance(img_entry, str):
+                    p = Path(img_entry)
+                else:
+                    try:
+                        sub, name = img_entry
+                        p = resolve_comfy_root() / "output" / sub / name
+                    except (ValueError, TypeError):
+                        continue
                 if p.is_file():
                     img_path = p
                     break

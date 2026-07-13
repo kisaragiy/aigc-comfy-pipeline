@@ -321,9 +321,10 @@ def _maybe_save_output(result: dict[str, Any], output_dir: str | None, extra_met
         })
 
     # 保存 JSON 元数据
+    from agents import __version__ as pipeline_version
     meta = {
         "created_at": datetime.now().isoformat(timespec="seconds"),
-        "version": "0.64.0",
+        "version": pipeline_version,
         "prompt": result.get("prompt", ""),
         "negative_prompt": result.get("negative_prompt", ""),
         "candidates_count": len(result.get("candidates", [])),
@@ -733,12 +734,19 @@ def create_batch(
         return []
 
     lines = fp.read_text(encoding="utf-8").splitlines()
-    prompts = []
+    prompts = []  # list of (prompt_text, ref_path_or_none)
     for line in lines:
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
-        prompts.append(stripped)
+        # 支持 "prompt | ref_path" 格式
+        if "|" in stripped:
+            parts = stripped.split("|", 1)
+            p_text = parts[0].strip()
+            p_ref = parts[1].strip()
+            prompts.append((p_text, p_ref if p_ref else None))
+        else:
+            prompts.append((stripped, None))
 
     if not prompts:
         print("❌ 批量文件中没有有效的 prompt")
@@ -757,10 +765,12 @@ def create_batch(
     ok_count = 0
     fail_count = 0
 
-    for idx, prompt_text in enumerate(prompts, start=1):
+    for idx, (prompt_text, prompt_ref) in enumerate(prompts, start=1):
         slug = _make_slug(prompt_text)
         sub_dir = str(batch_root / f"{idx:03d}_{slug}")
         print(f"\n[{idx}/{total}] 📝 {prompt_text[:60]}{'...' if len(prompt_text) > 60 else ''}")
+        if prompt_ref:
+            print(f"      ┗ 📎 ref: {prompt_ref}")
         print(f"      ┗ 📁 {sub_dir}")
 
         try:
@@ -768,7 +778,7 @@ def create_batch(
                 prompt_text,
                 count=count,
                 style_hint=style_hint,
-                ref_path=ref_path,
+                ref_path=prompt_ref or ref_path,
                 preset=preset,
                 min_score=min_score,
                 retry=retry,
@@ -811,7 +821,8 @@ def create_batch(
     # 3. 批量汇总
     print(f"\n{'='*60}")
     print(f"📊 批量汇总: {total} 条 | ✅ {ok_count} 成功 | ❌ {fail_count} 失败")
-    for idx, (prompt_text, r) in enumerate(zip(prompts, results), start=1):
+    for idx, (pt, r) in enumerate(zip(prompts, results), start=1):
+        prompt_text = pt[0] if isinstance(pt, tuple) else pt
         has_err = r.get("error") or r.get("had_errors")
         best = r.get("best", {})
         seed = best.get("seed", "?")
