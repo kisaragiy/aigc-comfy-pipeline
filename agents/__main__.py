@@ -780,6 +780,8 @@ def _workshop_inspect(args: list[str]) -> None:
                         help="生成后自动打开标注图（仅 --annotate 时有效）")
     parser.add_argument("--json", action="store_true",
                         help="以 JSON 格式输出质检结果（更适合程序处理）")
+    parser.add_argument("--html", default=None,
+                        help="生成质检 HTML 报告路径（仅多文件模式有效）")
     parsed = parser.parse_args(args)
 
     from workshop.inspect import inspect_image, format_report, annotate_image
@@ -876,6 +878,83 @@ def _workshop_inspect(args: list[str]) -> None:
     if fail_reasons and total > 1:
         reasons_str = " · ".join(f"⚠️ {part}: {cnt}张" for part, cnt in fail_reasons.most_common(5))
         print(f"  📊 失败原因: {reasons_str}")
+
+    # HTML 报告（可选）
+    if parsed.html and total > 1:
+        _generate_inspect_html(results, parsed.html)
+
+
+def _generate_inspect_html(results: list[dict], output_path: str) -> None:
+    """生成质检批量 HTML 报告。"""
+    rows = ""
+    ok_count = sum(1 for r in results if r["result"].get("status") == "ok")
+    for item in results:
+        r = item["result"]
+        parts = r.get("parts", {})
+        scores = r.get("scores", {})
+        overall = scores.get("overall", 0)
+        status = r.get("status", "?")
+        name = Path(item["path"]).name
+
+        def pstatus(pname: str) -> tuple[str, str]:
+            p = parts.get(pname, {})
+            s = p.get("status", "?")
+            score = p.get("score", 0)
+            cls = "ok" if s == "ok" else "warn" if s in ("闭眼", "正常") else "bad"
+            emoji = "✅" if s == "ok" else "⚠️" if s in ("闭眼", "正常") else "❌"
+            return f"{emoji} {s} ({score:.1f})", cls
+
+        face_s, face_c = pstatus("脸")
+        eye_l, _ = pstatus("左眼")
+        eye_r, _ = pstatus("右眼")
+        hand_s, hand_c = pstatus("手")
+        foot_s, foot_c = pstatus("脚")
+        blur_s, blur_c = pstatus("模糊")
+        rows += f"""<div class="card">
+  <div class="img-wrap"><img src="{item['path']}" loading="lazy"/></div>
+  <div class="info">
+    <div class="name">{name}</div>
+    <div class="score-row">综合: <strong>{overall:.2f}</strong> · 状态: {status}</div>
+    <div class="parts">
+      <span class="part {face_c}">{face_s}</span>
+      <span class="part eye">{eye_l}</span>
+      <span class="part eye">{eye_r}</span>
+      <span class="part {hand_c}">{hand_s}</span>
+      <span class="part {foot_c}">{foot_s}</span>
+      <span class="part {blur_c}">{blur_s}</span>
+    </div>
+  </div>
+</div>"""
+
+    html = f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><title>质检报告 · {len(results)} 张</title>
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{background:#1a1a2e;color:#eee;font-family:system-ui,sans-serif;padding:20px}}
+h1{{font-size:1.4rem;margin-bottom:4px;color:#e8a87c}}
+.summary{{color:#aaa;font-size:.85rem;margin-bottom:16px}}
+.grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}}
+.card{{background:#16213e;border-radius:10px;overflow:hidden;border:2px solid transparent}}
+.img-wrap{{width:100%;aspect-ratio:1/1;overflow:hidden;background:#0f0f23}}
+.img-wrap img{{width:100%;height:100%;object-fit:contain}}
+.info{{padding:10px}}
+.name{{font-size:.85rem;font-weight:600;margin-bottom:4px;color:#ccc;word-break:break-all}}
+.score-row{{font-size:.8rem;color:#aaa;margin-bottom:6px}}
+.parts{{display:flex;flex-wrap:wrap;gap:4px}}
+.part{{padding:2px 8px;border-radius:4px;font-size:.75rem}}
+.ok{{background:#1a3a2a;color:#4ade80}}
+.warn{{background:#3a3a1a;color:#facc15}}
+.bad{{background:#3a1a1a;color:#f87171}}
+.eye{{background:#1a2a3a;color:#7ec8e3}}
+</style></head>
+<body>
+<h1>🖼️ 质检报告</h1>
+<div class="summary">共 {len(results)} 张 · ✅ {ok_count} 通过 · ⚠️ {len(results)-ok_count} 有问题</div>
+<div class="grid">{rows}</div>
+</body></html>"""
+    Path(output_path).write_text(html, encoding="utf-8")
+    print(f"  🖼️  HTML 报告: {output_path}")
 
 
 def _workshop_video(args: list[str]) -> None:
