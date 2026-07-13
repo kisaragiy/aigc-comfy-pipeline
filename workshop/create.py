@@ -468,6 +468,7 @@ def _generate_gallery_html(result: dict[str, Any], output_dir: str) -> str:
             js_images.append(img["file"])
     import json
     js_parts = json.dumps([{k: v for k, v in img.items() if k in ("parts", "overall")} for img in images])
+    js_ref_image = json.dumps(ref_rel) if ref_path else "null"
 
     for _rank, img in enumerate(images, 1):
         if img.get("error"):
@@ -556,6 +557,10 @@ h1{{font-size:1.5rem;margin-bottom:8px;color:var(--heading)}}
 #modal-dl{{position:fixed;top:20px;right:20px;background:var(--dl-bg);color:var(--dl-color);text-decoration:none;padding:6px 14px;border-radius:8px;font-size:1.1rem;cursor:pointer;z-index:1001;border:1px solid var(--dl-border);transition:background .15s}}
 #modal-dl:hover{{background:var(--dl-hover)}}
 #modal-slide-status{{position:fixed;top:20px;left:20px;background:var(--dl-bg);color:var(--dl-color);padding:4px 12px;border-radius:8px;font-size:.78rem;display:none;pointer-events:none}}
+#modal-compare-btn{{position:fixed;top:20px;left:90px;background:var(--dl-bg);color:var(--dl-color);border:1px solid var(--dl-border);padding:4px 12px;border-radius:8px;font-size:.78rem;cursor:pointer;display:none;z-index:1001;transition:background .15s}}
+#modal-compare-btn:hover{{background:var(--dl-hover)}}
+#modal-compare-overlay{{position:absolute;inset:0;background-size:cover;background-position:center;opacity:0;pointer-events:none;transition:opacity .3s;border-radius:4px}}
+#modal-compare-overlay.show{{opacity:0.4}}
 </style></head>
 <body class="dark">
 <div class="toolbar">
@@ -579,10 +584,12 @@ h1{{font-size:1.5rem;margin-bottom:8px;color:var(--heading)}}
 <a id="modal-dl" href="#" download="gallery.png" onclick="event.stopPropagation();" title="下载当前图片">⬇</a>
 <div id="modal-zoom-level"></div>
 <div id="modal-slide-status">▶ 播放中</div>
+<button id="modal-compare-btn" onclick="toggleCompare()" title="对比参考图 (C)">🔍 对比</button>
 </div>
 |<script>
 |var images = {js_images};
 |var partsData = {js_parts};
+|var refImage = {js_ref_image};
 |var currentIdx = -1;
 |var zoom = 1, panX = 0, panY = 0, isPanning = false, startX, startY;
 |var container = document.getElementById('modal-zoom-container');
@@ -590,16 +597,34 @@ h1{{font-size:1.5rem;margin-bottom:8px;color:var(--heading)}}
 |var mImg = document.getElementById('modal-img');
 |var overlay = document.getElementById('modal-overlay');
 |var zoomLevel = document.getElementById('modal-zoom-level');
+|var compareBtn = document.getElementById('modal-compare-btn');
+|var compareShown = false;
+|if (refImage) compareBtn.style.display = 'block';
 |
-|function closeModal(e){{
-|    if (e.target === e.currentTarget || e.target.id === 'modal-img' || e.target.id === 'modal-zoom-container' || e.target.id === 'modal-zoom-inner') {{
-|        document.getElementById('modal').classList.remove('show');
-|        currentIdx = -1; resetZoom();
+|function toggleCompare(){{
+|    compareShown = !compareShown;
+|    compareBtn.textContent = compareShown ? '🔍 原图' : '🔍 对比';
+|    if (compareShown) {{
+|        inner.style.backgroundImage = 'url(' + refImage + ')';
+|        inner.style.backgroundSize = 'contain';
+|        inner.style.backgroundRepeat = 'no-repeat';
+|        inner.style.backgroundPosition = 'center';
+|        mImg.style.opacity = '0.5';
+|    }} else {{
+|        inner.style.backgroundImage = '';
+|        mImg.style.opacity = '1';
 |    }}
 |}}
-|function openModal(idx){{
-|    currentIdx = idx; resetZoom();
-|    mImg.src = images[idx];
+|
+function closeModal(e){{
+    if (e.target === e.currentTarget || e.target.id === 'modal-img' || e.target.id === 'modal-zoom-container' || e.target.id === 'modal-zoom-inner') {{
+        document.getElementById('modal').classList.remove('show');
+        currentIdx = -1; resetZoom(); resetCompare();
+    }}
+}}
+function openModal(idx){{
+    currentIdx = idx; resetZoom(); resetCompare();
+    mImg.src = images[idx];
 |    document.getElementById('modal').classList.add('show');
 |    updateCounter(); updateDownload(); updateOverlay();
 |}}
@@ -651,9 +676,12 @@ h1{{font-size:1.5rem;margin-bottom:8px;color:var(--heading)}}
 |    zoomLevel.textContent = (zoom * 100).toFixed(0) + '%';
 |    zoomLevel.style.display = zoom > 1 ? 'block' : 'none';
 |}}
-|function resetZoom(){{
-|    zoom = 1; panX = 0; panY = 0; applyTransform();
-|}}
+function resetZoom(){{
+    zoom = 1; panX = 0; panY = 0; applyTransform();
+}}
+function resetCompare(){{
+    if (compareShown) toggleCompare();
+}}
 |container.addEventListener('wheel', function(e){{
 |    e.preventDefault();
 |    var delta = e.deltaY > 0 ? -0.1 : 0.1;
@@ -705,6 +733,7 @@ function toggleSlide(){{
 document.addEventListener('keydown', function(e){{
     if (currentIdx < 0) return;
     if (e.key === ' ') {{ e.preventDefault(); toggleSlide(); return; }}
+    if (e.key === 'c' || e.key === 'C') {{ e.preventDefault(); if (refImage) toggleCompare(); return; }}
     if (e.key === 'ArrowLeft' && currentIdx > 0) {{
         if (slideTimer) toggleSlide();
         currentIdx--; mImg.src = images[currentIdx]; resetZoom();

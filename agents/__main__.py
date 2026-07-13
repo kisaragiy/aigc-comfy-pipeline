@@ -522,10 +522,23 @@ def _workshop_create(args: list[str]) -> None:
                         help="LoRA 权重文件名（ComfyUI/models/loras/ 下）")
     parser.add_argument("--lora-strength", type=float, default=1.0,
                         help="LoRA 强度（默认 1.0）")
+    parser.add_argument("--commercial", action="store_true",
+                        help="一键商业图: --style anime_commercial --preset commercial --upscale 2.0 --restore-face")
     parser.add_argument("--batch-file", default=None, help="批量文件路径（每行一条 prompt，空行和 # 注释行跳过）")
     parsed = parser.parse_args(args)
 
     nl_text = " ".join(parsed.nl_text) if parsed.nl_text else ""
+
+    # 快捷预设：--commercial 覆盖相关参数
+    if parsed.commercial:
+        if not parsed.style:
+            parsed.style = "anime_commercial"
+        if not parsed.preset:
+            parsed.preset = "commercial"
+        if parsed.upscale == 0.0:
+            parsed.upscale = 2.0
+        if parsed.restore_face is None:
+            parsed.restore_face = "GFPGANv1.4.pth"
 
     # 批量模式
     if parsed.batch_file:
