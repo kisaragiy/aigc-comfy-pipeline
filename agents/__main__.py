@@ -557,6 +557,10 @@ def _workshop_create(args: list[str]) -> None:
                         help="质量达标阈值 (0~1, 综合分低于此值时触发 auto-retry, 默认 0.4)")
     parser.add_argument("--filter", default=None,
                         help='Gallery 筛选规则 (如: "min_score=0.6;pass_quality" 或 "min_face=0.5;min_hand=0.3")')
+    parser.add_argument("--variety", type=int, default=1,
+                        help="多样性模式: 在多种参数风格间轮换 (1=关闭, 2/3=对应风格数)")
+    parser.add_argument("--no-learn", action="store_true",
+                        help="关闭自动记录质量到 quality DB")
     parser.add_argument("--cast", default=None,
                         help="人物表 JSON (角色名→外观+ref): --cast cast.json")
     parser.add_argument("--character", default=None,
@@ -682,29 +686,29 @@ def _workshop_create(args: list[str]) -> None:
         parser.print_help()
         return
 
-    # 自优化：从质量 DB 加载最优参数
+    # 自优化：从质量 DB 加载多样化推荐参数
+    auto_diverse: list[dict[str, Any]] | None = None
+    explore_rate = 0.0
     if parsed.auto:
         db_path = parsed.db or "quality.json"
         if Path(db_path).is_file():
             from workshop.autopilot import QualityDB
             db = QualityDB(db_path)
-            best = db.best_params(nl_text)
-            if best:
-                applied = []
-                if "steps" in best:
-                    parsed.steps = best["steps"]
-                    applied.append(f"steps={best['steps']}")
-                if "cfg" in best:
-                    parsed.cfg = best["cfg"]
-                    applied.append(f"cfg={best['cfg']}")
-                if best.get("preset") and not parsed.preset:
-                    parsed.preset = best["preset"]
-                    applied.append(f"preset={best['preset']}")
-                if applied:
-                    print(f"  🤖 自优化: 应用 {', '.join(applied)} (来自 {db_path})")
-            score = db.best_score(nl_text)
-            if score > 0:
-                print(f"  🏆 历史最佳分: {score:.4f}")
+            diverse = db.find_related_prompts(nl_text)
+            if diverse:
+                auto_diverse = diverse
+                src_info = " | ".join(
+                    f"{d.get('steps',20)}s/{d.get('cfg',7.0)}c (得分{d.get('score',0):.3f})"
+                    for d in diverse[:3])
+                print(f"  🤖 自优化: {len(diverse)} 种多样化参数推荐")
+                print(f"      {src_info}")
+                explore_rate = 0.15  # 即使有推荐也留探索空间
+            else:
+                print("  🤖 自优化: 尚无历史数据，使用默认参数")
+                explore_rate = 0.3  # 无数据时多探索
+        else:
+            print("  🤖 自优化: 无质量数据库，使用默认参数")
+            explore_rate = 0.3
 
     from workshop.create import create_from_nl
 
@@ -784,6 +788,10 @@ def _workshop_create(args: list[str]) -> None:
         quality_threshold=parsed.quality_threshold,
         db_path=parsed.db,
         filter_rules=filter_rules,
+        variety=parsed.variety,
+        no_learn=parsed.no_learn,
+        auto_diverse=auto_diverse,
+        explore_rate=explore_rate,
     )
 
     # 引擎推测（也用于 preview 模式）

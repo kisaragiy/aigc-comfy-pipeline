@@ -68,6 +68,11 @@ def create_from_nl(
     db_path: str | None = None,
     # ── Gallery 筛选 ──
     filter_rules: dict[str, Any] | None = None,
+    # ── 多样性 / 学习 ──
+    variety: int = 1,
+    explore_rate: float = 0.0,
+    no_learn: bool = False,
+    auto_diverse: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """自然语言描述 → 生成多张候选 → 质检排序 → 返回最优。
 
@@ -88,6 +93,17 @@ def create_from_nl(
         output_dir: 结果输出目录（保存 metadata.json）
         verbose: 详细信息
         clean: 生成前清理输出目录旧文件
+        gallery_dir: 输出画廊目录
+        ip_weight/ip_balance: 参考图控制参数
+        lora_name/lora_strength: LoRA 参数
+        variants: 多 prompt 数
+        steps/cfg: 生成参数
+        auto_retry/quality_threshold/db_path: 自动重试
+        filter_rules: Gallery 筛选规则
+        variety: 多样性模式（>1 时在内置预设间轮换）
+        explore_rate: 探索率（0~1，多少比例用随机附近参数）
+        no_learn: 关闭自动记录质量 DB
+        auto_diverse: 来自 quality DB 的多样化推荐参数列表
 
     Returns:
         {
@@ -195,21 +211,47 @@ def create_from_nl(
         _maybe_save_output(result, output_dir)
         return result
 
-    # 3. 生成多张候选（支持多 prompt variant）
+    import random
+    # ── 参数调度表（每张候选使用什么 steps/cfg/preset） ──
+    from workshop.autopilot import build_param_schedule
+    total_count = len(prompt_variants) * per_variant
+    param_schedule = build_param_schedule(
+        total_count,
+        steps=steps, cfg=cfg, preset=preset,
+        auto_diverse=auto_diverse,
+        variety=variety,
+        explore_rate=explore_rate,
+    )
+
+    # 3. 生成多张候选（支持多 prompt variant + 参数多样性）
     from agents.go_flux import build_flux_workflow
     from agents.comfy_utils import resolve_comfy_root
     comfy_root = resolve_comfy_root()
     candidates: list[dict[str, Any]] = []
     had_errors = False
-    total_generations = len(prompt_variants) * per_variant
+    total_generations = total_count
+
+    # 打印参数多样性信息
+    if verbose and auto_diverse:
+        src_names = set(s["source"] for s in param_schedule if s.get("source") != "default")
+        if src_names:
+            print(f"  🎲 参数调度: {', '.join(src_names)}")
+    elif variety > 1:
+        print(f"  🎲 多样性模式 x{variety}")
 
     for vi, pv in enumerate(prompt_variants):
         variant_prompt = pv["prompt"]
         for i in range(per_variant):
             s = seed + len(candidates) if seed > 0 else -1
             idx = vi * per_variant + i + 1
+            ps = param_schedule[idx - 1] if param_schedule else {}
+            c_steps = ps.get("steps", steps)
+            c_cfg = ps.get("cfg", cfg)
+            c_preset = ps.get("preset", preset)
+            src_tag = ps.get("source", "")
+            src_tag_str = f" [{src_tag}]" if src_tag and src_tag not in ("default",) else ""
 
-            print(f"\r  [{idx}/{total_generations}] [{pv['focus']}] 生成中 seed={s}...", end="", flush=True)
+            print(f"\\r  [{idx}/{total_generations}]{src_tag_str} 生成中 seed={s}...", end="", flush=True)
         try:
             qr = generate_with_quality(
                 build_flux_workflow, variant_prompt,
@@ -225,8 +267,8 @@ def create_from_nl(
                 ip_balance=ip_balance,
                 lora_name=lora_name,
                 lora_strength=lora_strength,
-                steps=steps,
-                cfg=cfg,
+                steps=c_steps,
+                cfg=c_cfg,
             )
         except Exception as exc:
             had_errors = True
@@ -265,13 +307,16 @@ def create_from_nl(
             "image": image_path,
             "score": qr.get("score", -1),
             "retries": qr.get("retries", 0),
+            "param_source": src_tag,
+            "param_steps": c_steps,
+            "param_cfg": c_cfg,
         }
         candidates.append(candidate)
 
         score_str = f"score={candidate['score']:.2f}" if candidate['score'] >= 0 else "score=?"
         focus_tag = f" [{pv['focus']}]" if len(prompt_variants) > 1 else ""
         img_tag = "✅" if image_path else "❌"
-        print(f"\r  [{idx}/{total_generations}] {img_tag}{focus_tag} seed={candidate['seed']} {score_str}  ")
+        print(f"\\r  [{idx}/{total_generations}] {img_tag}{src_tag_str}{focus_tag} seed={candidate['seed']} {score_str}  ")
 
     # 4. 逐张质检
     if inspect and candidates:
@@ -458,7 +503,50 @@ def create_from_nl(
         if gallery_path:
             print(f"  🖼️  Gallery: {gallery_path}")
 
+    # ── 自动记录到 quality DB ──
+    if not no_learn and not dry_run and candidates:
+        try:
+            _record_to_quality_db(result, db_path or "quality.json", nl_text)
+        except Exception:
+            pass  # 静默降级，学习非关键
+
     return result
+
+
+def _record_to_quality_db(result: dict[str, Any], db_path: str, nl_text: str) -> None:
+    """将 create 结果自动记录到质量数据库。"""
+    from workshop.autopilot import QualityDB
+    from pathlib import Path
+
+    db = QualityDB(db_path)
+    candidates = result.get("candidates", [])
+    prompt = nl_text
+
+    for c in candidates:
+        if c.get("error") or not c.get("image"):
+            continue
+        ins = c.get("inspect", {})
+        ins_scores = ins.get("scores", {}) if ins else {}
+        params = {
+            "steps": c.get("param_steps", 20),
+            "cfg": c.get("param_cfg", 7.0),
+            "preset": c.get("param_source", ""),
+        }
+        clip_score = c.get("score", -1) if c.get("score", -1) >= 0 else None
+        combined = (
+            ins_scores.get("overall", 0) * 0.6 +
+            (clip_score or 0) * 0.4
+        )
+        score = {
+            "overall": ins_scores.get("overall", 0),
+            "face": ins_scores.get("脸", 0),
+            "hand": ins_scores.get("手", 0),
+            "foot": ins_scores.get("脚", 0),
+            "blur": ins_scores.get("模糊", 0),
+            "clip": clip_score or 0,
+            "combined": round(combined, 4),
+        }
+        db.record(prompt, params, score)
 
 
 def _maybe_save_output(result: dict[str, Any], output_dir: str | None, extra_meta: dict[str, Any] | None = None) -> None:

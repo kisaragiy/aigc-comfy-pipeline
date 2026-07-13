@@ -82,6 +82,115 @@ class QualityDB:
             return s.get("combined", 0) or s.get("overall", 0)
         return 0.0
 
+    def best_diverse_params(self, prompt: str, k: int = 3) -> list[dict[str, Any]]:
+        """返回 TOP-K 多样化参数组合（steps/cfg 维度差异大）。
+
+        Args:
+            prompt: 查询 prompt
+            k: 最多返回几组
+
+        Returns:
+            [{steps, cfg, preset, score, source}, ...] 按质量降序，但保证参数多样性
+        """
+        key = self._hash(prompt)
+        entry = self.data.get(key)
+        if not entry or not entry.get("runs"):
+            return []
+
+        runs = entry["runs"]
+        # 构建参数→最高分映射
+        param_scores: dict[str, dict[str, Any]] = {}
+        for r in runs:
+            params = r.get("params", {})
+            if not params:
+                continue
+            # 用 steps,cfg 做 key
+            pkey = f"{params.get('steps', '?')}_{params.get('cfg', '?')}"
+            score = r.get("score", {}).get("combined", 0)
+            if pkey not in param_scores or score > param_scores[pkey].get("score", 0):
+                param_scores[pkey] = {
+                    "steps": params.get("steps", 20),
+                    "cfg": params.get("cfg", 7.0),
+                    "preset": params.get("preset"),
+                    "score": score,
+                }
+
+        if not param_scores:
+            return []
+
+        params_list = list(param_scores.values())
+        # 按分数降序
+        params_list.sort(key=lambda x: -x["score"])
+
+        if k >= len(params_list):
+            for p in params_list:
+                p["source"] = "auto"
+            return params_list
+
+        # 贪心选择: 先拿最高分，然后每次选与已选集距离最大的
+        selected = [params_list[0]]
+        remaining = params_list[1:]
+
+        while len(selected) < k and remaining:
+            # 对每个剩余的，找到与已选集的最小距离
+            best_dist = -1
+            best_idx = 0
+            for i, cand in enumerate(remaining):
+                min_dist = min(_param_distance(cand, s) for s in selected)
+                if min_dist > best_dist:
+                    best_dist = min_dist
+                    best_idx = i
+            selected.append(remaining.pop(best_idx))
+
+        for p in selected:
+            p["source"] = "auto"
+        return selected
+
+    def find_related_prompts(self, prompt: str, max_results: int = 5) -> list[dict[str, Any]]:
+        """查找与当前 prompt 相关的历史最优参数。
+
+        匹配策略:
+          1. 精确匹配（同 prompt hash）
+          2. 共享角色签名（同角色名或独特特征）
+          3. 回退空列表
+
+        Returns:
+            [{prompt, steps, cfg, preset, score}, ...]
+        """
+        # 1. 精确匹配
+        exact = self.best_diverse_params(prompt, k=3)
+        if exact:
+            return exact
+
+        # 2. 角色签名匹配
+        sig = extract_character_signature(prompt)
+        if sig:
+            primary_marker = sig[0]
+            related: list[dict[str, Any]] = []
+            for key, entry in self.data.items():
+                ep = entry.get("prompt", "")
+                esig = extract_character_signature(ep)
+                if primary_marker in esig:
+                    runs = entry.get("runs", [])
+                    if runs:
+                        # 取该 prompt 的最佳参数
+                        best_run = runs[0]
+                        params = best_run.get("params", {})
+                        score = best_run.get("score", {}).get("combined", 0)
+                        related.append({
+                            "prompt": ep[:60],
+                            "steps": params.get("steps", 20),
+                            "cfg": params.get("cfg", 7.0),
+                            "preset": params.get("preset"),
+                            "score": score,
+                            "source": f"related: {ep[:40]}",
+                        })
+            if related:
+                related.sort(key=lambda x: -x["score"])
+                return related[:3]
+
+        return []
+
     def stats(self) -> dict[str, Any]:
         """返回统计信息。"""
         total = len(self.data)
@@ -92,7 +201,145 @@ class QualityDB:
         self.path.write_text(json.dumps(self.data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-# ── 参数网格扫描 ──────────────────────────────────────────
+# ── 角色签名提取 ──────────────────────────────────────────
+
+def extract_character_signature(prompt: str) -> list[str]:
+    """从 prompt 中提取角色身份标记（角色名、独特装饰、服装等）。
+
+    用于区分不同角色的最优参数，防止跨角色参数污染。
+
+    Returns:
+        角色标记列表（按重要性降序）
+    """
+    import re
+    markers: list[str] = []
+
+    # 1. 引号内的字符名: "Alice" 或 'Bob'
+    quoted = re.findall(r'["\u201c\u201d]([^"\u201c\u201d]+)["\u201c\u201d]', prompt)
+    markers.extend(quoted)
+
+    # 2. 角色/人物/人设 标签后的名字
+    char_after = re.findall(r'(?:角色|人物|人设)[：:]\s*(\S+)', prompt)
+    markers.extend(char_after)
+
+    # 3. 常见角色名前缀: 作为|名为|叫 后面跟着的名字
+    named = re.findall(r'(?:作为|名为|叫)\s*(\S+?)(?:\s|，|,|。|$)', prompt)
+    markers.extend(named)
+
+    # 4. 独有服饰/特征标记: 提取"的"前面2-4字的独特描述
+    #    "红色蝴蝶结"、"猫耳发饰"、"眼罩" 等
+    unique_items = re.findall(r'([\u4e00-\u9fff]{2,6}(?:蝴蝶结|发饰|发夹|耳环|项链|戒指|手镯|头饰|帽子'
+                              r'|眼镜|眼罩|口罩|围巾|披风|斗篷|铠甲|纹身|伤疤|翅膀|尾巴))', prompt)
+    markers.extend(unique_items)
+
+    # 5. 颜色+服饰/部位组合
+    color_items = re.findall(r'([\u4e00-\u9fff]{1,2}(?:色|)*[\u4e00-\u9fff]{1,4}(?:发|眼|瞳|裙|衣|服|裤|鞋|袜))', prompt)
+    markers.extend(color_items)
+
+    return markers
+
+
+# ── 参数多样性 ────────────────────────────────────────────
+
+DIVERSE_PRESETS: list[dict[str, Any]] = [
+    {"name": "quality", "steps": 30, "cfg": 7.0, "preset": "quality"},
+    {"name": "balanced", "steps": 20, "cfg": 7.0, "preset": "balanced"},
+    {"name": "fast", "steps": 15, "cfg": 5.0, "preset": "fast"},
+    {"name": "creative", "steps": 25, "cfg": 9.0, "preset": "balanced"},
+]
+
+
+def _param_distance(a: dict[str, Any], b: dict[str, Any]) -> float:
+    """计算两组参数的距离（steps/cfg 维度）。"""
+    s1 = a.get("steps", 20) or 20
+    s2 = b.get("steps", 20) or 20
+    c1 = a.get("cfg", 7.0) or 7.0
+    c2 = b.get("cfg", 7.0) or 7.0
+    return ((s1 - s2) / 10) ** 2 + ((c1 - c2) / 2.0) ** 2
+
+
+# ── 参数调度生成 ──────────────────────────────────────────
+
+def build_param_schedule(
+    count: int,
+    *,
+    steps: int = 20,
+    cfg: float = 7.0,
+    preset: str | None = None,
+    auto_diverse: list[dict[str, Any]] | None = None,
+    variety: int = 1,
+    explore_rate: float = 0.0,
+) -> list[dict[str, Any]]:
+    """为 count 张候选构建参数调度表（每张候选使用什么参数）。
+
+    Args:
+        count: 候选总数
+        steps: 默认步数
+        cfg: 默认 CFG
+        preset: 默认预设
+        auto_diverse: 来自 quality DB 的多样化推荐参数（含权重），
+                      每个元素: {steps, cfg, preset, weight}
+        variety: 多样性模式 >1 时在内置预设间轮换
+        explore_rate: 探索率 (0~1, 多少比例的候选用随机附近参数)
+
+    Returns:
+        [{steps, cfg, preset, source}, ...] 长度 = count
+    """
+    import random
+
+    schedule: list[dict[str, Any]] = []
+
+    # 确定候选"池"
+    pool: list[dict[str, Any]] = []
+
+    if auto_diverse:
+        # 来自 quality DB 的多样化推荐
+        pool = list(auto_diverse)
+    elif variety > 1:
+        # 内置多样性模式
+        for v in range(variety):
+            vp = DIVERSE_PRESETS[v % len(DIVERSE_PRESETS)].copy()
+            vp["source"] = f"variety_{vp['name']}"
+            pool.append(vp)
+    else:
+        pool.append({
+            "steps": steps, "cfg": cfg, "preset": preset,
+            "source": "default",
+        })
+
+    if not pool:
+        pool.append({
+            "steps": steps, "cfg": cfg, "preset": preset,
+            "source": "default",
+        })
+
+    # 按权重构建调度
+    for i in range(count):
+        # 探索模式
+        if explore_rate > 0 and random.random() < explore_rate:
+            base = random.choice(pool)
+            explore_steps = min(80, max(10, (base.get("steps", 20) or 20) + random.choice([-5, 0, 5])))
+            explore_cfg = round(min(20.0, max(1.0, (base.get("cfg", 7.0) or 7.0) + random.choice([-0.5, 0, 0.5]))), 1)
+            schedule.append({
+                "steps": explore_steps,
+                "cfg": explore_cfg,
+                "preset": base.get("preset"),
+                "source": "explore",
+            })
+        else:
+            # 从池中轮换选择
+            entry = pool[i % len(pool)]
+            schedule.append({
+                "steps": entry.get("steps", steps),
+                "cfg": entry.get("cfg", cfg),
+                "preset": entry.get("preset", preset),
+                "source": entry.get("source", "auto"),
+            })
+
+    return schedule
+
+
+# ── 质量 DB 增强 ──────────────────────────────────────────
 
 DEFAULT_GRID = "steps:20,30;cfg:5.0,7.0"
 QUALITY_WEIGHTS = {"face": 0.3, "hand": 0.2, "foot": 0.1, "blur": 0.1, "clip": 0.3}
