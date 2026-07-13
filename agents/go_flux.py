@@ -62,6 +62,7 @@ def build_flux_workflow(
     ref_image: str | None = None,  # 参考图路径（Flux.2 Klein 原生视觉参考）
     ip_weight: float = 0.7,        # 参考图影响权重（传给 RefLatentController.strength）
     ip_balance: float = 0.5,       # 文字/参考注意力平衡（Flux2KleinTextRefBalance）
+    color_anchor: float = 0.0,     # 颜色锚定强度（0=禁用，Flux2KleinColorAnchor）
 ) -> tuple[dict[str, Any], int]:
     """构建 Flux.2 Klein API 格式工作流。
 
@@ -196,6 +197,17 @@ def build_flux_workflow(
 
             ref_cond_out = [n_ref_bal, 1]
             ref_model_out = [n_ref_bal, 0]
+
+            # ColorAnchor: 场景颜色一致性锚定（可选）
+            if color_anchor > 0:
+                n_ca = nxt()
+                wf[n_ca] = {"class_type": "Flux2KleinColorAnchor", "inputs": {
+                    "model": ref_model_out,
+                    "conditioning": ref_cond_out,
+                    "strength": color_anchor,
+                }}
+                ref_cond_out = [n_ca, 1]
+                ref_model_out = [n_ca, 0]
 
     # 6. EmptyFlux2LatentImage
     n6 = nxt()

@@ -524,10 +524,40 @@ def _workshop_create(args: list[str]) -> None:
                         help="LoRA 强度（默认 1.0）")
     parser.add_argument("--commercial", action="store_true",
                         help="一键商业图: --style anime_commercial --preset commercial --upscale 2.0 --restore-face")
+    parser.add_argument("--save", default=None,
+                        help="保存当前参数为工作流模板 (如: --save my_portrait)")
+    parser.add_argument("--load", default=None,
+                        help="加载工作流模板 (如: --load my_portrait)")
+    parser.add_argument("--list-workflows", action="store_true",
+                        help="列出已保存的工作流模板")
+    parser.add_argument("--smart", action="store_true",
+                        help="智能模式: 自动检测内容类型并调参")
     parser.add_argument("--batch-file", default=None, help="批量文件路径（每行一条 prompt，空行和 # 注释行跳过）")
     parsed = parser.parse_args(args)
 
     nl_text = " ".join(parsed.nl_text) if parsed.nl_text else ""
+
+    # 工作流模板管理
+    _WORKFLOW_DIR = Path.home() / ".hermes" / "workflows"
+    if parsed.list_workflows:
+        if _WORKFLOW_DIR.is_dir():
+            for f in sorted(_WORKFLOW_DIR.glob("*.json")):
+                print(f"  📋 {f.stem}")
+        else:
+            print("  (无已保存的工作流)")
+        return
+    if parsed.load:
+        load_path = _WORKFLOW_DIR / f"{parsed.load}.json"
+        if load_path.is_file():
+            import json as _json
+            saved = _json.loads(load_path.read_text())
+            for k, v in saved.items():
+                if hasattr(parsed, k) and v is not None:
+                    setattr(parsed, k, v)
+            print(f"  📋 已加载工作流: {parsed.load}")
+        else:
+            print(f"  ❌ 未找到工作流: {parsed.load}")
+            return
 
     # 快捷预设：--commercial 覆盖相关参数
     if parsed.commercial:
@@ -539,6 +569,46 @@ def _workshop_create(args: list[str]) -> None:
             parsed.upscale = 2.0
         if parsed.restore_face is None:
             parsed.restore_face = "GFPGANv1.4.pth"
+
+    # 智能模式：根据内容自动调参
+    if parsed.smart and nl_text:
+        from workshop.engine.engine import _detect_style, _detect_composition, _detect_lighting
+        detected_style = _detect_style(nl_text, parsed.style)
+        detected_comp = _detect_composition(nl_text)
+        # 根据检测结果设置智能默认值
+        if not parsed.style:
+            parsed.style = detected_style
+        if not parsed.preset:
+            parsed.preset = "commercial" if detected_style == "anime_commercial" else "balanced"
+        if parsed.upscale == 0.0:
+            parsed.upscale = 2.0  # 默认启用超分
+        if parsed.restore_face is None:
+            parsed.restore_face = "GFPGANv1.4.pth"  # 默认启用修脸
+        print(f"  🤖 智能模式: 风格={detected_style} | 构图={detected_comp}")
+
+    # 保存工作流模板
+    if parsed.save:
+        _WORKFLOW_DIR.mkdir(parents=True, exist_ok=True)
+        save_path = _WORKFLOW_DIR / f"{parsed.save}.json"
+        import json as _json
+        # 保存重要参数
+        params = {
+            "style": parsed.style,
+            "preset": parsed.preset,
+            "upscale": parsed.upscale if parsed.upscale > 0 else None,
+            "restore_face": parsed.restore_face,
+            "count": parsed.count,
+            "ip_weight": parsed.ip_weight,
+            "balance": parsed.balance,
+            "lora": parsed.lora,
+            "lora_strength": parsed.lora_strength,
+            "min_score": parsed.min_score,
+            "retry": parsed.retry,
+        }
+        # 过滤 None
+        params = {k: v for k, v in params.items() if v is not None}
+        save_path.write_text(_json.dumps(params, ensure_ascii=False, indent=2))
+        print(f"  📋 已保存工作流: {parsed.save} ({save_path})")
 
     # 批量模式
     if parsed.batch_file:
@@ -1213,6 +1283,8 @@ def _workshop_manga(args: list[str]) -> None:
     parser.add_argument("--restore-face", default=None, nargs="?",
                         const="GFPGANv1.4.pth",
                         help='修脸模型 (GFPGANv1.4.pth / codeformer-v0.1.0.pth)')
+    parser.add_argument("--check", action="store_true",
+                        help="分镜连贯性检查（不生成）")
     parsed = parser.parse_args(args)
 
     script = ""
@@ -1253,8 +1325,21 @@ def _workshop_manga(args: list[str]) -> None:
     for name, info in chars.items():
         print(f"   {name}: {info.get('服饰','?')} / {info.get('发型','?')} / {info.get('特征','?')}")
 
-    print("\n📋 生成分镜表...")
+    print("\\n📋 生成分镜表...")
     storyboard = script_to_storyboard(script, characters=chars, ollama_available=False)
+
+    # 分镜连贯性检查（可选）
+    if parsed.check:
+        from workshop.manga import validate_storyboard
+        warnings = validate_storyboard(storyboard, chars)
+        if warnings:
+            print(f"\\n⚠️ 分镜连贯性警告 ({len(warnings)}):")
+            for w in warnings:
+                print(f"   • {w}")
+        else:
+            print("  ✅ 分镜连贯性检查通过")
+        return  # --check 模式不继续生成
+
     # 分镜表预览
     print(f"  {'镜号':<6} {'人物':<10} {'景别':<8} {'画面描述':<28} {'台词':<20} {'备注':<10}")
     print(f"  {'-'*6} {'-'*10} {'-'*8} {'-'*28} {'-'*20} {'-'*10}")

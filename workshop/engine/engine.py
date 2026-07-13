@@ -137,19 +137,32 @@ STYLE_KEYWORDS: dict[str, str] = {
 
 _OLLAMA_TEMPLATE = """You are a professional AI prompt engineer for Stable Diffusion / Flux. Convert the user's natural language description into a high-quality English prompt.
 
-Requirements:
-1. Analyze the implied STYLE (anime, photoreal, CG, cosplay, cinematic, oil painting, etc.)
-2. Analyze the COMPOSITION (close-up, half-body, full-body, wide shot, low/high angle, etc.)
-3. Analyze the LIGHTING (natural, backlight, side light, neon, stage, etc.)
-4. Analyze the MOOD / COLOR TONE (warm, cool, cyberpunk, etc.)
-5. Infer defaults for any missing elements using best practices
-6. Output ONLY the English prompt — no explanations, no notes, no markup
+First, analyze INTENT to determine optimal config:
+- CONTENT TYPE: portrait / half-body / full-body / landscape / group-scene / close-up / action
+- STYLE: anime / anime_commercial / photoreal / CG / cinematic / fantasy
+- MOOD: warm / cool / dramatic / serene / energetic / mysterious
+
+Then generate a single English prompt:
+1. Quality tags (masterpiece, best quality, etc.)
+2. Subject (appearance, clothing, expression, pose)
+3. Environment/background
+4. Lighting and color palette
+5. Composition and framing
+6. Style-specific keywords
+
+Rules:
+- Output ONLY the English prompt — no explanations, no notes, no markup
+- For anime: cel shading, clean lineart, vibrant colors, expressive eyes
+- For commercial: key visual quality, magazine cover style, absurdres, 8k
+- Include specific lighting (rim light, volumetric, soft diffused)
+- Include camera angle (low angle, dutch angle, eye level)
+- Be specific about expression and mood
 
 User description:
 {user_input}
 
 Output format (English only, comma-separated tags):
-MASTERPIECE, best quality, [detailed English description], [composition], [lighting], [color/mood terms]"""
+MASTERPIECE, best quality, [detailed description], [composition], [lighting], [style terms]"""
 
 _FALLBACK_TEMPLATE = """你是一位专业的 AI 绘画提示词工程师。请将用户的自然语言描述，转化为高质量的英文绘画提示词。
 

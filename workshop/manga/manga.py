@@ -105,6 +105,23 @@ def storyboard_to_prompts(
     base_negative = preset.get("negative", "")
 
     panel_list = []
+    # 构建角色锚定: 每个角色统一的视觉描述
+    char_anchors: dict[str, str] = {}
+    for name, info in characters.items():
+        parts = [info.get(k, "") for k in ("服饰", "发型", "特征")]
+        anchor = ", ".join(p for p in parts if p)
+        if anchor:
+            char_anchors[name] = anchor
+
+    # 构建场景锚定: 同一场景使用一致的视觉描述
+    scene_anchors: dict[str, str] = {}
+    scene_names: dict[str, str] = {}  # 场景名 → 标准化描述
+    for shot in storyboard:
+        sc = shot.get("场景", "").strip()
+        if sc and sc not in scene_names:
+            # 对每个场景生成一致的描述词
+            scene_names[sc] = sc
+
     for shot in storyboard:
         # 组装每格的 prompt
         character = shot.get("人物", "")
@@ -113,18 +130,15 @@ def storyboard_to_prompts(
         visual = shot.get("画面描述", "")
         dialogue = shot.get("台词", "")
 
-        # 角色特征注入
-        char_prompt = ""
-        if character in characters:
-            char_info = characters[character]
-            char_prompt = ", ".join([
-                char_info.get("服饰", ""),
-                char_info.get("发型", ""),
-                char_info.get("特征", ""),
-            ])
+        # 角色特征注入 — 使用锚定确保跨格一致性
+        char_prompt = char_anchors.get(character, "")
+
+        # 场景锚定注入 — 同场景用一致的描述
+        scene_anchor = scene_names.get(scene, scene)
 
         # 调用引擎生成 prompt
-        full_desc = f"{character}, {char_prompt}, {visual}, {scene}, {camera}" if char_prompt else f"{character}, {visual}, {scene}, {camera}"
+        full_desc_parts = [character, char_prompt, visual, scene_anchor, camera] if char_prompt else [character, visual, scene_anchor, camera]
+        full_desc = ", ".join(p for p in full_desc_parts if p)
         if dialogue:
             full_desc += f", 正在说: {dialogue}"
 
@@ -160,6 +174,7 @@ def generate_panels(
     global_ref: str | None = None,
     ip_weight: float = 0.7,
     preset: str | None = None,
+    color_anchor: float = 0.0,
 ) -> list[dict[str, Any]]:
     """逐格提交 ComfyUI 出图，失败可重试。
 
@@ -208,6 +223,7 @@ def generate_panels(
                 "ref_image": panel_ref, "ip_weight": ip_weight,
             }
             params = apply_preset(base_params, preset) if preset else base_params
+            params["color_anchor"] = color_anchor
             workflow = build_flux_workflow(panel["prompt"], seed=panel["seed"], **params)
         else:
             from agents.go_knives_lora import build_sdxl_workflow
@@ -593,3 +609,33 @@ def generate_manga_gallery(
     gallery_path.write_text(html, encoding="utf-8")
     print(f"  🖼️  画廊: {gallery_path}")
     return str(gallery_path.resolve())
+
+
+def validate_storyboard(storyboard: list[dict[str, str]],
+                        characters: dict[str, dict[str, str]]) -> list[str]:
+    """验证分镜表连贯性，返回警告列表。"""
+    warnings: list[str] = []
+    names = set(characters.keys())
+    seen_chars: set[str] = set()
+
+    for i, shot in enumerate(storyboard):
+        sid = shot.get("镜号", f"#{i+1}")
+        char = shot.get("人物", "")
+        scene = shot.get("场景", "").strip()
+        camera = shot.get("景别", "")
+        visual = shot.get("画面描述", "").strip()
+
+        if char and char not in names:
+            warnings.append(f"[{sid}] 角色 '{char}' 未在 --char 中定义")
+        if not camera:
+            warnings.append(f"[{sid}] 缺少景别")
+        if not visual:
+            warnings.append(f"[{sid}] 缺少画面描述")
+        if char:
+            seen_chars.add(char)
+
+    for name in names:
+        if name not in seen_chars:
+            warnings.append(f"角色 '{name}' 在所有分镜中均未出场")
+
+    return warnings
