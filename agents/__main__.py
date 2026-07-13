@@ -518,6 +518,10 @@ def _workshop_create(args: list[str]) -> None:
     parser.add_argument("--restore-face", default=None, nargs="?",
                         const="GFPGANv1.4.pth",
                         help='修脸模型 (GFPGANv1.4.pth / codeformer-v0.1.0.pth)')
+    parser.add_argument("--lora", default=None,
+                        help="LoRA 权重文件名（ComfyUI/models/loras/ 下）")
+    parser.add_argument("--lora-strength", type=float, default=1.0,
+                        help="LoRA 强度（默认 1.0）")
     parser.add_argument("--batch-file", default=None, help="批量文件路径（每行一条 prompt，空行和 # 注释行跳过）")
     parsed = parser.parse_args(args)
 
@@ -563,6 +567,8 @@ def _workshop_create(args: list[str]) -> None:
         clean=parsed.clean,
         ip_weight=parsed.ip_weight,
         ip_balance=parsed.balance,
+        lora_name=parsed.lora,
+        lora_strength=parsed.lora_strength,
     )
 
     # 引擎推测（也用于 preview 模式）
@@ -1136,6 +1142,13 @@ def _workshop_manga(args: list[str]) -> None:
                         help='参考图（角色路径映射或全局）: "Alice=path.png" 或 "path.png"')
     parser.add_argument("--ip-weight", type=float, default=0.7,
                         help="参考图影响权重（0.0~1.0，默认 0.7）")
+    parser.add_argument("--preset", default=None,
+                        help="质量预设 (quality/balanced/fast/commercial/...)")
+    parser.add_argument("--upscale", type=float, default=0.0,
+                        help="超分倍数 (2.0/4.0, 0=不超分)")
+    parser.add_argument("--restore-face", default=None, nargs="?",
+                        const="GFPGANv1.4.pth",
+                        help='修脸模型 (GFPGANv1.4.pth / codeformer-v0.1.0.pth)')
     parsed = parser.parse_args(args)
 
     script = ""
@@ -1215,7 +1228,8 @@ def _workshop_manga(args: list[str]) -> None:
     print("\\n🖼️  逐格生图...")
     results = generate_panels(panels, dry_run=parsed.preview, max_retries=parsed.retry,
                               flux=not parsed.sdxl, char_refs=char_refs,
-                              global_ref=global_ref, ip_weight=parsed.ip_weight)
+                              global_ref=global_ref, ip_weight=parsed.ip_weight,
+                              preset=parsed.preset)
 
     # 处理 --output
     if parsed.output:
@@ -1270,6 +1284,37 @@ def _workshop_manga(args: list[str]) -> None:
             panel_paths=panel_paths,
             assembled_path=output if output else None,
         )
+
+        # 后处理：超分 + 修脸
+        if output and (parsed.upscale > 0 or parsed.restore_face is not None):
+            from agents.comfy_utils import comfy_post_prompt, comfy_base_url, wait_images
+            current = output
+            if parsed.upscale > 0:
+                from agents.go_flux import build_upscale_workflow
+                print(f"\n🔍 超分拼页 {parsed.upscale}x ...")
+                wf = build_upscale_workflow(current, upscale_factor=parsed.upscale, prefix="manga_upscaled")
+                r = comfy_post_prompt(wf)
+                pid = r.get("prompt_id", "")
+                if pid:
+                    imgs = wait_images(pid, comfy_base_url(), timeout_s=300)
+                    if imgs:
+                        from agents.comfy_utils import resolve_comfy_root
+                        cr = resolve_comfy_root()
+                        current = str(cr / "output" / imgs[0][0] / imgs[0][1])
+                        print(f"  ✅ 超分完成")
+            if parsed.restore_face:
+                from agents.go_flux import build_restore_face_workflow
+                print(f"\n🔧 修脸拼页 ({parsed.restore_face}) ...")
+                wf = build_restore_face_workflow(current, model_name=parsed.restore_face, prefix="manga_restored")
+                r = comfy_post_prompt(wf)
+                pid = r.get("prompt_id", "")
+                if pid:
+                    imgs = wait_images(pid, comfy_base_url(), timeout_s=300)
+                    if imgs:
+                        from agents.comfy_utils import resolve_comfy_root
+                        cr = resolve_comfy_root()
+                        current = str(cr / "output" / imgs[0][0] / imgs[0][1])
+                        print(f"  ✅ 修脸完成")
     else:
         print("\n📄 拼页...")
         output = assemble_page(results)

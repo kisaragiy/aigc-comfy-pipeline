@@ -56,6 +56,8 @@ def create_from_nl(
     clean: bool = False,
     ip_weight: float = 0.7,
     ip_balance: float = 0.5,
+    lora_name: str | None = None,
+    lora_strength: float = 1.0,
 ) -> dict[str, Any]:
     """自然语言描述 → 生成多张候选 → 质检排序 → 返回最优。
 
@@ -188,6 +190,8 @@ def create_from_nl(
                 ref_image=ref_path,
                 ip_weight=ip_weight,
                 ip_balance=ip_balance,
+                lora_name=lora_name,
+                lora_strength=lora_strength,
             )
         except Exception as exc:
             had_errors = True
