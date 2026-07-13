@@ -1090,11 +1090,23 @@ def _workshop_video(args: list[str]) -> None:
     parser.add_argument("--denoise", type=float, default=1.0, help="去噪强度")
     parser.add_argument("--neg", default="", help="负向提示词")
     parser.add_argument("--output", default=None, help="输出目录")
+    parser.add_argument("--commercial", action="store_true",
+                        help="一键高质量: --preset quality --frames 97 --fps 30 --steps 50")
     parsed = parser.parse_args(args)
 
     if not parsed.prompt:
         parser.print_help()
         return
+
+    if parsed.commercial:
+        if not parsed.preset:
+            parsed.preset = "quality"
+        if parsed.frames == 49:
+            parsed.frames = 97
+        if parsed.fps == 15:
+            parsed.fps = 30
+        if parsed.steps == 30:
+            parsed.steps = 50
 
     prompt = " ".join(parsed.prompt)
 
