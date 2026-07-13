@@ -760,6 +760,45 @@ def _workshop_create_batch(parsed) -> None:
                 print(f"\\n📂 已打开: {best_img}")
                 break
 
+    # 批量后处理：超分 + 修脸
+    needs_upscale = parsed.upscale > 0
+    needs_restore = parsed.restore_face is not None
+    if (needs_upscale or needs_restore) and results:
+        from agents.comfy_utils import comfy_post_prompt, comfy_base_url, wait_images
+        from agents.go_flux import build_upscale_workflow, build_restore_face_workflow
+        from agents.comfy_utils import resolve_comfy_root
+        ok_count = 0
+        for r in results:
+            best = r.get("best", {})
+            img = best.get("image", "")
+            if not img or not Path(img).is_file():
+                continue
+            current = img
+            if needs_upscale:
+                wf = build_upscale_workflow(current, upscale_factor=parsed.upscale,
+                                            prefix=f"batch_up_{r.get('prompt_text','')[:16]}")
+                pid = comfy_post_prompt(wf).get("prompt_id", "")
+                if pid:
+                    imgs = wait_images(pid, comfy_base_url(), timeout_s=300)
+                    if imgs:
+                        cr = resolve_comfy_root()
+                        current = str(cr / "output" / imgs[0][0] / imgs[0][1])
+            if needs_restore:
+                wf = build_restore_face_workflow(current, model_name=parsed.restore_face,
+                                                  prefix=f"batch_rf_{r.get('prompt_text','')[:16]}")
+                pid = comfy_post_prompt(wf).get("prompt_id", "")
+                if pid:
+                    imgs = wait_images(pid, comfy_base_url(), timeout_s=300)
+                    if imgs:
+                        cr = resolve_comfy_root()
+                        current = str(cr / "output" / imgs[0][0] / imgs[0][1])
+            if current != img:
+                best["image"] = current
+                best["post_processed"] = True
+                ok_count += 1
+        if ok_count:
+            print(f"  ✅ 批量后处理完成: {ok_count}/{len(results)} 张")
+
 def _workshop_engine(args: list[str]) -> None:
     """python -m agents workshop engine <nl_text> [--style STYLE] [--ollama]"""
     import argparse
@@ -1296,6 +1335,7 @@ def _workshop_manga(args: list[str]) -> None:
             meta=meta,
             panel_paths=panel_paths,
             assembled_path=output if output else None,
+            char_refs=char_refs,
         )
 
         # 后处理：超分 + 修脸

@@ -497,6 +497,7 @@ def generate_manga_gallery(
     meta: dict[str, Any],
     panel_paths: dict[str, str],
     assembled_path: str | None = None,
+    char_refs: dict[str, str] | None = None,
 ) -> str:
     """为漫画输出生成 HTML 画廊页。
 
@@ -505,6 +506,7 @@ def generate_manga_gallery(
         meta: metadata.json 内容
         panel_paths: {镜号: 图片路径} 映射
         assembled_path: 拼页图片路径
+        char_refs: 角色名 → 参考图路径 映射
 
     Returns:
         生成的 HTML 文件路径
@@ -533,10 +535,21 @@ def generate_manga_gallery(
     char_html = ""
     chars = meta.get("角色", {})
     if chars:
-        char_items = "".join(
-            f'<li><b>{name}</b>: {info.get("服饰","?")} / {info.get("发型","?")} / {info.get("特征","?")}</li>'
-            for name, info in chars.items()
-        )
+        char_items = ""
+        for name, info in chars.items():
+            ref_img = ""
+            if char_refs and name in char_refs:
+                ref_src = Path(char_refs[name]).name
+                try:
+                    import shutil
+                    shutil.copy2(char_refs[name], str(out_dir / ref_src))
+                    ref_img = f'<img src="{ref_src}" class="char-ref" title="{name} 参考图"/>'
+                except Exception:
+                    pass
+            char_items += f"""<li>
+  {ref_img}
+  <b>{name}</b>: {info.get("服饰","?")} / {info.get("发型","?")} / {info.get("特征","?")}
+</li>"""
         char_html = f"""
     <div class="section">
         <h2>角色</h2>
@@ -560,6 +573,7 @@ def generate_manga_gallery(
   .assembled{{max-width:100%;height:auto}}
   ul{{list-style:none}}
   li{{padding:4px 0;font-size:14px}}
+  .char-ref{{width:48px;height:48px;object-fit:cover;border-radius:4px;vertical-align:middle;margin-right:8px;border:1px solid #ddd}}
 </style></head><body>
 <h1>📖 漫画画廊</h1>
 <div class="meta">
