@@ -922,65 +922,83 @@ usage: python -m agents workshop <subcommand> [args...]
 
 ### `workshop create`
 
-一句话出图：端到端管线 `NL → Prompt引擎 → generate_with_quality×N → 逐张质检 → 综合排序 → 选最优`。
+一句话出图：端到端管线 `NL → Prompt引擎 → generate_with_quality×N → 逐张质检 → 综合排序 → 选最优 → (超分) → (修脸) → Gallery`。
 
 ```text
 usage: python -m agents workshop create [-h] [--count COUNT] [--style STYLE]
-                                        [--ref REF] [--preset PRESET]
+                                        [--ref REF] [--ip-weight IP_WEIGHT]
+                                        [--balance BALANCE] [--preset PRESET]
+                                        [--preset-define PRESET_DEFINE]
+                                        [--preset-file PRESET_FILE]
                                         [--min-score MIN_SCORE] [--retry RETRY]
                                         [--no-inspect] [--preview] [--ollama]
                                         [--output OUTPUT] [--gallery GALLERY]
-                                        [--seed SEED] [--open] [--negative NEGATIVE]
-                                        [--verbose] [--clean]
-                                        [--batch-file BATCH_FILE]
+                                        [--seed SEED] [--open]
+                                        [--negative NEGATIVE] [--verbose]
+                                        [--clean] [--upscale UPSCALE]
+                                        [--restore-face [RESTORE_FACE]]
+                                        [--lora LORA] [--lora-strength LORA_STRENGTH]
+                                        [--commercial] [--batch-file BATCH_FILE]
                                         [nl_text ...]
 
 参数:
-  --count COUNT      生成候选数（默认: 4）
-  --style STYLE      画风提示 (anime/photoreal/cg/...)
-  --ref REF          参考图路径（角色特征分析 — Ollama VL 模型增强分析）<br>
-                         V0.71: 结构化 JSON 特征提取（脸型/发型/瞳色/服饰/配件/色调）<br>
-                         注: Flux IP-Adapter 视觉条件控制暂不可用（XLabs 模型与 ComfyUI 节点不兼容）<br>
-                         当前为纯文本分析，参考图仅用于 Ollama 文字描述
-  --preset PRESET    质量预设 (quality/balanced/fast/...)
-  --min-score SCORE  最低 CLIP 分
-  --retry RETRY      失败重试次数
-  --no-inspect       跳过质检
-  --preview          预览模式（跳过生成，显示引擎推测 + 负向）
-  --ollama           使用 Ollama 优化 prompt
-  --output OUTPUT    结果输出目录（保存 metadata.json + best.png，自动生成 gallery）
-                      metadata.json 含逐候选信息（seed/score/retries/error/inspect）
-  --gallery GALLERY  候选画廊输出目录（默认仅 --output 时自动生成到 <output>/gallery/）
-                      Gallery 按综合分降序排列，显示负向提示词 + 引擎推测信息 + 排名标签
-  --seed SEED        起始种子（0=随机，固定种子可复现结果）
-  --open               生成后打开 Gallery 页面（优先）或最优图
-  --negative NEGATIVE   负向提示词（不设置时使用风格预设默认值）
-                        负向提示词（不设置时使用风格预设默认值 + 自动 NL 检测）
-                         自动检测: "不要模糊"→blurry, "别崩手"→bad hands, "太暗"→dark...
-  --verbose          详细信息
-  --clean            生成前清理输出目录旧文件（删除 *.png/*.json/*.html/gallery/）
+  --count COUNT          生成候选数（默认: 4）
+  --style STYLE          画风提示 (anime/anime_commercial/photoreal/cg/cosplay/...)
+  --ref REF              参考图路径（ReferenceLatent VAE 视觉参考 + Ollama 文本分析）
+                          V0.72+: Flux.2 Klein 原生视觉参考管线
+  --ip-weight IP_WEIGHT  参考图影响权重 0~1（默认 0.7，传给 RefLatentController）
+  --balance BALANCE      文字/参考注意力平衡 0~1（默认 0.5，0=纯参考 1=纯文字）
+  --preset PRESET        质量预设 (quality/commercial/balanced/fast/portrait)
+                         使用 --preset-list 查看全部
+  --preset-define DEF    自定义预设: "my:steps=35,cfg=7.5;v:steps=20,cfg=5.0"
+  --preset-file PATH     从 JSON 文件加载自定义预设
+  --min-score SCORE      最低 CLIP 分
+  --retry RETRY          失败重试次数
+  --no-inspect           跳过质检
+  --preview              预览模式（跳过生成，显示引擎推测 + 负向）
+  --ollama               使用 Ollama 优化 prompt
+  --output OUTPUT        结果输出目录（保存 metadata.json + best.png，自动生成 gallery）
+                          metadata.json 含 ref_image/ip_weight/ip_balance + 逐候选信息
+  --gallery GALLERY      候选画廊输出目录
+  --seed SEED            起始种子（0=随机，固定种子可复现）
+  --open                 生成后打开 Gallery 页面（优先）或最优图
+  --negative NEGATIVE    负向提示词（不设置时使用风格预设默认值 + 自动 NL 检测）
+                          自动检测: "不要模糊"→blurry, "别崩手"→bad hands
+  --verbose              详细信息
+  --clean                生成前清理输出目录旧文件
+  --upscale UPSCALE      超分倍数 (2.0/4.0, 0=不超分)
+  --restore-face [MODEL] 修脸模型 (GFPGANv1.4.pth / codeformer-v0.1.0.pth)
+  --lora LORA            LoRA 权重文件名（ComfyUI/models/loras/ 下）
+  --lora-strength FLOAT  LoRA 强度（默认 1.0）
+  --commercial           一键商业图: --style anime_commercial --preset commercial
+                          --upscale 2.0 --restore-face GFPGANv1.4.pth
+  --batch-file PATH      批量文件路径（每行一条 prompt，空行和 # 注释行跳过）
+                          支持 "prompt | ref_path.png" 每行独立参考图
+                          支持 --upscale/--restore-face 批量后处理
 
-  --batch-file PATH  批量文件路径（每行一条 prompt，空行和 # 注释行跳过）
-                     批量模式下自动为每条 prompt 创建独立子目录（<编号>_<slug>/）
-                     生成 batch_metadata.json 汇总结果
-
-Gallery 特性:
+Gallery 特性 (V0.46-V0.86):
   - 键盘导航: ← → 切换候选，ESC 关闭
   - 下载按钮: Lightbox 右上角 ⬇ 下载当前图片
-  - 逐部位质检: Face/L-Eye/R-Eye/Hand/Foot/Blur 彩色标签
+  - 逐部位质检: Face/L-Eye/R-Eye/Hand/Foot/Blur 彩色标签 (绿≥0.8 黄≥0.3 红<0.3)
+  - 滚轮缩放: 鼠标滚轮 0.5x~10x + 拖动平移 + 双击还原
+  - 质检 overlay: Lightbox 显示逐部位浮标 + 综合分
+  - 主题切换: 右上角 ☀️/🌙 亮色/暗色切换 (localStorage 持久化)
+  - 幻灯片: Space 键 3 秒自动轮播
+  - 参考图展示: 有 --ref 时顶部显示参考图 + 权重/平衡参数
+  - 对比模式: 按 C 或点击 🔍 对比，参考图半透明叠加
+  - 一键复制 seed: 卡片 📋 按钮复制种子到剪贴板
 
 示例:
-  python -m agents workshop create "银发少女校服教室窗边逆光" --count 6
-  python -m agents workshop create "prompt" --style anime --ref ref.png
-  python -m agents workshop create "prompt" --preview  # 预览 prompt + 引擎推测 + 负向
-  python -m agents workshop create "prompt" --ollama  # 使用 Ollama 增强
-  python -m agents workshop create "prompt" --output ./result  # 保存最优
-  python -m agents workshop create "prompt" --gallery ./gallery  # 所有候选 HTML 画廊
-  python -m agents workshop create "银发少女" --seed 42  # 固定种子可复现
-  python -m agents workshop create "银发少女" --open      # 生成后自动打开最优图
-  python -m agents workshop create "银发少女" --negative "blurry, watermark, bad hands"  # 自定义负向
-  python -m agents workshop create "校服少女" --style anime \
-    --negative "photoreal, 3d, lowres"  # anime 风格排除非目标画风
+  python -m agents workshop create "银发精灵 森林 商业插画" --commercial
+  python -m agents workshop create "银发精灵" --commercial --ref ref.png
+  python -m agents workshop create "银发精灵" --lora char.sft --preset commercial
+  python -m agents workshop create "校服少女" --style anime --preset quality
+  python -m agents workshop create "精灵弓箭手" --count 6 --no-inspect
+  python -m agents workshop create "prompt" --ref ref.png --ip-weight 0.5 --balance 0.3
+  python -m agents workshop create "prompt" --batch-file prompts.txt --upscale 2.0
+  python -m agents workshop create "赛博朋克少女" --preset-define "hd:steps=35,cfg=7.0"
+  python -m agents workshop create "银发少女" --open --negative "blurry, watermark"
+  python -m agents workshop create "prompt" --preview  # 预览 prompt + 引擎推测
 ```
 
 ### `workshop engine`
@@ -1040,7 +1058,12 @@ usage: python -m agents workshop engine [-h] [--style STYLE] [--ollama]
 usage: python -m agents workshop manga [-h] [--style STYLE] [--preview]
                                        [--layout LAYOUT] [--char CHAR ...]
                                        [--script-file SCRIPT_FILE]
-                                       [--output OUTPUT]
+                                       [--output OUTPUT] [--retry RETRY]
+                                       [--sdxl] [--ref REF ...]
+                                       [--ip-weight IP_WEIGHT]
+                                       [--preset PRESET]
+                                       [--upscale UPSCALE]
+                                       [--restore-face [RESTORE_FACE]]
                                        script_text [script_text ...]
 
 参数:
@@ -1049,28 +1072,27 @@ usage: python -m agents workshop manga [-h] [--style STYLE] [--preview]
   --layout LAYOUT         拼页布局 (auto/4koma)
   --char "名:服饰:发型:特征"  角色定义 (可重复，支持 1~4 个)
   --script-file FILE       从文件读取剧本（替代命令行参数）
-  --output DIR             输出目录（保存拼页 + 逐格图 + metadata.json）
+  --output DIR             输出目录（保存拼页 + 逐格图 + metadata.json + 画廊）
   --retry N                每格失败后最大重试次数（默认 0=不重试）
   --sdxl                   使用 SDXL 代替 Flux（更快，支持 LoRA）
-  script_text             剧本/场景描述
+  --ref REF                参考图路径: "Alice=path.png"（角色专属）或 "path.png"（全局）
+  --ip-weight FLOAT        参考图影响权重 0~1（默认 0.7）
+  --preset PRESET          质量预设 (commercial/quality/balanced/fast)
+  --upscale UPSCALE        超分倍数 (2.0/4.0, 0=不超分，对拼页生效)
+  --restore-face [MODEL]   修脸模型 (GFPGANv1.4.pth / codeformer-v0.1.0.pth)
+  script_text              剧本/场景描述
 
 示例:
   python -m agents workshop manga "教室中，两人相对而立。" --preview
-  # 默认角色 Knives / Caster，预览完整分镜表 + 面板（种子/尺寸/Prompt）
+  # 默认角色 Knives / Caster，预览完整分镜表 + 面板
 
-  python -m agents workshop manga "森林里的追逐" --preview \
-    --char "战士:重甲:金发:巨剑" \
-    --char "法师:法袍:银发:魔法书"
-  # 自定义角色 (2 个 → 4 镜)
+  python -m agents workshop manga "森林里的追逐" \
+    --char "战士:重甲:金发:巨剑" --char "法师:法袍:银发:魔法书"
 
-  python -m agents workshop manga "四人小队巡逻" --preview \
-    --char "A:盔甲:金发:剑士" \
-    --char "B:法袍:银发:法师" \
-    --char "C:皮甲:棕发:弓手" \
-    --char "D:斗篷:红发:盗贼"
-  # 4 角色 → 6 镜 (含群像)
-
-  python -m agents workshop manga --script-file script.txt --preview
+  python -m agents workshop manga "精灵与骑士" --output ./manga \
+    --char "精灵:银发:精灵耳:蓝瞳" "骑士:铠甲:金发:绿瞳" \
+    --ref "精灵=C:/ref_elf.png" "骑士=C:/ref_knight.png" \
+    --preset commercial --upscale 2.0 --restore-face
   # 从文件读取剧本
 
   python -m agents workshop manga "教室中，两人相对而立。" --output ./manga-out
