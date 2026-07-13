@@ -183,6 +183,7 @@ def create_from_nl(
                 seed=s,
                 negative_prompt=negative_prompt,
                 filename_prefix=f"create_{i:02d}",
+                ref_image=ref_path,
             )
         except Exception as exc:
             had_errors = True

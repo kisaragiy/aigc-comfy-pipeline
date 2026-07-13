@@ -394,3 +394,49 @@ class TestDetectNegative:
         """直接在文本中的关键词（无句式）也被检测。"""
         result = _detect_negative("这张图太模糊了")
         assert "blurry" in result
+
+
+# ── ref_analyze_to_prompt 增强字段 ────────────────────────
+
+class TestRefAnalyzeToPrompt:
+    """测试 ref_analyze_to_prompt 返回增强字段。"""
+
+    def test_returns_new_fields(self):
+        """返回字典包含 V0.71 新增字段。"""
+        # 无需实际分析，测试返回结构
+        from workshop.engine.engine import ref_analyze_to_prompt
+
+        # 当 ollama 不可用，所有新增字段应为空字符串
+        result = ref_analyze_to_prompt("nonexistent.png", "test prompt", ollama_available=False)
+
+        assert "composition" in result
+        assert "lighting" in result
+        assert "colors" in result
+        assert "background" in result
+        assert isinstance(result["composition"], str)
+        assert isinstance(result["lighting"], str)
+        assert isinstance(result["colors"], str)
+        assert isinstance(result["background"], str)
+
+    def test_ollama_unavailable_fallback(self):
+        """ollama 不可用时 prompt 仍有效。"""
+        from workshop.engine.engine import ref_analyze_to_prompt
+
+        result = ref_analyze_to_prompt("nonexistent.png", "a girl in a garden", ollama_available=False)
+
+        # prompt 应为有效字符串
+        assert result.get("prompt")
+        assert result.get("ref_prompt")
+        assert "masterpiece" in result.get("ref_prompt", "")
+        assert "best quality" in result.get("ref_prompt", "")
+
+    def test_ollama_unavailable_new_fields_empty(self):
+        """ollama 不可用时新增字段为空。"""
+        from workshop.engine.engine import ref_analyze_to_prompt
+
+        result = ref_analyze_to_prompt("nonexistent.png", "test", ollama_available=False)
+
+        assert result.get("composition") == ""
+        assert result.get("lighting") == ""
+        assert result.get("colors") == ""
+        assert result.get("background") == ""

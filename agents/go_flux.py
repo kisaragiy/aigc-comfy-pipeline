@@ -59,8 +59,12 @@ def build_flux_workflow(
     sampler: str = "euler",
     scheduler: str = "normal",
     filename_prefix: str = "flux_klein",
+    ref_image: str | None = None,  # NEW: 参考图路径（IP-Adapter 视觉条件控制）
+    ip_weight: float = 0.7,        # IP-Adapter 权重
 ) -> tuple[dict[str, Any], int]:
     """构建 Flux.2 Klein API 格式工作流。
+
+    支持 LoRA 注入和 IP-Adapter 视觉参考（ref_image）。
 
     Args:
         prompt: 正向提示词
@@ -75,6 +79,8 @@ def build_flux_workflow(
         sampler: 采样器名称
         scheduler: 调度器
         filename_prefix: 输出文件名前缀
+        ref_image: 参考图路径（IP-Adapter 视觉条件控制，None=禁用）
+        ip_weight: IP-Adapter 权重（0.0~1.0，默认 0.7）
 
     Returns:
         (workflow_dict, actual_seed)
@@ -116,6 +122,47 @@ def build_flux_workflow(
             "strength_clip": lora_strength}}
         model_out = [nl, 0]
         clip_out = [nl, 1]
+
+    # ── IP-Adapter 视觉条件控制（可选） ────────────────────────
+    ref_image_path = ref_image
+    if ref_image_path:
+        # 检查参考图是否存在
+        if not __import__("os").path.isfile(ref_image_path):
+            print(f"[WARN] 参考图不存在: {ref_image_path}，跳过 IP-Adapter")
+            ref_image_path = None
+
+    ipa_model_out = model_out  # 默认使用原模型（无 IP-Adapter）
+    if ref_image_path:
+        # LoadImage: 加载参考图
+        n_ref = nxt()
+        wf[n_ref] = {"class_type": "LoadImage", "inputs": {"image": ref_image_path}}
+
+        # IPAdapterUnifiedLoader: 加载 IP-Adapter + CLIP Vision 模型
+        n_ipa_loader = nxt()
+        wf[n_ipa_loader] = {
+            "class_type": "IPAdapterUnifiedLoader",
+            "inputs": {
+                "model_name": "ip-adapter-flux-xlabs.safetensors",
+                "preset": "flux",
+            },
+        }
+
+        # IPAdapterAdvanced: 应用视觉条件到模型
+        n_ipa = nxt()
+        wf[n_ipa] = {
+            "class_type": "IPAdapterAdvanced",
+            "inputs": {
+                "model": model_out,
+                "ipadapter": [n_ipa_loader, 1],  # output 1 = ipadapter stack
+                "image": [n_ref, 0],
+                "weight": ip_weight,
+                "weight_type": "linear",
+                "noise": 0.0,
+                "start_at": 0.0,
+                "end_at": 1.0,
+            },
+        }
+        ipa_model_out = [n_ipa, 0]
 
     # 4. CLIPTextEncode (positive)
     n4 = nxt()
@@ -162,7 +209,7 @@ def build_flux_workflow(
     # 10. CFGGuider
     n10 = nxt()
     wf[n10] = {"class_type": "CFGGuider", "inputs": {
-        "model": model_out,
+        "model": ipa_model_out,
         "positive": [n4, 0],
         "negative": neg_conditioning,
         "cfg": cfg}}
