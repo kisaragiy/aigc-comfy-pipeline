@@ -493,7 +493,9 @@ def _workshop_create(args: list[str]) -> None:
     parser.add_argument("nl_text", nargs="*", help="自然语言描述")
     parser.add_argument("--count", type=int, default=4, help="生成候选数（默认: 4）")
     parser.add_argument("--style", default=None, help="画风提示 (anime/photoreal/cg/cosplay/...)")
-    parser.add_argument("--ref", default=None, help="参考图路径（角色特征分析）")
+    parser.add_argument("--ref", default=None, help="参考图路径（角色特征分析 + VAE 视觉参考）")
+    parser.add_argument("--ip-weight", type=float, default=0.7, help="参考图影响权重（0.0~1.0，默认 0.7）")
+    parser.add_argument("--balance", type=float, default=0.5, help="文字/参考注意力平衡（0~1，默认 0.5）")
     parser.add_argument("--preset", default=None, help="质量预设 (quality/balanced/fast/...)")
     parser.add_argument("--min-score", type=float, default=0.0, help="最低 CLIP 分")
     parser.add_argument("--retry", type=int, default=0, help="失败重试次数")
@@ -545,6 +547,8 @@ def _workshop_create(args: list[str]) -> None:
         verbose=parsed.verbose,
         gallery_dir=gallery_dir,
         clean=parsed.clean,
+        ip_weight=parsed.ip_weight,
+        ip_balance=parsed.balance,
     )
 
     # 引擎推测（也用于 preview 模式）
