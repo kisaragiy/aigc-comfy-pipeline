@@ -58,6 +58,7 @@ def create_from_nl(
     ip_balance: float = 0.5,
     lora_name: str | None = None,
     lora_strength: float = 1.0,
+    variants: int = 1,
 ) -> dict[str, Any]:
     """自然语言描述 → 生成多张候选 → 质检排序 → 返回最优。
 
@@ -113,19 +114,38 @@ def create_from_nl(
             if verbose:
                 print(f"🧹 已清理: {output_dir}/")
 
-    # 2. 生成专业提示词
+    # 2. 生成专业提示词（支持多 variant）
     ollama_avail = use_ollama
 
+    ref_analysis = None
     if ref_path and Path(ref_path).is_file():
-        analysis = ref_analyze_to_prompt(ref_path, nl_text, ollama_available=ollama_avail)
-        final_prompt = analysis["prompt"]
+        ref_analysis = ref_analyze_to_prompt(ref_path, nl_text, ollama_available=ollama_avail)
         if verbose:
-            print(f"📎 参考图分析: {analysis.get('character_desc', '')[:60]}...")
-    else:
-        final_prompt = nls_to_prompt(nl_text, style_hint=style_hint, ollama_available=ollama_avail)
+            print(f"📎 参考图分析: {ref_analysis.get('character_desc', '')[:60]}...")
 
-    if verbose:
-        print(f"📝 Prompt ({'Ollama' if ollama_avail else '模板'}): {final_prompt[:120]}...")
+    if variants > 1:
+        # 多 prompt 模式：生成不同角度的提示词
+        from workshop.engine.engine import generate_prompt_variants
+        prompt_variants = generate_prompt_variants(
+            nl_text, style_hint,
+            ref_analysis=ref_analysis, count=min(variants, 5),
+            ollama_available=ollama_avail)
+        if verbose:
+            print(f"📝 多 prompt 模式 ({len(prompt_variants)} 个角度):")
+            for pv in prompt_variants:
+                print(f"  [{pv['focus']}] {pv['prompt'][:80]}...")
+    else:
+        # 单 prompt 模式（原行为）
+        if ref_analysis:
+            final_prompt = ref_analysis["prompt"]
+        else:
+            final_prompt = nls_to_prompt(nl_text, style_hint=style_hint, ollama_available=ollama_avail)
+        prompt_variants = [{"prompt": final_prompt, "focus": "default", "camera": ""}]
+        if verbose:
+            print(f"📝 Prompt ({'Ollama' if ollama_avail else '模板'}): {final_prompt[:120]}...")
+
+    # 计算每 variant 的生成数
+    per_variant = max(1, count // len(prompt_variants))
 
     # 2b. 负向提示词：用户指定优先，否则使用风格预设默认值
     if not negative_prompt:
@@ -166,27 +186,31 @@ def create_from_nl(
         _maybe_save_output(result, output_dir)
         return result
 
-    # 3. 生成多张候选
+    # 3. 生成多张候选（支持多 prompt variant）
     from agents.go_flux import build_flux_workflow
-
-    candidates: list[dict[str, Any]] = []
+    from agents.comfy_utils import resolve_comfy_root
     comfy_root = resolve_comfy_root()
+    candidates: list[dict[str, Any]] = []
     had_errors = False
+    total_generations = len(prompt_variants) * per_variant
 
-    for i in range(count):
-        s = seed + i if seed > 0 else -1
-        print(f"\r  [{i+1}/{count}] 生成中 seed={s}...", end="", flush=True)
+    for vi, pv in enumerate(prompt_variants):
+        variant_prompt = pv["prompt"]
+        for i in range(per_variant):
+            s = seed + len(candidates) if seed > 0 else -1
+            idx = vi * per_variant + i + 1
 
+            print(f"\r  [{idx}/{total_generations}] [{pv['focus']}] 生成中 seed={s}...", end="", flush=True)
         try:
             qr = generate_with_quality(
-                build_flux_workflow, final_prompt,
+                build_flux_workflow, variant_prompt,
                 preset=preset,
                 min_score=min_score,
                 max_retries=retry,
                 no_validate=no_validate,
                 seed=s,
                 negative_prompt=negative_prompt,
-                filename_prefix=f"create_{i:02d}",
+                filename_prefix=f"create_{idx:02d}",
                 ref_image=ref_path,
                 ip_weight=ip_weight,
                 ip_balance=ip_balance,
@@ -234,8 +258,9 @@ def create_from_nl(
         candidates.append(candidate)
 
         score_str = f"score={candidate['score']:.2f}" if candidate['score'] >= 0 else "score=?"
+        focus_tag = f" [{pv['focus']}]" if len(prompt_variants) > 1 else ""
         img_tag = "✅" if image_path else "❌"
-        print(f"\r  [{i+1}/{count}] {img_tag} seed={candidate['seed']} {score_str}  ")
+        print(f"\r  [{idx}/{total_generations}] {img_tag}{focus_tag} seed={candidate['seed']} {score_str}  ")
 
     # 4. 逐张质检
     if inspect and candidates:
