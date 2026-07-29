@@ -16,6 +16,29 @@ from comfy_utils import bootstrap_agents_path
 
 bootstrap_agents_path()
 
+# VLM 审美评分（可选）
+_VLM_SCORER = None
+
+
+def _get_vlm_scorer() -> Any:
+    """懒加载 VLM 评分器。"""
+    global _VLM_SCORER
+    if _VLM_SCORER is None:
+        try:
+            from agents.aesthetic_scorer import AestheticScorer
+            _VLM_SCORER = AestheticScorer(auto_start=False, verbose=False)
+        except Exception:
+            _VLM_SCORER = False  # 标记为不可用
+    return _VLM_SCORER if _VLM_SCORER is not False else None
+
+
+def aesthetic_score(image_path: str) -> dict[str, Any]:
+    """VLM 审美评分（调用 Qwen3.5-9B）。"""
+    scorer = _get_vlm_scorer()
+    if scorer is None:
+        return {"available": False, "error": "VLM scorer not available"}
+    return scorer.score(image_path)
+
 
 def _clip_score(image_path: str, prompt: str) -> dict[str, Any]:
     """CLIP 图文相关性评分 [0,1]。"""
@@ -71,6 +94,45 @@ def _detect_objects(image_path: str, model_path: str) -> list[dict[str, Any]]:
         return [{"error": f"检测失败: {e}"}]
 
 
+def _check_face_mediapipe(image_path: str) -> dict[str, Any] | None:
+    """MediaPipe Face Detection — 对动漫脸效果好，无需额外模型文件。"""
+    try:
+        import mediapipe as mp
+        import cv2
+        img = cv2.imread(image_path)
+        if img is None:
+            return None
+        rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        with mp.solutions.face_detection.FaceDetection(
+            model_selection=1, min_detection_confidence=0.3
+        ) as fd:
+            results = fd.process(rgb)
+            if results.detections:
+                faces = []
+                for d in results.detections:
+                    box = d.location_data.relative_bounding_box
+                    h, w, _ = img.shape
+                    faces.append({
+                        "x": int(box.xmin * w),
+                        "y": int(box.ymin * h),
+                        "w": int(box.width * w),
+                        "h": int(box.height * h),
+                        "confidence": round(d.score[0], 3),
+                    })
+                return {
+                    "face_count": len(faces),
+                    "max_confidence": max(f["confidence"] for f in faces),
+                    "detections": faces[:5],
+                    "ok": 0 < len(faces) <= 2,
+                    "method": "mediapipe",
+                }
+    except ImportError:
+        pass  # mediapipe not installed — skip
+    except Exception:
+        pass
+    return None
+
+
 def _check_face(image_path: str) -> dict[str, Any]:
     """人脸检测 — YOLO → OpenCV Haar cascade 降级。"""
     from model_manager import resolve_models_root
@@ -93,7 +155,12 @@ def _check_face(image_path: str) -> dict[str, Any]:
                     "method": "yolo",
                 }
 
-    # 降级到 OpenCV Haar cascade（built-in，无需额外模型文件）
+    # 降级：MediaPipe Face Detection（对动漫脸更友好，无需模型文件）
+    mp_result = _check_face_mediapipe(image_path)
+    if mp_result:
+        return mp_result
+
+    # 最终降级：OpenCV Haar cascade（built-in）
     try:
         import cv2
         img = cv2.imread(image_path)
@@ -246,6 +313,19 @@ def validate_image(image_path: str, prompt: str) -> dict[str, Any]:
     # 5. 综合评分
     score = _compute_overall(result)
     result["overall"] = score
+
+    # 6. VLM 审美评分（可选）
+    vlm = aesthetic_score(image_path)
+    if vlm.get("available"):
+        result["aesthetic"] = {
+            "face_score": vlm.get("face_score", -1),
+            "composition_score": vlm.get("composition_score", -1),
+            "color_score": vlm.get("color_score", -1),
+            "overall_score": vlm.get("overall_score", -1),
+            "feedback": vlm.get("overall_feedback", vlm.get("feedback", "")),
+        }
+    else:
+        result["aesthetic"] = {"available": False}
 
     return result
 

@@ -11,61 +11,113 @@ DEMO_SCENES: list[dict[str, Any]] = [
     {
         "id": 1,
         "name": "portrait",
-        "title": "近景肖像",
-        "prompt_focus": "close-up portrait showing face and expression, looking at viewer, soft lighting",
+        "title": "罗兹瓦尔宅邸肖像",
+        "prompt_focus": "inside the Roswaal mansion, standing by a grand window with soft natural light filtering through, noble interior with ornate furniture, elegant aristocratic atmosphere, gentle expression",
+        "outfit_detail": "signature white and violet gradient dress with golden trim, white four-petal flower hair ornament on left side of head",
         "style": "anime",
-        "preset": "quality",
-        "steps": 30,
-        "cfg": 7.0,
+        "preset": "flux_portrait",
+        "steps": 28,
+        "cfg": 2.5,
+        "model_type": "flux",
     },
     {
         "id": 2,
         "name": "halfbody",
-        "title": "半身站姿",
-        "prompt_focus": "half-body standing pose, full outfit visible, confident posture, studio lighting",
+        "title": "宅邸玫瑰花园",
+        "prompt_focus": "in the mansion's rose garden at dawn, surrounded by blooming roses and morning mist, dewdrops on petals, warm golden hour sunlight filtering through trees, elegant standing pose",
+        "outfit_detail": "full view of elegant white and violet gradient dress with golden ornaments, dress flowing gracefully, white flower hair ornament visible",
         "style": "anime",
-        "preset": "quality",
-        "steps": 25,
-        "cfg": 7.0,
+        "preset": "flux_quality",
+        "steps": 28,
+        "cfg": 2.0,
+        "model_type": "flux",
     },
     {
         "id": 3,
         "name": "action",
-        "title": "动态/战斗",
-        "prompt_focus": "dynamic action pose, mid-motion, dramatic angle, speed lines, intense expression",
+        "title": "冰魔法战斗",
+        "prompt_focus": "casting ice magic, crystalline ice shards and snowflakes floating in mid-air, glowing aqua magic circle beneath feet, intense battle expression, dynamic combat pose, magical energy swirling, dramatic rim lighting",
+        "outfit_detail": "dress flowing dynamically with motion, ice-blue magical energy swirling around the hem, white flower ornament in wind-blown hair",
         "style": "anime",
-        "preset": "balanced",
+        "preset": "flux_balanced",
         "steps": 20,
-        "cfg": 8.0,
+        "cfg": 1.5,
+        "model_type": "flux",
     },
     {
         "id": 4,
         "name": "fullbody_env",
-        "title": "环境全身",
-        "prompt_focus": "full body in detailed environment, atmospheric lighting, wide shot, scenic background",
+        "title": "艾利奥尔大草原",
+        "prompt_focus": "standing on the Meadow of Elior at sunset, vast grasslands stretching to horizon, gentle wind blowing through hair and dress, dramatic sky with clouds, golden and purple twilight atmosphere, elf homeland scenery",
+        "outfit_detail": "complete view of elegant white and violet dress silhouette against the sunset sky, golden trim catching the last light",
         "style": "anime",
-        "preset": "quality",
-        "steps": 30,
-        "cfg": 7.0,
+        "preset": "flux_quality",
+        "steps": 28,
+        "cfg": 2.0,
+        "model_type": "flux",
     },
     {
         "id": 5,
         "name": "expression",
-        "title": "表情特写",
-        "prompt_focus": "extreme close-up on face, emotional expression, tears or smile, shallow depth of field",
+        "title": "王选厅",
+        "prompt_focus": "in the royal selection hall, solemn dignified atmosphere, candlelit room with tall stained glass windows casting colored light, determined yet gentle expression, noble and resolute gaze, soft warm interior lighting",
+        "outfit_detail": "intricate details of the white and violet dress visible, golden ornaments catching candlelight, white flower ornament softly lit",
         "style": "anime",
-        "preset": "quality",
-        "steps": 30,
-        "cfg": 6.5,
+        "preset": "flux_quality",
+        "steps": 28,
+        "cfg": 2.5,
+        "model_type": "flux",
     },
 ]
 
 
+# ── 角色特征预设 ──────────────────────────────────────
+
+CHARACTER_PRESETS: dict[str, str] = {
+    "emilia": (
+        "Emilia (Re:Zero), the silver-haired half-elf with amethyst-purple eyes, "
+        "long silver hair with gentle waves, pointed elven ears, "
+        "wearing her elegant white and violet gradient dress with golden trim and ornaments, "
+        "a distinctive white four-petal flower hair ornament pinned on the left side of her head, "
+        "noble and graceful aura, gentle expression, pale skin"
+    ),
+    "rem": (
+        "Rem (Re:Zero), the blue-haired oni maid with light blue eyes, "
+        "short blue bob-cut hair with a white flower hair ornament on the right side, "
+        "wearing a black and white french maid uniform, "
+        "gentle and devoted expression, pale skin"
+    ),
+    "ram": (
+        "Ram (Re:Zero), the pink-haired oni maid with pink eyes, "
+        "short pink hair with a red headband, "
+        "wearing a pink and white french maid uniform, "
+        "confident and sharp expression"
+    ),
+}
+
+
+def _expand_character(char_desc: str) -> str:
+    """If char_desc is a known short name, expand to full description."""
+    key = char_desc.strip().lower().rstrip(".!,")
+    # Handle "Emilia (Re:Zero)" -> look up "emilia"
+    if "(" in key:
+        key = key.split("(")[0].strip()
+    return CHARACTER_PRESETS.get(key, char_desc)
+
+
 def _build_prompt(char_desc: str, scene: dict[str, Any]) -> str:
-    """为场景构建完整 prompt。"""
+    """为场景构建自然语言描述（Flux 友好格式）。
+
+    整合角色描述 + 场景焦点 + 服装细节。
+    """
+    char_desc = _expand_character(char_desc)
     focus = scene["prompt_focus"]
-    style = scene.get("style", "anime")
-    return f"{char_desc}, {focus}, {style} style, high quality, detailed, masterpiece"
+    outfit = scene.get("outfit_detail", "")
+
+    pieces = [char_desc, focus]
+    if outfit:
+        pieces.append(outfit)
+    return ". ".join(pieces) + "."
 
 
 def run_demo(
@@ -77,6 +129,7 @@ def run_demo(
     use_ollama: bool = False,
     no_learn: bool = True,
     verbose: bool = True,
+    model_type: str = "flux",
 ) -> dict[str, Any]:
     """面试样张管线：5 场景 × count_per_scene = 5~10 张成品。
 
@@ -85,7 +138,7 @@ def run_demo(
     Args:
         char_desc: 角色描述（如 "银发精灵 Alice, 蓝瞳, 白色长裙"）
         output_dir: 输出目录
-        count_per_scene: 每场景生成数（默认 1，建议 1~2）
+        count_per_scene: 每场景生成数（默认 4）
         ref_path: 可选的参考图（角色特征参考）
         use_ollama: 是否用 Ollama 增强 prompt
         no_learn: 默认关闭自动学习（demo 场景非典型）
@@ -133,6 +186,10 @@ def run_demo(
                 use_ollama=use_ollama,
                 no_learn=no_learn,
                 verbose=verbose,
+                prompt_ready=True,
+                face_detailer=True,
+                upscale=1.5 if model_type == "sdxl" else 1.0,
+                model_type=model_type,
             )
         except Exception as exc:
             print(f"    ❌ 生成失败: {exc}")
@@ -190,6 +247,7 @@ def run_demo(
     print(f"  输出目录: {out.resolve()}")
     print(f"  Gallery: {gallery_path or '无'}")
     print(f"  报告: {md_path}")
+    print(f"  📋 运行人工审核: python -m agents workshop review {out.resolve().name}/")
     print(f"{'='*50}\n")
 
     return {
@@ -233,10 +291,11 @@ def _build_simple_gallery(candidates: list[dict[str, Any]], out_dir: Path) -> st
         for c in group:
             img = c.get("image", "")
             seed = c.get("seed", "?")
-            score = c.get("score", -1)
+            score = c.get("score") if c.get("score") is not None else -1
+            score_display = f"{score:.2f}" if isinstance(score, (int, float)) and score >= 0 else "?"
             html_parts.append(
                 f"<div class='card'><img src='{img}' loading='lazy'/>"
-                f"<div class='label'>seed={seed} score={score:.2f}</div></div>"
+                f"<div class='label'>seed={seed} score={score_display}</div></div>"
             )
         html_parts.append("</div>")
 

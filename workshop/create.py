@@ -73,6 +73,24 @@ def create_from_nl(
     explore_rate: float = 0.0,
     no_learn: bool = False,
     auto_diverse: list[dict[str, Any]] | None = None,
+    # ── 模型类型 ──
+    model_type: str = "flux",
+    # ── 跳过引擎增强（prompt 已完整构建，如 demo 场景） ──
+    prompt_ready: bool = False,
+    # ── 质量增强（FaceDetailer / Upscale） ──
+    face_detailer: bool = True,
+    upscale: float = 1.0,
+    # ── VLM prompt 优化（Qwen3.5-9B） ──
+    use_vlm: bool = False,
+    # ── VLM 审美门禁 ──
+    aesthetic_min_score: float = 0.0,
+    # ── InstantID / ControlNet ──
+    faceid: bool = False,
+    controlnet_type: str | None = None,
+    controlnet_strength: float = 0.7,
+    # ── planner 自动选路 ──
+    auto_plan: bool = False,      # 启用 planner 自动决策
+    plan_preview: bool = False,   # 只看 plan 不跑图
 ) -> dict[str, Any]:
     """自然语言描述 → 生成多张候选 → 质检排序 → 返回最优。
 
@@ -113,6 +131,70 @@ def create_from_nl(
             "inspection_summary": "...",
         }
     """
+    # 0. planner 自动选路（auto_plan=True 时覆盖参数）
+    if auto_plan:
+        from workshop.engine.planner import plan_from_nl
+        plan = plan_from_nl(
+            nl_text,
+            ref_path=ref_path,
+            model_type=model_type,
+        )
+        if plan_preview:
+            print("\n  📋 自动计划:")
+            for k in ("scene", "tier", "preset", "face_detailer", "hand_refiner",
+                      "upscale", "steps", "cfg", "lora_name", "ref_method",
+                      "ip_weight", "ip_balance", "model_type"):
+                v = plan.get(k)
+                if v:
+                    print(f"    {k}: {v}")
+            return {"plan": plan, "preview": True}
+
+        # plan 覆盖参数
+        if plan.get("preset"):
+            preset = plan["preset"]
+        if plan.get("face_detailer"):
+            face_detailer = plan["face_detailer"]
+        if plan.get("upscale"):
+            upscale = plan["upscale"]
+        if plan.get("steps"):
+            steps = plan["steps"]
+        if plan.get("cfg"):
+            cfg = plan["cfg"]
+        if plan.get("lora_name") and not lora_name:
+            lora_name = plan["lora_name"]
+        if plan.get("lora_strength"):
+            lora_strength = plan["lora_strength"]
+
+        # ── 底模-LoRA 兼容检查 ──
+        if lora_name and not dry_run:
+            try:
+                from lora_manager import check_compatibility, resolve_base_model
+                current_base = resolve_base_model(checkpoint)
+                compat = check_compatibility(lora_name, current_base)
+                if not compat["compatible"]:
+                    print(f"  ⚠️ LoRA 兼容性: {compat['message']}")
+                    print(f"    建议: 换底模 '{checkpoint}' 或不用 LoRA '{lora_name}'")
+                elif not compat["recommended"]:
+                    print(f"  ℹ️ LoRA 兼容性: {compat['message']}")
+            except ImportError:
+                pass  # lora_manager 不存在时静默跳过
+
+        if plan.get("ip_weight"):
+            ip_weight = plan["ip_weight"]
+        if plan.get("ip_balance"):
+            ip_balance = plan["ip_balance"]
+        if plan.get("model_type"):
+            model_type = plan["model_type"]
+        if verbose:
+            print(f"\n  🤖 自动计划: {plan.get('scene','?')} / {plan.get('tier','?')} / {plan.get('preset','?')}")
+        else:
+            tier_str = plan.get('tier','?')
+            engine_str = plan.get('model_type','?')
+            scene_str = plan.get('scene','?')
+            vram = plan.get("vram_gb")
+            vram_str = f" VRAM={vram}GB" if vram else ""
+            print(f"  🤖 {scene_str} / {tier_str} / {engine_str}  face_detailer={plan.get('face_detailer',False)} upscale={plan.get('upscale',1.0)}x{vram_str}")
+
     # 1. 检查 ComfyUI 状态
     if not dry_run:
         comfy_ok = check_comfy_health()
@@ -139,22 +221,46 @@ def create_from_nl(
             if verbose:
                 print(f"🧹 已清理: {output_dir}/")
 
+    # ── 0. 前置检查：自动检测缺失模型 ──
+    if not dry_run:
+        try:
+            from workshop.models.auto_download import scan_all
+            scan = scan_all()
+            if scan["missing"]:
+                print(f"⚠️ 缺失 {len(scan['missing'])} 个模型（运行 auto_download --download 下载）:")
+                for m in scan["missing"]:
+                    print(f"  ❌ {m}")
+            if scan["invalid"]:
+                print(f"⚠️ {len(scan['invalid'])} 个模型文件损坏:")
+                for m in scan["invalid"]:
+                    print(f"  ⚠️ {m}")
+        except ImportError:
+            pass  # auto_download 模块不存在时跳过
+
     # 2. 生成专业提示词（支持多 variant）
     ollama_avail = use_ollama
 
     ref_analysis = None
-    if ref_path and Path(ref_path).is_file():
+    if ref_path and Path(ref_path).is_file() and not prompt_ready:
         ref_analysis = ref_analyze_to_prompt(ref_path, nl_text, ollama_available=ollama_avail)
         if verbose:
             print(f"📎 参考图分析: {ref_analysis.get('character_desc', '')[:60]}...")
 
-    if variants > 1:
+    # 安全兜底：确保 final_prompt 始终有值
+    final_prompt = nl_text
+
+    if prompt_ready:
+        # 直接使用已构建好的完整 prompt（如 demo 场景）
+        prompt_variants = [{"prompt": nl_text, "focus": "default", "camera": ""}]
+        if verbose:
+            print(f"📝 Prompt (预构建): {nl_text[:120]}...")
+    elif variants > 1:
         # 多 prompt 模式：生成不同角度的提示词
         from workshop.engine.engine import generate_prompt_variants
         prompt_variants = generate_prompt_variants(
             nl_text, style_hint,
             ref_analysis=ref_analysis, count=min(variants, 5),
-            ollama_available=ollama_avail)
+            ollama_available=ollama_avail, model_type=model_type)
         if verbose:
             print(f"📝 多 prompt 模式 ({len(prompt_variants)} 个角度):")
             for pv in prompt_variants:
@@ -164,10 +270,11 @@ def create_from_nl(
         if ref_analysis:
             final_prompt = ref_analysis["prompt"]
         else:
-            final_prompt = nls_to_prompt(nl_text, style_hint=style_hint, ollama_available=ollama_avail)
+            final_prompt = nls_to_prompt(nl_text, style_hint=style_hint, ollama_available=ollama_avail, model_type=model_type, use_vlm=use_vlm)
         prompt_variants = [{"prompt": final_prompt, "focus": "default", "camera": ""}]
         if verbose:
-            print(f"📝 Prompt ({'Ollama' if ollama_avail else '模板'}): {final_prompt[:120]}...")
+            label = "VLM" if use_vlm else ("Ollama" if ollama_avail else "模板")
+            print(f"📝 Prompt ({label}): {final_prompt[:120]}...")
 
     # 计算每 variant 的生成数
     per_variant = max(1, count // len(prompt_variants))
@@ -224,9 +331,34 @@ def create_from_nl(
     )
 
     # 3. 生成多张候选（支持多 prompt variant + 参数多样性）
-    from agents.go_flux import build_flux_workflow
-    from agents.comfy_utils import resolve_comfy_root
+    if model_type == "sdxl":
+        from agents.go_sdxl import build_sdxl_workflow
+        build_fn = build_sdxl_workflow
+    else:
+        from agents.go_flux import build_flux_workflow
+        build_fn = build_flux_workflow
+    from agents.comfy_utils import resolve_comfy_root, DEFAULT_COMFY_URL
     comfy_root = resolve_comfy_root()
+
+    # 复制参考图到 ComfyUI input/（如果有）
+    ref_image_name = None
+    if ref_path and Path(ref_path).is_file():
+        import shutil
+        comfy_input = comfy_root / "input"
+        if not comfy_input.is_dir():
+            comfy_input.mkdir(parents=True, exist_ok=True)
+        # 用原文件名，遇到冲突加时间戳
+        src_name = Path(ref_path).name
+        dst = comfy_input / src_name
+        if dst.exists():
+            from datetime import datetime
+            stamp = datetime.now().strftime("%H%M%S")
+            dst = comfy_input / f"{stamp}_{src_name}"
+        shutil.copy2(ref_path, str(dst))
+        ref_image_name = dst.name
+        if verbose:
+            print(f"📎 参考图已复制到 ComfyUI input/: {ref_image_name}")
+
     candidates: list[dict[str, Any]] = []
     had_errors = False
     total_generations = total_count
@@ -251,72 +383,78 @@ def create_from_nl(
             src_tag = ps.get("source", "")
             src_tag_str = f" [{src_tag}]" if src_tag and src_tag not in ("default",) else ""
 
-            print(f"\\r  [{idx}/{total_generations}]{src_tag_str} 生成中 seed={s}...", end="", flush=True)
-        try:
-            qr = generate_with_quality(
-                build_flux_workflow, variant_prompt,
-                preset=preset,
-                min_score=min_score,
-                max_retries=retry,
-                no_validate=no_validate,
-                seed=s,
-                negative_prompt=negative_prompt,
-                filename_prefix=f"create_{idx:02d}",
-                ref_image=ref_path,
-                ip_weight=ip_weight,
-                ip_balance=ip_balance,
-                lora_name=lora_name,
-                lora_strength=lora_strength,
-                steps=c_steps,
-                cfg=c_cfg,
-            )
-        except Exception as exc:
-            had_errors = True
-            print(f"\r  [{i+1}/{count}] ❌ seed={s}: {exc}")
-            candidates.append({
-                "seed": s,
-                "image": "",
-                "score": -1,
-                "error": str(exc),
-                "retries": 0,
-            })
-            continue
+            print(f"\n  [{idx}/{total_generations}]{src_tag_str} 生成中 seed={s}...", end="", flush=True)
+            try:
+                qr = generate_with_quality(
+                    build_fn, variant_prompt,
+                    preset=c_preset,
+                    min_score=min_score,
+                    max_retries=retry,
+                    no_validate=no_validate,
+                    seed=s,
+                    negative_prompt=negative_prompt,
+                    filename_prefix=f"pipeline_create_{idx:02d}",
+                    ref_image=ref_image_name or ref_path,
+                    ip_weight=ip_weight,
+                    ip_balance=ip_balance,
+                    face_detailer=face_detailer,
+                    upscale=upscale,
+                    lora_name=lora_name,
+                    steps=c_steps,
+                    cfg=c_cfg,
+                    aesthetic_min_score=aesthetic_min_score,
+                    faceid=faceid,
+                    controlnet_type=controlnet_type,
+                    controlnet_strength=controlnet_strength,
+                )
+            except Exception as exc:
+                had_errors = True
+                print(f"\\\\n  [{i+1}/{count}] ❌ seed={s}: {exc}")
+                candidates.append({
+                    "seed": s,
+                    "image": "",
+                    "score": -1,
+                    "error": str(exc),
+                    "retries": 0,
+                })
+                continue
 
-        # 提取图片路径
-        image_path = ""
-        for img_entry in qr.get("images", []):
-            if isinstance(img_entry, str):
-                # 绝对路径格式（generate_with_quality 返回）
-                p = Path(img_entry)
-                if p.is_file():
-                    image_path = str(p.resolve())
-                    break
-            else:
-                # 旧格式 (subfolder, name) tuple — 兼容
-                try:
-                    sub, name = img_entry
-                    p = comfy_root / "output" / sub / name
+            # 提取图片路径
+            image_path = ""
+            for img_entry in qr.get("images", []):
+                if isinstance(img_entry, str):
+                    # 绝对路径格式（generate_with_quality 返回）
+                    p = Path(img_entry)
                     if p.is_file():
                         image_path = str(p.resolve())
                         break
-                except (ValueError, TypeError):
-                    pass
+                else:
+                    # 旧格式 (subfolder, name) tuple — 兼容
+                    try:
+                        sub, name = img_entry
+                        p = comfy_root / "output" / sub / name
+                        if p.is_file():
+                            image_path = str(p.resolve())
+                            break
+                    except (ValueError, TypeError):
+                        pass
 
-        candidate = {
-            "seed": qr.get("seed", 0),
-            "image": image_path,
-            "score": qr.get("score", -1),
-            "retries": qr.get("retries", 0),
-            "param_source": src_tag,
-            "param_steps": c_steps,
-            "param_cfg": c_cfg,
-        }
-        candidates.append(candidate)
+            candidate = {
+                "seed": qr.get("seed", 0),
+                "image": image_path,
+                "score": qr.get("score") if qr.get("score") is not None else -1,
+                "retries": qr.get("retries", 0),
+                "param_source": src_tag,
+                "param_steps": c_steps,
+                "param_cfg": c_cfg,
+            }
+            candidates.append(candidate)
 
-        score_str = f"score={candidate['score']:.2f}" if candidate['score'] >= 0 else "score=?"
-        focus_tag = f" [{pv['focus']}]" if len(prompt_variants) > 1 else ""
-        img_tag = "✅" if image_path else "❌"
-        print(f"\\r  [{idx}/{total_generations}] {img_tag}{src_tag_str}{focus_tag} seed={candidate['seed']} {score_str}  ")
+            score_val = candidate['score']
+            score_str = f"score={score_val:.2f}" if isinstance(score_val, (int, float)) and score_val >= 0 else "score=?"
+            focus_tag = f" [{pv['focus']}]" if len(prompt_variants) > 1 else ""
+            img_tag = "✅" if image_path else "❌"
+            print(f"\n  [{idx}/{total_generations}] {img_tag}{src_tag_str}{focus_tag} seed={candidate['seed']} {score_str}  ")
 
     # 4. 逐张质检
     if inspect and candidates:
@@ -366,25 +504,31 @@ def create_from_nl(
             print(f"    🔄 重试 {retry_round + 1}/{auto_retry} (steps={retry_steps}, cfg={retry_cfg:.1f})...")
             try:
                 qr = generate_with_quality(
-                    build_flux_workflow, retry_base_prompt,
+                    build_fn, retry_base_prompt,
                     preset=preset,
                     min_score=min_score,
                     max_retries=retry,
                     no_validate=no_validate,
                     seed=retry_seed,
                     negative_prompt=negative_prompt,
-                    filename_prefix=f"retry_{retry_round + 1:02d}",
-                    ref_image=ref_path,
+                    filename_prefix=f"pipeline_retry_{retry_round + 1:02d}",
+                    ref_image=ref_image_name or ref_path,
                     ip_weight=ip_weight,
                     ip_balance=ip_balance,
+                    face_detailer=face_detailer,
+                    upscale=upscale,
                     lora_name=lora_name,
                     lora_strength=lora_strength,
                     steps=retry_steps,
                     cfg=retry_cfg,
+                    aesthetic_min_score=aesthetic_min_score,
+                    faceid=faceid,
+                    controlnet_type=controlnet_type,
+                    controlnet_strength=controlnet_strength,
                 )
             except Exception as exc:
-                print(f"      ❌ 重试生成失败: {exc}")
-                continue
+                had_errors = True
+                print(f"\\\\n  [{i+1}/{count}] ❌ seed={s}: {exc}")
 
             # 提取图片
             retry_image = ""
@@ -407,7 +551,7 @@ def create_from_nl(
             new_candidate = {
                 "seed": qr.get("seed", 0),
                 "image": retry_image,
-                "score": qr.get("score", -1),
+                "score": qr.get("score") if qr.get("score") is not None else -1,
                 "retries": qr.get("retries", 0),
                 "auto_retry_round": retry_round + 1,
             }
@@ -427,7 +571,9 @@ def create_from_nl(
             ins_scores = new_candidate.get("inspect", {}).get("scores", {})
             new_overall = ins_scores.get("overall", 0) if new_candidate.get("inspect") else 0
             best_overall = max(best_overall, new_overall)
-            score_str = f"score={qr.get('score', -1):.2f}" if qr.get("score", -1) >= 0 else "score=?"
+            score_val = qr.get("score")
+            score_val = score_val if score_val is not None else -1
+            score_str = f"score={score_val:.2f}" if isinstance(score_val, (int, float)) and score_val >= 0 else "score=?"
             img_tag = "✅" if retry_image else "❌"
             print(f"      {img_tag} seed={new_candidate['seed']} {score_str} 综合={new_overall:.2f}")
 
@@ -532,10 +678,11 @@ def _record_to_quality_db(result: dict[str, Any], db_path: str, nl_text: str) ->
             "cfg": c.get("param_cfg", 7.0),
             "preset": c.get("param_source", ""),
         }
-        clip_score = c.get("score", -1) if c.get("score", -1) >= 0 else None
+        clip_score = c.get("score") if c.get("score") is not None else -1
+        clip_score_val = clip_score if isinstance(clip_score, (int, float)) and clip_score >= 0 else None
         combined = (
             ins_scores.get("overall", 0) * 0.6 +
-            (clip_score or 0) * 0.4
+            (clip_score_val or 0) * 0.4
         )
         score = {
             "overall": ins_scores.get("overall", 0),
@@ -543,7 +690,7 @@ def _record_to_quality_db(result: dict[str, Any], db_path: str, nl_text: str) ->
             "hand": ins_scores.get("手", 0),
             "foot": ins_scores.get("脚", 0),
             "blur": ins_scores.get("模糊", 0),
-            "clip": clip_score or 0,
+            "clip": clip_score_val or 0,
             "combined": round(combined, 4),
         }
         db.record(prompt, params, score)
@@ -731,7 +878,7 @@ def _generate_gallery_html(result: dict[str, Any], output_dir: str, candidates_o
 </div>"""
             continue
         best_class = " best" if img.get("best") else ""
-        score_tag = f"<span class='score'>CLIP: {img['score']:.2f}</span>" if img.get("score", -1) >= 0 else ""
+        score_tag = f"<span class='score'>CLIP: {img['score']:.2f}</span>" if isinstance(img.get("score"), (int, float)) and img["score"] >= 0 else ""
         summary_tag = f"<span class='summary'>{img['summary']}</span>" if img.get("summary") else ""
         overall_tag = f"<span class='overall'>综合: {img.get('overall', 0):.2f}</span>" if img.get('overall', 0) > 0 else ""
         best_badge = " <span class='badge best-badge'>🏆 最优</span>" if img.get("best") else ""
@@ -1209,8 +1356,8 @@ def create_batch(
 
             best = result.get("best", {})
             best_seed = best.get("seed", "?")
-            best_score = best.get("score", -1)
-            score_str = f"score={best_score:.2f}" if best_score >= 0 else "score=?"
+            best_score = best.get("score") if best.get("score") is not None else -1
+            score_str = f"score={best_score:.2f}" if isinstance(best_score, (int, float)) and best_score >= 0 else "score=?"
             candidates = result.get("candidates", [])
             print(f"      ┗ {status} best=seed={best_seed} {score_str}  |  候选 {len(candidates)} 张")
 
@@ -1236,8 +1383,8 @@ def create_batch(
         has_err = r.get("error") or r.get("had_errors")
         best = r.get("best", {})
         seed = best.get("seed", "?")
-        score = best.get("score", -1)
-        score_s = f"score={score:.2f}" if score >= 0 else "score=?"
+        score = best.get("score") if best.get("score") is not None else -1
+        score_s = f"score={score:.2f}" if isinstance(score, (int, float)) and score >= 0 else "score=?"
         print(f"  [{idx}/{total}] {'✅' if not has_err else '❌'} {prompt_text[:50]} → seed={seed} {score_s}")
     print(f"{'='*60}\n")
 

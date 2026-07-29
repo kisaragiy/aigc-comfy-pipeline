@@ -10,7 +10,12 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
-- **V0.71.0** — 当前：IP-Adapter 调研 + 文本分析增强 + 质量门禁 bug 修复<br>　　　　　　**IP-Adapter 验证结论**: XLabs Flux IP-Adapter 模型 (`double_blocks.*` keys) 与<br>　　　　　　　comfyui_ipadapter_plus 节点 (`image_proj.*` / `ip_adapter.*` keys) 不兼容<br>　　　　　　　已移除 IP-Adapter workflow 节点，XLabs 模型已清理（节省 936MB）<br>　　　　　　--ref 当前走 Ollama 文本分析 + Qwen3 文本编码（无视觉条件控制）<br>　　　　　　**文本分析增强（保留）**: _ollama_vl_analyze prompt 改为英文 + 结构化 JSON<br>　　　　　　ref_analyze_to_prompt 返回新增 composition/lighting/colors/background 字段<br>　　　　　　**质量门禁 bug 修复**: create.py 图片路径解析支持 generate_with_quality 返回的绝对路径格式<br>　　　　　　agents/go_flux.py 工作流构建移除不兼容的 IP-Adapter 节点<br>　　　　　　workshop/engine/engine.py 参考图分析增强<br>　　　　　　tests/test_go_flux_workflow.py +9 项工作流测试<br>　　　　　　tests/test_workshop_engine.py +3 项增强字段测试<br>　　　　　　测试总数 283 → 295 项<br>　　　　　　版本 0.71.0<br>
+- **V1.10.0** — 当前：模型兼容知识库 + 质量自动重试 + 多角度 prompt + 角色 LoRA 训练<br>　　　　　　`workshop/models/knowledge.md` 模型兼容性文档<br>　　　　　　`workshop/models/registry.json` 程序可读模型/recipe 库<br>　　　　　　`agents/model_compat.py` 提交前自动检查兼容性<br>　　　　　　`agents/comfy_utils.py` 出图后自动记录 recipe<br>　　　　　　`workshop/inspect/auto_retry.py` 质检不合格自动换 seed 重试<br>　　　　　　`workshop/engine/variant.py` 多角度 prompt 策略（特写/半身/全身）<br>　　　　　　`workshop/engine/ref.py` 参考图 CLIP 分析 → 结构化特征<br>　　　　　　`workshop/prototype.py` 原创角色流水线（20 张原型→挑选→变体）<br>　　　　　　Flux.1 dev LoRA 训练管线（comfyui-fluxtrainer）<br>　　　　　　版本 1.10.0<br>
+- **V0.92.0** — 上一版：角色特征保持方案调研（IP-Adapter/ReferenceLatent/IFTv3）<br>　　　　　　IP-Adapter 全线 7 变种测试：均无法锁住动漫角色特征<br>　　　　　　Flux ReferenceLatent + IdentityFeatureTransferV3 HARD\_LOCK 测试<br>　　　　　　Flux.2 Klein 与 FluxTrainer 架构不兼容（3072dim vs 4096dim）<br>　　　　　　下载 flux1-dev-fp8 标准 Flux.1 模型 + ae VAE + clip\_L 完成<br>　　　　　　Flux.1 dev LoRA 训练流程打通<br>　　　　　　版本 0.92.0<br>
+- **V0.91.0** — 上一版：质量分级工作流 + 审美门禁<br>　　　　　　`workshop/workflows/` 三级工作流（bare/standard/premium）<br>　　　　　　`agents/planner.py` 自然语言→工作流自动选择<br>　　　　　　VLM 审美评分门禁（Qwen3.5-9B）<br>　　　　　　版本 0.91.0<br>
+- **V0.90.0** — 上一版：视频管线完善 + 漫画管线<br>　　　　　　Wan2.2 视频生成接入 workshop CLI<br>　　　　　　漫画分镜→逐格生图→拼页→Gallery<br>　　　　　　版本 0.90.0<br>
+- **V0.80.0** — 上一版：面试展示里程碑（release v1.0.0）<br>　　　　　　CLI 统一入口（16+ 命令）<br>　　　　　　`workshop demo` 面试样张生成<br>　　　　　　serve API（12 个端点）<br>　　　　　　Docker 部署<br>　　　　　　295 项测试<br>　　　　　　版本 0.80.0<br>
+- **V0.71.0** — IP-Adapter 调研 + 文本分析增强 + 质量门禁 bug 修复<br>　　　　　　**IP-Adapter 验证结论**: XLabs Flux IP-Adapter 模型 (`double_blocks.*` keys) 与<br>　　　　　　　comfyui_ipadapter_plus 节点 (`image_proj.*` / `ip_adapter.*` keys) 不兼容<br>　　　　　　　已移除 IP-Adapter workflow 节点，XLabs 模型已清理（节省 936MB）<br>　　　　　　--ref 当前走 Ollama 文本分析 + Qwen3 文本编码（无视觉条件控制）<br>　　　　　　**文本分析增强（保留）**: _ollama_vl_analyze prompt 改为英文 + 结构化 JSON<br>　　　　　　ref_analyze_to_prompt 返回新增 composition/lighting/colors/background 字段<br>　　　　　　**质量门禁 bug 修复**: create.py 图片路径解析支持 generate_with_quality 返回的绝对路径格式<br>　　　　　　agents/go_flux.py 工作流构建移除不兼容的 IP-Adapter 节点<br>　　　　　　workshop/engine/engine.py 参考图分析增强<br>　　　　　　tests/test_go_flux_workflow.py +9 项工作流测试<br>　　　　　　tests/test_workshop_engine.py +3 项增强字段测试<br>　　　　　　测试总数 283 → 295 项<br>　　　　　　版本 0.71.0<br>
 - **V0.70.0** — 上一版：workshop create --batch-file 批量管线<br>　　　　　　从文本文件读取多条 prompt，逐条执行完整创作管线<br>　　　　　　每行一条 prompt，空行和 # 注释行自动跳过<br>　　　　　　每条 prompt 在输出目录下创建独立子目录（<编号>_<slug>/）<br>　　　　　　自动保存 best.png + metadata.json + Gallery 到子目录<br>　　　　　　控制台显示实时分步进度 [3/5] prompt [2/4] ✅✅❌✅<br>　　　　　　末尾汇总：成功数/失败数/每条 best seed + score<br>　　　　　　生成 batch_metadata.json 保存批量元数据<br>　　　　　　`workshop/create.py` 新增 `create_batch()` + `_make_slug()`<br>　　　　　　`tests/test_workshop_create.py` +7 项批量测试<br>　　　　　　测试总数 276 → 283 项<br>　　　　　　版本 0.70.0<br>
 - **V0.69.0** — 上一版：Gallery 下载按钮 + workshop create --clean<br>　　　　　　Gallery Lightbox 右上角 ⬇ 下载当前图片（download 属性，浏览器原生保存）<br>　　　　　　Lightbox 新增 closeModal（点击背景关闭，非图片区域）<br>　　　　　　`workshop create --clean` 生成前清理输出目录旧文件<br>　　　　　　　　删除 *.png/*.jpg/*.jpeg/*.webp/*.json/*.html + gallery/ 子目录<br>　　　　　　`tests/test_workshop_create.py` +5 项测试（下载按钮2 + --clean3）<br>　　　　　　测试总数 271 → 276 项<br>　　　　　　版本 0.69.0<br>
 - **V0.68.0** — 上一版：Gallery 键盘导航 + inspect --json<br>　　　　　　Gallery Lightbox 支持 ← → 箭头键切换候选图<br>　　　　　　Lightbox 底部显示"<当前>/<总数> ← →"计数器<br>　　　　　　Lightbox 支持 ESC 关闭<br>　　　　　　`workshop inspect --json` 输出结构化的 JSON 质检结果（适合程序处理）<br>　　　　　　JSON 模式自动隐藏进度提示，兼容管道/重定向用法<br>　　　　　　`tests/test_workshop_create.py` +3 项键盘导航测试<br>　　　　　　`tests/test_workshop_inspect.py` +3 项 JSON 输出测试<br>　　　　　　测试总数 265 → 271 项<br>　　　　　　版本 0.68.0<br>
@@ -366,3 +371,46 @@ metadata.json 包含完整的生成参数，面试时打开即可证明工程化
 - [ ] `POST /api/video` 支持 preset/timeout/denoise/ref 参数
 - [ ] `python -m agents queue list` 显示 `🎬 video`/`🖼️ image` 类型标记
 - [ ] `python -m agents queue list` 队列为空时友好提示
+
+## 实战策略参考（新增，见 workshop/）
+
+| 文件 | 用途 | 示例命令 |
+|------|------|---------|
+| `workshop/prompt-tactics.md` | Prompt 工程战术（动漫/写实/视频模板） | `workshop create "1girl, ..." --preset anime` |
+| `workshop/character-consistency.md` | 角色一致性（LoRA/seed/ref 三战术） | `workshop train --character "name"` |
+| `workshop/workflow-tips.md` | ComfyUI 工作流技巧（节点/放大/面部修复） | 直接用于 C:\DrawingLive\ComfyUI |
+| `workshop/comfyui-workflows-reference.md` | 424个网上工作流提取的模型→Prompt→参数映射 | 直接配合 workshop create/video |
+| `workshop/video-camera-guide.md` | AI 视频运镜实战 (8种运镜→Wan2.2 Prompt) | `workshop video "camera slowly pushes in..."` |
+| `workshop/storyboard-to-video.md` | 分镜→视频全流程 (剧本→逐镜→生成→拼接) | 三步出片流程 |
+| `workshop/scene-guide.md` | 9大生图场景实战 (真人/立绘/换装/多人/Cos等) | workshop create 直接套用 |
+| `workshop/production_springboot.py` | **高级** Spring Boot 3 生产架构 (Java, 600+行C#风格代码) | 12模块: DI/JPA/JWT/缓存/测试/8条常见坑 |
+| `workshop/production_dotnet.py` | **高级** ASP.NET Core 10 生产架构 (C#, 600+行) | 12模块: DI/EF/中间件/JWT/测试/8条常见坑 |
+| `workshop/production_fastapi.py` | **高级** 生产级 FastAPI 架构 (1173行) | 分层/DI/Repo/UoW/CQRS/熔断/指标/认证/CRUD全示例 |
+| `workshop/scaffold.py` | 项目骨架生成 (cli/fastapi/vue3/fullstack/python-pkg 5种) | `workshop scaffold fastapi myapi` |
+| `tools/re/pe-analyzer.py` | PE 文件自动分析 (头/节区/导入表/加壳检测) | `python tools/re/pe-analyzer.py target.exe` |
+| `tools/re/frida-script-gen.py` | Frida 脚本生成 (Hook/Trace/Dump/反调试) | `python tools/re/frida-script-gen.py hook CreateFile` |
+| `tools/re/api-monitor.py` | API 调用分析 (参数解码/攻击模式检测) | `python tools/re/api-monitor.py decode VirtualAllocEx` |
+| `tools/re/game-arch-extract.py` | 游戏资源包识别 (NK/Zip/PAK 等格式鉴定) | `python tools/re/game-arch-extract.py identify file.bin` |
+| `tools/re/cheat-toolkit.py` | Cheat Engine 模式辅助 (扫描/监控/指针) | `python tools/re/cheat-toolkit.py modules <pid>` |
+| `tools/re/mem_scanner.py` | **高级** 进程内存扫描器 (Pymem+Capstone) | 全维度扫描/RWX检测/特征码搜索/DLL清单 |
+| `tools/re/frida_hooker.py` | **高级** Frida自动化工具 (frida Python绑定) | 反调试绕过/API Trace/模块枚举 |
+| `tools/re/shellcode_factory.py` | **高级** Shellcode生成器 (MessageBox/WinExec/XOR编码) | 实际可用的x64 shellcode |
+| `tools/re/anti_debug_detect.py` | **高级** 反调试检测 (PEB/NtGlobalFlag/INT3/父进程) | 9种反调试技术全检测 |
+| `tools/scraping/captcha_solver.py` | 通用验证码破解 (VLM+Playwright+Pillow三引擎) | 文本/滑块/点选/旋转/数学/reCAPTCHA |
+| `tools/scraping/scraper_pro.py` | 生产级爬虫框架 (反检测/Cookie持久/重试/截图) | `python scraper_pro.py fetch <url>` |
+| `tools/scraping/taobao_auto.py` | 淘宝自动化 (搜索/详情/价格监控/收藏) | `python taobao_auto.py search <keyword>` |
+| `tools/testing/production_testing.py` | **高级** 测试架构参考 (15模块) | 金字塔/TDD/Hypothesis/Fake/异步/CI/覆盖率 |
+| `tools/testing/demo_test.py` | 测试实战演示 (17用例, 94%覆盖, Hypothesis+AsyncMock) | `pytest tools/testing/demo_test.py -v --cov` |
+| `tools/frontend/frontend_expert.py` | **高级** Vue3/TS/CSS 前端参考 (15模块) | 组件模式/状态管理/Pinia/路由/权限/性能/动画/测试 |
+| `workshop/creative/aigc_knowledge.py` | 创意知识库 (41服装/17发型/14表情/15姿势/14画风/13分镜/8运镜) | 性别×风格×季节推荐, 可组合原子知识 |
+| `agents/orchestrator.py` | **核心** ComfyUI 工作流编排器 | 硬件检测 → 多熔炉拆分 → DAG编排 → 并行/串行策略 |
+| `agents/go_director.py` | **核心** AIGC 创意导演层 | 需求理解→故事板→创意推荐→编排→评审, 3镜15s视频 |
+| `workshop/creative/fashion_depth.py` | **专业级** 深度服装分类 (148条目, 8大类) | 丝袜D数/材质/类型/鞋子跟型/领型/袖型/面料/颜色, 可组合审美推荐 |
+| `workshop/creative/character_design.py` | **二次元/动漫/Galgame** 角色设计 (9属性/14动漫服/24发型/11眼型/8定番) | 性格→视觉映射, 动漫服装/发色/瞳色体系, Galgame定番场景 |
+| `workshop/creative/background_depth.py` | **深度背景** 知识 (18场景×13景别×12光线) | 校园/都市/自然/幻想/特殊五类, 镜头语言, 跨镜连续性, 情绪变化策略 |
+| `agents/go_aesthetic.py` | **核心** VLM 审美评估 Agent | 多维度(构图/色彩/角色/服装/背景/技法)评分, A/B对比, 多轮评审, 时尚细节识别 |
+| `agents/go_manga.py` | **核心** 漫画连续性系统 + LLM 语义理解 | 角色卡/场景卡/故事板, qwen3:14b 自然语言→分镜(角色/场景/镜头/情感弧), 批量一致性生成, 4格排版 |
+| `agents/workflow_builder.py` | **核心** ComfyUI 工作流自动生成器 | 声明式DAG→API JSON, 4预设模板, 50+节点支持, 连接验证 |
+| `workshop/local-workflows-map.md` | 本地 ComfyUI 工作流地图 (18+目录/579文件) | 在 ComfyUI 中 Load 对应 JSON |
+| `~/stock_analyzer/` | 股票分析系统 (analyzer + app + cron + config) | `cd ~/stock_analyzer && uv run python analyzer.py` |
+| `~/boss-agent-cli-dev/` | BOSS直聘 CLI (外部项目 v1.15.0, 264测试) | `boss-agent-cli search --keyword "Python"` |
