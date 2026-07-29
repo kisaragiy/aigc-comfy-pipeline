@@ -36,3 +36,69 @@ atempo=*
 .vscode/
 *.swp
 *.swo
+
+# 出图产出（自动生成）
+demo_*/
+manga_*/
+emilia_*/
+manga_sdxl_*/
+manga_demo_*/
+manga_final/
+ckpt_compare/
+workshop/ac_output/
+workshop/ac2_output/
+workshop/batch_output/
+workshop/knives_output/
+workshop/rebia_output/
+workshop/shimu_test/
+workshop/livia_test/
+
+# 临时处理文件
+closers_temp_*/
+test_audio.wav
+test_payload.json
+test_faceid/
+_check_*.py
+_check_torch.py
+dump_status.py
+run_*.py
+run5_variants.py
+serve_gallery*.py
+bench.json
+check_faceid.py
+
+# 测试与覆盖率
+.coverage
+.coverage.*
+htmlcov/
+
+# Hermes 计划文件
+.hermes/
+
+# 数据文件（自动生成）
+quality.json
+agents/quality.json
+workshop/rebia_analysis.json
+workshop/rebia_analysis_log.txt
+closers_catalog.json
+
+# 临时脚本
+scripts/*.bat
+scripts/start_vlm_server.bat
+refs/
+
+# 工具脚本和临时分析文件
+workshop/_*.py
+workshop/_*_workflow.json
+workshop/analyze_*.py
+workshop/test_*.py
+workshop/train_*.py
+workshop/vlm_analyze.py
+workshop/auto_pipeline.py
+
+# 工作流临时文件
+workshop/workflows/
+workshop/*_workflow.json
+workshop/*_test/
+workshop/ac2_pipeline.py
+workshop/ac_pipeline.py
