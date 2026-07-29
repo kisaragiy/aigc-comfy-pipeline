@@ -58,11 +58,16 @@ def build_flux_workflow(
     lora_strength: float = 1.0,
     sampler: str = "euler",
     scheduler: str = "normal",
-    filename_prefix: str = "flux_klein",
+    filename_prefix: str = "pipeline_flux",
     ref_image: str | None = None,  # 参考图路径（Flux.2 Klein 原生视觉参考）
     ip_weight: float = 0.7,        # 参考图影响权重（传给 RefLatentController.strength）
     ip_balance: float = 0.5,       # 文字/参考注意力平衡（Flux2KleinTextRefBalance）
     color_anchor: float = 0.0,     # 颜色锚定强度（0=禁用，Flux2KleinColorAnchor）
+    # ── 质量增强 ──
+    face_detailer: bool = False,   # FaceDetailer 修脸
+    hand_refiner: bool = False,    # HandRefiner 修手(未实现，占位)
+    upscale: float = 1.0,          # 放大倍数（1.0=不放大）
+    ref_method: str = "reference_latent",  # "reference_latent" | "ipadapter" | None
 ) -> tuple[dict[str, Any], int]:
     """构建 Flux.2 Klein API 格式工作流。
 
@@ -156,7 +161,24 @@ def build_flux_workflow(
     ref_active = False
 
     if ref_image:
-        if not __import__("os").path.isfile(ref_image):
+        # 检查参考图是否存在（ComfyUI LoadImage 在 input/ 目录中找）
+        __check_ref_in = __import__("os").path
+        ref_exists = __check_ref_in.isfile(ref_image)
+        if not ref_exists and not __check_ref_in.isabs(ref_image):
+            # 也可能是 ComfyUI input 目录中的文件
+            try:
+                # 处理两种 import 路径（agents/ 下运行 vs 项目根运行）
+                import importlib
+                try:
+                    _cu = importlib.import_module("comfy_utils")
+                except ImportError:
+                    _cu = importlib.import_module("agents.comfy_utils")
+                comfy_input = _cu.resolve_comfy_root() / "input"
+                if (comfy_input / ref_image).is_file():
+                    ref_exists = True
+            except Exception:
+                pass
+        if not ref_exists:
             print(f"[WARN] 参考图不存在: {ref_image}，跳过视觉参考")
         else:
             ref_active = True
@@ -250,10 +272,71 @@ def build_flux_workflow(
     wf[n12] = {"class_type": "VAEDecode", "inputs": {
         "samples": [n11, 0], "vae": [n3, 0]}}
 
+    # ── 质量增强后处理管线 ─────────────────────────────────
+    current_image: list = [n12, 0]  # 当前图片输入
+
+    # 12b. FaceDetailer（可选）- Impact Pack 人脸修复
+    if face_detailer:
+        # 人脸检测器（Ultralytics YOLOv8 face model）
+        n_fd_det = nxt()
+        wf[n_fd_det] = {
+            "class_type": "UltralyticsDetectorProvider",
+            "inputs": {"model_name": "bbox/face_yolov8m.pt"},
+        }
+        n_fd = nxt()
+        wf[n_fd] = {
+            "class_type": "FaceDetailer",
+            "inputs": {
+                "image": current_image,
+                "model": model_out,
+                "clip": clip_out,
+                "vae": [n3, 0],
+                "guide_size": 512,
+                "guide_size_for": True,
+                "max_size": 1024,
+                "seed": seed_actual,
+                "steps": 12,
+                "cfg": 1.5,
+                "sampler_name": "euler",
+                "scheduler": "sgm_uniform",
+                "positive": ref_cond_out,
+                "negative": ref_neg_out,
+                "denoise": 0.4,
+                "feather": 10,
+                "noise_mask": True,
+                "force_inpaint": False,
+                "bbox_threshold": 0.5,
+                "bbox_dilation": 10,
+                "bbox_crop_factor": 3.0,
+                "bbox_detector": [n_fd_det, 0],
+                "drop_size": 10,
+                "wildcard": "",
+                "cycle": 1,
+                "sam_detection_hint": "center-1",
+                "sam_dilation": 0,
+                "sam_threshold": 0.93,
+                "sam_bbox_expansion": 0,
+                "sam_mask_hint_threshold": 0.7,
+                "sam_mask_hint_use_negative": "False",
+            },
+        }
+        current_image = [n_fd, 0]  # FaceDetailer 输出: first IMAGE output
+
+    # 12c. Upscale（可选）
+    if upscale > 1.0:
+        n_us_load = nxt()
+        wf[n_us_load] = {"class_type": "UpscaleModelLoader", "inputs": {
+            "model_name": "RealESRGAN_x4plus.pth"}}
+        n_us = nxt()
+        wf[n_us] = {"class_type": "ImageUpscaleWithModel", "inputs": {
+            "upscale_model": [n_us_load, 0],
+            "image": current_image}}
+        current_image = [n_us, 0]
+
     # 13. SaveImage
     n13 = nxt()
     wf[n13] = {"class_type": "SaveImage", "inputs": {
-        "images": [n12, 0], "filename_prefix": filename_prefix}}
+        "images": current_image, "filename_prefix": filename_prefix}}
 
     return wf, seed_actual
 

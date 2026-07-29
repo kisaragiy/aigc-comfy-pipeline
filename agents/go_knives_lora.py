@@ -413,3 +413,190 @@ if __name__ == "__main__":
     except (RuntimeError, TimeoutError, FileNotFoundError, KeyError) as exc:
         print(f"错误: {exc}", file=sys.stderr)
         sys.exit(1)
+
+
+def build_sdxl_workflow(
+    prompt: str,
+    *,
+    seed: int = -1,
+    steps: int = 20,
+    cfg: float = 7.0,
+    width: int = 1024,
+    height: int = 1024,
+    filename_prefix: str = "pipeline_sdxl",
+    ckpt: str | None = None,
+    negative_prompt: str = "",
+    lora_name: str | None = None,
+    lora_strength: float = 0.9,
+) -> dict[str, Any]:
+    """构建 SDXL API 格式工作流。
+
+    Args:
+        lora_name: LoRA 文件名（不传=禁用 LoRA，传=使用指定 LoRA）
+        lora_strength: LoRA 强度（默认 0.9）
+    """
+    # 选模板：有 LoRA 用 knives，无 LoRA 用 multi_char（比较干净）
+    if lora_name:
+        template_path = HERE / "workflow_knives_lora_sdxl.json"
+    else:
+        template_path = HERE / "workflow_multi_char_lora_sdxl.json"
+    if not template_path.is_file():
+        template_path = HERE / "workflow_knives_lora_sdxl.json"
+
+    with open(template_path, encoding="utf-8") as f:
+        wf = json.load(f)
+
+    seed_actual = seed if seed != -1 else random.randint(1, 2**48 - 1)
+
+    # ── 固定节点 ID 注入（SDXL 模板的约定） ──
+    # Node 6 = 正向 prompt, Node 7 = 负向 prompt
+    for nid in ("6", "7"):
+        if nid in wf and wf[nid].get("class_type") in ("CLIPTextEncode", "CLIPTextEncodeSDXL"):
+            wf[nid]["inputs"]["text"] = prompt if nid == "6" else (negative_prompt if negative_prompt else "")
+
+    # Node 5 = EmptyLatentImage
+    if "5" in wf and wf["5"].get("class_type") == "EmptyLatentImage":
+        wf["5"]["inputs"]["width"] = width
+        wf["5"]["inputs"]["height"] = height
+
+    # Node 3 = KSampler
+    if "3" in wf and wf["3"].get("class_type") in ("KSampler", "KSamplerAdvanced"):
+        wf["3"]["inputs"]["seed"] = seed_actual
+        wf["3"]["inputs"]["steps"] = steps
+        wf["3"]["inputs"]["cfg"] = cfg
+
+    # Node 9 = SaveImage
+    if "9" in wf and wf["9"].get("class_type") == "SaveImage":
+        wf["9"]["inputs"]["filename_prefix"] = filename_prefix
+
+    # ── LoRA 处理 ──
+    if lora_name:
+        # 有 LoRA：找到第一个 LoraLoader 注入
+        for nid, node in wf.items():
+            if node.get("class_type") == "LoraLoader":
+                node["inputs"]["lora_name"] = lora_name
+                node["inputs"]["strength_model"] = lora_strength
+                node["inputs"]["strength_clip"] = lora_strength
+                break
+    else:
+        # 无 LoRA：所有 LoraLoader 禁用（用有效文件名+0强度）
+        for nid, node in wf.items():
+            if node.get("class_type") == "LoraLoader":
+                node["inputs"]["lora_name"] = "caster_sdxl.safetensors"
+                node["inputs"]["strength_model"] = 0.0
+                node["inputs"]["strength_clip"] = 0.0
+
+    # ── 覆盖 checkpoint ──
+    if ckpt:
+        for nid, node in wf.items():
+            if node.get("class_type") in ("CheckpointLoaderSimple",):
+                node["inputs"]["ckpt_name"] = ckpt
+                break
+    return wf
+
+
+def build_anima_workflow(
+    prompt: str,
+    *,
+    seed: int = -1,
+    steps: int = 28,
+    cfg: float = 6.5,
+    width: int = 1024,
+    height: int = 1024,
+    filename_prefix: str = "pipeline_anima",
+    negative_prompt: str = "",
+    lora_name: str | None = None,
+    lora_strength: float = 0.9,
+) -> dict[str, Any]:
+    """构建 Anima 工作流（UNETLoader + DualCLIPLoader）。"""
+    wf = {}
+    nid = [0]
+    def nxt():
+        nid[0] += 1
+        return str(nid[0])
+    seed_actual = seed if seed != -1 else random.randint(1, 2**48 - 1)
+
+    n1 = nxt(); wf[n1] = {"class_type": "UNETLoader", "inputs": {"unet_name": "anima-base-v1.0.safetensors", "weight_dtype": "default"}}
+    n2 = nxt(); wf[n2] = {"class_type": "DualCLIPLoader", "inputs": {"clip_name1": "clip_l.safetensors", "clip_name2": "sd_xl_base_1.0.safetensors", "type": "sdxl"}}
+    n3 = nxt(); wf[n3] = {"class_type": "VAELoader", "inputs": {"vae_name": "sdxl_vae.safetensors"}}
+
+    mo, co = [n1, 0], [n2, 0]
+    if lora_name:
+        nl = nxt(); wf[nl] = {"class_type": "LoraLoader", "inputs": {"lora_name": lora_name, "strength_model": lora_strength, "strength_clip": lora_strength, "model": mo, "clip": co}}
+        mo, co = [nl, 0], [nl, 1]
+
+    n4 = nxt(); wf[n4] = {"class_type": "CLIPTextEncode", "inputs": {"text": prompt, "clip": co}}
+    n5 = nxt(); wf[n5] = {"class_type": "CLIPTextEncode", "inputs": {"text": negative_prompt or "worst quality, low quality, blurry, bad anatomy, bad hands, ugly, deformed, extra limbs, fused fingers, missing fingers, extra fingers, mutated hands, poorly drawn face, bad eyes, cross-eyed, watermark, text", "clip": co}}
+    n6 = nxt(); wf[n6] = {"class_type": "EmptyLatentImage", "inputs": {"width": width, "height": height, "batch_size": 1}}
+    n7 = nxt(); wf[n7] = {"class_type": "KSampler", "inputs": {"seed": seed_actual, "steps": steps, "cfg": cfg, "sampler_name": "dpmpp_2m", "scheduler": "karras", "denoise": 1, "model": mo, "positive": [n4, 0], "negative": [n5, 0], "latent_image": [n6, 0]}}
+    n8 = nxt(); wf[n8] = {"class_type": "VAEDecode", "inputs": {"samples": [n7, 0], "vae": [n3, 0]}}
+    n9 = nxt(); wf[n9] = {"class_type": "SaveImage", "inputs": {"filename_prefix": filename_prefix, "images": [n8, 0]}}
+    return wf
+
+
+def build_sdxl_clean_workflow(
+    prompt: str,
+    *,
+    seed: int = -1,
+    steps: int = 25,
+    cfg: float = 6.5,
+    width: int = 1024,
+    height: int = 1024,
+    filename_prefix: str = "pipeline_sdxl",
+    ckpt: str | None = None,
+    negative_prompt: str = "",
+    sampler: str = "dpmpp_2m",
+    scheduler: str = "karras",
+) -> dict[str, Any]:
+    """纯净 SDXL 工作流 — 无FaceDetailer/无LoRA/无多余节点。
+
+    仅包含: CheckpointLoaderSimple + CLIPTextEncode×2 + EmptyLatentImage
+          + KSampler + VAEDecode + SaveImage
+    """
+    wf: dict[str, Any] = {}
+    nid = [0]
+    def nxt():
+        nid[0] += 1
+        return str(nid[0])
+
+    seed_actual = seed if seed != -1 else __import__("random").randint(1, 2**48 - 1)
+
+    # 1. CheckpointLoaderSimple
+    n1 = nxt()
+    wf[n1] = {"class_type": "CheckpointLoaderSimple", "inputs": {
+        "ckpt_name": ckpt or "waiIllustriousSDXL_v160.safetensors"}}
+
+    # 2. CLIPTextEncode (正向)
+    n2 = nxt()
+    wf[n2] = {"class_type": "CLIPTextEncode", "inputs": {
+        "text": prompt, "clip": [n1, 1]}}
+
+    # 3. CLIPTextEncode (负向)
+    n3 = nxt()
+    wf[n3] = {"class_type": "CLIPTextEncode", "inputs": {
+        "text": negative_prompt, "clip": [n1, 1]}}
+
+    # 4. EmptyLatentImage
+    n4 = nxt()
+    wf[n4] = {"class_type": "EmptyLatentImage", "inputs": {
+        "width": width, "height": height, "batch_size": 1}}
+
+    # 5. KSampler
+    n5 = nxt()
+    wf[n5] = {"class_type": "KSampler", "inputs": {
+        "seed": seed_actual, "steps": steps, "cfg": cfg,
+        "sampler_name": sampler, "scheduler": scheduler, "denoise": 1,
+        "model": [n1, 0], "positive": [n2, 0], "negative": [n3, 0],
+        "latent_image": [n4, 0]}}
+
+    # 6. VAEDecode
+    n6 = nxt()
+    wf[n6] = {"class_type": "VAEDecode", "inputs": {
+        "samples": [n5, 0], "vae": [n1, 2]}}
+
+    # 7. SaveImage
+    n7 = nxt()
+    wf[n7] = {"class_type": "SaveImage", "inputs": {
+        "filename_prefix": filename_prefix, "images": [n6, 0]}}
+
+    return wf

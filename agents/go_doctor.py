@@ -28,29 +28,80 @@ def _check_python():
 
 def _check_comfyui():
     from comfy_utils import check_comfy_health
-
     ok = check_comfy_health()
     return ok, "启动 ComfyUI 或检查 COMFY_URL 环境变量" if not ok else ""
 
 
 def _check_ollama():
     from comfy_utils import check_ollama_health
-
     ok = check_ollama_health()
     return ok, "启动 WSL Ollama: wsl sh -c 'ollama serve &'" if not ok else ""
 
 
 def _check_comfy_root():
     from comfy_utils import resolve_comfy_root
-
     root = resolve_comfy_root()
     ok = root.is_dir() if root else False
     return ok, str(root) if root else "设置 COMFY_ROOT 环境变量"
 
 
+def _check_pythonpath():
+    """检查 PYTHONPATH 是否被 Hermes 污染。"""
+    pp = os.environ.get("PYTHONPATH", "")
+    if "hermes-agent" in pp:
+        return False, f"PYTHONPATH含Hermes: {pp[:60]}..."
+    return True, "无污染"
+
+
+def _check_port():
+    """检查 ComfyUI 端口 8188 是否被占用。"""
+    import socket
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        s.bind(("127.0.0.1", 8188)); s.close()
+        return True, "端口8188可用"
+    except OSError:
+        return False, "端口8188已被占用"
+
+
+def _check_bad_nodes():
+    """检查是否有已知损坏的 custom nodes。"""
+    comfy = os.environ.get("COMFY_ROOT", r"C:\DrawingLive\ComfyUI")
+    bad = ["ComfyUI_Lam", "ComfyUI_Swwan"]
+    found = [n for n in bad if (Path(comfy) / "custom_nodes" / n).is_dir()]
+    if found:
+        return False, f"损坏节点仍在: {found}（需移出custom_nodes/）"
+    return True, "无损坏节点"
+
+
+def _check_anima():
+    """检查 Anima 模型文件是否存在。"""
+    comfy = os.environ.get("COMFY_ROOT", r"C:\DrawingLive\ComfyUI")
+    diff = Path(comfy) / "models" / "diffusion_models"
+    animas = ["anima-base-v1.0.safetensors", "anima-preview.safetensors",
+              "anima-preview2.safetensors", "anima-preview3-base.safetensors"]
+    missing = [m for m in animas if not (diff / m).is_file()]
+    if missing:
+        return False, f"缺失: {missing}"
+    return True, "Anima文件存在（但当前ComfyUI版本不可用）"
+
+
+def _check_vram():
+    """检查 GPU VRAM 剩余。"""
+    try:
+        import subprocess
+        r = subprocess.run(
+            ["nvidia-smi", "--query-gpu=memory.free", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=5,
+        )
+        free = int(r.stdout.strip())
+        return free > 2048, f"{free}MB 空闲"
+    except Exception:
+        return True, "无法检查"
+
+
 def _check_models_dir(auto_fix: bool = False):
     from model_manager import resolve_models_root
-
     root = resolve_models_root()
     ok = root and root.is_dir()
     if not ok and auto_fix and root:
@@ -61,7 +112,6 @@ def _check_models_dir(auto_fix: bool = False):
 
 def _check_models_installed():
     from model_manager import list_models
-
     models = list_models()
     ok = len(models) > 0
     return ok, f"{len(models)} 个模型" if ok else "下载模型到 models/ 目录"
@@ -69,7 +119,6 @@ def _check_models_installed():
 
 def _check_workflows():
     from workflow_manager import list_workflows
-
     wfs = list_workflows()
     ok = len(wfs) > 0
     return ok, f"{len(wfs)} 个" if ok else "workflows/ 目录为空"
@@ -78,7 +127,6 @@ def _check_workflows():
 def _check_pip_deps():
     try:
         import requests  # noqa: F401
-
         return True, ""
     except ImportError:
         return False, "pip install -r requirements.txt"
@@ -86,7 +134,6 @@ def _check_pip_deps():
 
 def _check_disk():
     from comfy_utils import resolve_comfy_root
-
     root = resolve_comfy_root() or "."
     try:
         usage = shutil.disk_usage(root)
@@ -103,6 +150,11 @@ CHECKS = [
     ("ComfyUI 在线", _check_comfyui, None),
     ("Ollama 在线", _check_ollama, None),
     ("ComfyUI 目录", _check_comfy_root, None),
+    ("PYTHONPATH 污染", _check_pythonpath, None),
+    ("端口 8188", _check_port, None),
+    ("损坏 CustomNodes", _check_bad_nodes, None),
+    ("Anima 模型文件", _check_anima, None),
+    ("GPU VRAM", _check_vram, None),
     ("models/ 目录", _check_models_dir, "_check_models_dir_fix"),
     ("已安装模型", _check_models_installed, None),
     ("Workflow 文件", _check_workflows, None),

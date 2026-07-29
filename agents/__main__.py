@@ -288,6 +288,37 @@ def _run_models() -> None:
             for m in result["found"]:
                 print(f"   ✅ [{m['category']}] {m['value']}")
 
+    elif action == "recommend":
+        from workshop.models_recommend import recommend, list_styles, STYLE_LABELS
+        style = sys.argv[3] if len(sys.argv) > 3 and not sys.argv[3].startswith("--") else ""
+        top_k = 3
+        if "--top" in sys.argv:
+            try:
+                ti = sys.argv.index("--top")
+                top_k = int(sys.argv[ti + 1])
+            except (ValueError, IndexError):
+                pass
+        if style == "--list" or not style:
+            print("可用风格标签:")
+            for s in list_styles():
+                label = STYLE_LABELS.get(s, s)
+                print(f"  {s:25s}  {label}")
+            return
+        results = recommend(style, top_k=top_k)
+        if not results:
+            print(f"没有找到风格「{style}」的推荐。使用 --list 查看可用风格。")
+            return
+        label = STYLE_LABELS.get(style, style)
+        print(f"\n{'='*50}")
+        print(f"风格: {label}  Top {top_k}")
+        print(f"{'='*50}")
+        for i, r in enumerate(results, 1):
+            fd = " ✅FD" if r.get("face_detailer") else ""
+            print(f"\n  #{i}  {r['name']}")
+            print(f"      评分: {r['score']}/10{fd}")
+            print(f"      底模: {r['base']}  {r['size_gb']}GB")
+            print(f"      说明: {r.get('notes','')[:80]}")
+
     elif action == "download":
         from agents.model_download import download_cli
         download_cli(sys.argv[3:])
@@ -317,7 +348,7 @@ def _run_models() -> None:
 
 
 def _show_models_help() -> None:
-    print("用法: python -m agents models list [category] [--disk]|info <name>|check <workflow_name>|check video|download <url>|download video|refresh|prune [--force]")
+    print("用法: python -m agents models list [category] [--disk]|info <name>|check <workflow_name>|check video|download <url>|download video|refresh|prune [--force]|recommend <style> [--top N]")
 
 
 def _get_video_duration_str(video_path: Path) -> str:
@@ -450,7 +481,7 @@ def _run_outputs() -> None:
 
 
 def _run_workshop() -> None:
-    """Handle 'workshop create|engine|inspect|manga|video|verify|demo' subcommands."""
+    """Handle 'workshop create|engine|inspect|manga|video|verify|demo|review' subcommands."""
     if len(sys.argv) < 3:
         print("用法: python -m agents workshop <subcommand> [args...]")
         print()
@@ -462,10 +493,17 @@ def _run_workshop() -> None:
         print("  video   \"描述\"   — 视频生成")
         print("  verify  <目录>   — 一致性验证（比对多张画中同角色质检结果）")
         print("  demo    \"描述\"   — 面试样张管线（5场景 Gallery + 报告）")
+        print('  review  <目录>   — 人工审核 Web UI (评分/删除/归类/标签)')
+        print('  draw    "描述"   — 一句出图（SDXL premium 默认全配）')
+        print('  plan    "描述"   — 预览自动计划')
+        print('  demo    "描述"   — 面试样张管线')
+        print('  aesthetic <图片> — VLM 审美评分')
+        print('  aesthetic compare <图1> <图2> — VLM 质量对比')
+        print('  models  [list|recommend] — 模型管理')
         print()
         print("示例:")
         print('  python -m agents workshop create "银发少女校服教室窗边逆光" --count 6 --inspect')
-        print('  python -m agents workshop create "prompt" --style anime --ref ref.png')
+        print('  python -m agents workshop plan "爱蜜莉雅，精细插画"')
         print('  python -m agents workshop engine "赛博朋克少女，霓虹雨夜"')
         print('  python -m agents workshop inspect output.png')
         return
@@ -489,8 +527,22 @@ def _run_workshop() -> None:
         _workshop_autopilot(args)
     elif sub == "verify":
         _workshop_verify(args)
+    elif sub == "draw":
+        _workshop_draw(args)
     elif sub == "demo":
         _workshop_demo(args)
+    elif sub == "review":
+        _workshop_review(args)
+    elif sub == "plan":
+        _workshop_plan(args)
+    elif sub == "bench":
+        _workshop_bench(args)
+    elif sub == "bench-report":
+        _workshop_bench_report()
+    elif sub == "aesthetic":
+        _workshop_aesthetic(args)
+    elif sub == "models":
+        _workshop_models(args)
     else:
         print(f"未知 workshop 子命令: {sub}")
         _run_workshop()
@@ -533,6 +585,14 @@ def _workshop_create(args: list[str]) -> None:
                         help="LoRA 权重文件名（ComfyUI/models/loras/ 下）")
     parser.add_argument("--lora-strength", type=float, default=1.0,
                         help="LoRA 强度（默认 1.0）")
+    parser.add_argument("--lora-stack", default=None,
+                        help="LoRA 叠加模板: character_only / char_style / char_scene / char_style_scene / dual_char")
+    parser.add_argument("--lora-block-weights", default=None,
+                        help="Block weights: 22 个逗号分隔浮点数（仅记录元数据，需自定义节点生效）")
+    parser.add_argument("--lora-list", action="store_true",
+                        help="列出所有已安装 LoRA 及其元数据")
+    parser.add_argument("--lora-info", default=None,
+                        help="显示指定 LoRA 的详细信息")
     parser.add_argument("--commercial", action="store_true",
                         help="一键商业图: --style anime_commercial --preset commercial --upscale 2.0 --restore-face")
     parser.add_argument("--save", default=None,
@@ -551,6 +611,26 @@ def _workshop_create(args: list[str]) -> None:
                         help="自优化: 从质量 DB 加载最优参数")
     parser.add_argument("--db", default=None,
                         help="质量数据库路径 (配合 --auto 使用)")
+    parser.add_argument("--plan", action="store_true",
+                        help="启用 planner 自动选路（auto_plan）")
+    parser.add_argument("--no-plan", action="store_true",
+                        help="强制关闭 planner 自动选路")
+    parser.add_argument("--model", default=None,
+                        help="模型类型: flux (默认) 或 sdxl")
+    parser.add_argument("--face-detailer", action="store_true",
+                        help="启用 FaceDetailer 修脸")
+    parser.add_argument("--bench", action="store_true",
+                        help="基准测试模式：记录耗时/显存/评分到 bench.json")
+    parser.add_argument("--vlm", action="store_true",
+                        help="使用 Qwen3.5-9B VLM 优化 prompt（替代 Ollama）")
+    parser.add_argument("--faceid", action="store_true",
+                        help="InstantID 单图保脸（需 --ref）")
+    parser.add_argument("--controlnet", default=None,
+                        help="ControlNet 控制: openpose/canny/depth（需 --ref）")
+    parser.add_argument("--controlnet-strength", type=float, default=0.7,
+                        help="ControlNet 强度 (默认 0.7)")
+    parser.add_argument("--aesthetic-min-score", type=float, default=0.0,
+                        help="VLM 审美最低分 0-10（低于此分自动重试，默认 0=禁用）")
     parser.add_argument("--variants", type=int, default=1,
                         help="多 prompt 数 (1~5, 不同角度/景别, 默认 1=单 prompt)")
     parser.add_argument("--steps", type=int, default=20,
@@ -587,6 +667,39 @@ def _workshop_create(args: list[str]) -> None:
         else:
             print("  (无已保存的工作流)")
         return
+
+    # ── LoRA 管理 ──
+    if parsed.lora_list:
+        try:
+            from lora_manager import list_loras
+            print(list_loras())
+        except ImportError:
+            print("❌ lora_manager 模块未安装")
+        return
+    if parsed.lora_info:
+        try:
+            from lora_manager import show_lora_detail
+            print(show_lora_detail(parsed.lora_info))
+        except ImportError:
+            print("❌ lora_manager 模块未安装")
+        return
+    if parsed.lora_stack:
+        try:
+            from lora_manager import apply_lora_stack
+            stacked = apply_lora_stack(parsed.lora or "", parsed.lora_stack)
+            if stacked and len(stacked) > 1:
+                print(f"  📦 LoRA 叠加模板: {parsed.lora_stack}")
+                for item in stacked:
+                    print(f"    - {item['name']} (weight={item['weight']})")
+                # 覆盖 lora 参数为叠加列表（create_from_nl 不支持，先只显示信息）
+                parsed.lora = stacked  # type: ignore
+                parsed.lora_strength = 1.0  # 叠加列表自带权重
+            elif stacked:
+                parsed.lora = stacked[0]["name"]
+                parsed.lora_strength = stacked[0]["weight"]
+        except ImportError:
+            pass
+
     if parsed.load:
         load_path = _WORKFLOW_DIR / f"{parsed.load}.json"
         if load_path.is_file():
@@ -766,6 +879,30 @@ def _workshop_create(args: list[str]) -> None:
             else:
                 filter_rules[part] = True
 
+    # ── VLM 自启（--vlm 或 --aesthetic-min-score 时检测并启动） ──
+    if parsed.vlm or parsed.aesthetic_min_score > 0:
+        try:
+            from agents.aesthetic_scorer import AestheticScorer
+            _vlm = AestheticScorer(auto_start=True, verbose=parsed.verbose)
+        except Exception:
+            pass
+
+    # ── auto_plan 默认行为：无显式参数时自动启用 planner ──
+    auto_plan = parsed.plan
+    if parsed.no_plan:
+        auto_plan = False
+    elif not auto_plan:
+        # 检查是否有用户显式指定的生成参数
+        user_params = [parsed.preset, parsed.model, parsed.lora, parsed.style,
+                       parsed.face_detailer, parsed.upscale if parsed.upscale else None]
+        user_defaults = [None, None, None, None, False, None]
+        has_explicit = any(u != d for u, d in zip(user_params, user_defaults))
+        if not has_explicit:
+            auto_plan = True
+            if not parsed.preview and parsed.verbose:
+                print("  🤖 自动检测到无显式参数，启用 planner 自动选路")
+
+    # ── 调用 create_from_nl ──
     result = create_from_nl(
         nl_text,
         count=parsed.count,
@@ -788,6 +925,8 @@ def _workshop_create(args: list[str]) -> None:
         lora_name=parsed.lora,
         lora_strength=parsed.lora_strength,
         variants=parsed.variants,
+        face_detailer=parsed.face_detailer,
+        upscale=parsed.upscale or 1.0,
         steps=parsed.steps,
         cfg=parsed.cfg,
         auto_retry=parsed.auto_retry,
@@ -798,7 +937,43 @@ def _workshop_create(args: list[str]) -> None:
         no_learn=parsed.no_learn,
         auto_diverse=auto_diverse,
         explore_rate=explore_rate,
+        auto_plan=auto_plan,
+        model_type=parsed.model or "flux",
+        use_vlm=parsed.vlm,
+        aesthetic_min_score=parsed.aesthetic_min_score,
+        faceid=parsed.faceid,
+        controlnet_type=parsed.controlnet,
+        controlnet_strength=parsed.controlnet_strength,
     )
+
+    # ── bench 模式：记录基准数据 ──
+    if parsed.bench and result and not result.get("preview"):
+        import time, json as _json
+
+        best = result.get("best", {})
+        candidates = result.get("candidates", [])
+        valid = [c for c in candidates if c.get("image") and not c.get("error")]
+        scores = [c.get("score", -1) for c in valid if c.get("score") is not None]
+
+        bench_entry = {
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "prompt": nl_text[:80],
+            "model_type": parsed.model or "flux",
+            "auto_plan": auto_plan,
+            "count": parsed.count,
+            "n_valid": len(valid),
+            "best_score": best.get("score", -1),
+            "avg_score": round(sum(scores) / len(scores), 3) if scores else -1,
+            "best_image": best.get("image", ""),
+        }
+
+        bench_path = Path("bench.json")
+        bench_data = []
+        if bench_path.is_file():
+            bench_data = _json.loads(bench_path.read_text(encoding="utf-8"))
+        bench_data.append(bench_entry)
+        bench_path.write_text(_json.dumps(bench_data, indent=2, ensure_ascii=False), encoding="utf-8")
+        print(f"  📊 bench 记录已保存 ({len(bench_data)} 条)")
 
     # 引擎推测（也用于 preview 模式）
     from workshop.engine.engine import _detect_style, _detect_composition, _detect_lighting, _detect_negative
@@ -1263,6 +1438,7 @@ def _workshop_verify(args: list[str]) -> None:
     parser.add_argument("--html", action="store_true", help="生成 HTML 报告")
     parser.add_argument("--threshold", type=float, default=0.15, help="标准差阈值 (默认 0.15)")
     parser.add_argument("--output", default=None, help="HTML 报告输出路径")
+    parser.add_argument("--vlm", action="store_true", help="使用 VLM 判断角色一致性")
     parsed = parser.parse_args(args)
 
     from workshop.consistency import verify_consistency, print_verify_report
@@ -1310,15 +1486,492 @@ def _workshop_verify(args: list[str]) -> None:
         out_path.write_text(report["html"], encoding="utf-8")
         print(f"  📊 HTML 报告: {out_path.resolve()}")
 
+    # ── VLM 角色一致性判断 ──
+    if parsed.vlm and len(candidates) >= 2:
+        print("\n  🤖 VLM 角色一致性分析:")
+        try:
+            from agents.aesthetic_scorer import AestheticScorer
+            _vlm = AestheticScorer(auto_start=False)
+            if _vlm._check_server():
+                # 用前两张图做角色一致性对比
+                img1 = candidates[0]["image"]
+                img2 = candidates[1]["image"]
+                prompt = (f"Compare these two images carefully. "
+                          f"Are they the same character/person? "
+                          f"Rate character consistency from 0-10. "
+                          f"Explain key similarities and differences in appearance, "
+                          f"clothing, facial features, hair style, and coloring. "
+                          f"Output JSON with fields: consistency_score, same_character(bool), "
+                          f"differences, similarities")
+                result = _vlm.compare_images(img1, img2, prompt)
+                if result.get("available"):
+                    print(f"  {result['response'][:300]}")
+                else:
+                    print(f"  ⚠️ VLM 分析失败: {result.get('error')}")
+            else:
+                print("  ⚠️ VLM 服务未运行")
+        except Exception as exc:
+            print(f"  ⚠️ VLM 分析失败: {exc}")
+
+
+def _workshop_review(args: list[str]) -> None:
+    """workshop review <输出目录> — 人工审核 Web UI。"""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="人工审核 Web UI")
+    parser.add_argument("output_dir", nargs="?", default=None, help="输出目录（默认 demo_* 最新）")
+    parser.add_argument("--port", type=int, default=8765, help="Web UI 端口 (默认 8765)")
+    parser.add_argument("--no-browser", action="store_true", help="不自动打开浏览器")
+    parser.add_argument("--report", action="store_true", help="生成审核报告（不启动 UI）")
+    parsed = parser.parse_args(args)
+
+    output_dir = parsed.output_dir
+    if not output_dir:
+        # 自动找最新的 demo_* 目录
+        from pathlib import Path
+        demos = sorted(Path('.').glob('demo_*/'), key=lambda p: p.stat().st_mtime, reverse=True)
+        if not demos:
+            print('❌ 未找到输出目录，请指定: python -m agents workshop review <目录>')
+            return
+        output_dir = str(demos[0])
+        print(f'📂 自动使用最新输出目录: {output_dir}')
+
+    if parsed.report:
+        from workshop.review import generate_report, print_report
+        report = generate_report(output_dir)
+        print_report(report)
+        return
+
+    from workshop.review_server import serve
+    serve(output_dir, port=parsed.port, no_browser=parsed.no_browser)
+
+
+def _workshop_plan(args: list[str]) -> None:
+    """workshop plan <描述> — 预览自动计划（不跑图）。"""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="预览自动计划")
+    parser.add_argument("nl_text", nargs="+", help="自然语言描述")
+    parsed = parser.parse_args(args)
+    nl_text = " ".join(parsed.nl_text)
+
+    from workshop.engine.planner import plan_from_nl
+    plan = plan_from_nl(nl_text)
+
+    print("\n  📋 自动计划:")
+    for k, v in plan.items():
+        if k == "nl_text":
+            continue
+        if v is not None and v is not False and v != "":
+            print(f"    {k}: {v}")
+    # 显存/时间预估
+    vram = plan.get("vram_gb")
+    vram_total = plan.get("vram_available", 12.0)
+    time_s = plan.get("time_sec_per_img")
+    if vram:
+        pct = vram / vram_total * 100
+        bar = "█" * int(pct / 5) + "░" * (20 - int(pct / 5))
+        print(f"  📊 VRAM: {bar} {vram:.1f}/{vram_total:.0f}GB ({pct:.0f}%)")
+    if time_s:
+        print(f"  ⏱  每张: ~{time_s}s")
+    print()
+
+
+def _workshop_bench_report() -> None:
+    """从 bench.json 生成可读报告。"""
+    import json
+    from pathlib import Path
+
+    bench_path = Path("bench.json")
+    if not bench_path.is_file():
+        print("❌ bench.json 不存在。先用 --bench 跑几次。")
+        return
+
+    data = json.loads(bench_path.read_text(encoding="utf-8"))
+    if not data:
+        print("❌ bench.json 为空。")
+        return
+
+    print("\n  📊 质量基准报告\n")
+
+    # 按 model_type 分组
+    by_model: dict[str, list] = {}
+    for entry in data:
+        mt = entry.get("model_type", "?")
+        by_model.setdefault(mt, []).append(entry)
+
+    for model_type, entries in sorted(by_model.items()):
+        print(f"  [{model_type.upper()}]")
+        for e in entries:
+            n = e.get("n_valid", 0)
+            best = e.get("best_score", -1)
+            avg = e.get("avg_score", -1)
+            ts = e.get("timestamp", "?")[5:16]
+            prompt = e.get("prompt", "?")[:40]
+            print(f"    {ts} | {n}张 | best={best:.3f} | avg={avg:.3f} | {prompt}")
+        print()
+
+    print(f"  共 {len(data)} 条记录")
+
+
+def _workshop_aesthetic(args: list[str]) -> None:
+    """workshop aesthetic <图片> — VLM 审美评分。"""
+    if not args:
+        print("用法: python -m agents workshop aesthetic <图片路径>")
+        print("  对图片进行 VLM 审美评分（需 Qwen3.5-9B-VLM 服务运行在端口 8083）")
+        print()
+        print("  子命令:")
+        print("    describe <图片>  — 图片→prompt（VLM 分析并生成 prompt）")
+        print("    compare <图1> <图2> — VLM 对比两张图质量")
+        print()
+        print("  也可以先启动服务:")
+        print("    scripts\\start_vlm_server.bat")
+        return
+
+    sub = args[0]
+    rest = args[1:]
+
+    if sub == "describe" and rest:
+        _workshop_describe(rest[0])
+        return
+    if sub == "compare" and len(rest) >= 2:
+        _workshop_compare(rest[0], rest[1])
+        return
+
+    # 默认：单图审美评分
+    image_path = args[0]
+    from agents.aesthetic_scorer import AestheticScorer
+    import json
+
+    scorer = AestheticScorer(auto_start=False, verbose=True)
+    if not scorer._check_server():
+        print("❌ VLM 服务未运行。请先启动:")
+        print("   scripts\\start_vlm_server.bat")
+        return
+
+    result = scorer.score(image_path)
+    print(json.dumps(result, indent=2, ensure_ascii=False))
+
+
+def _workshop_describe(image_path: str) -> None:
+    """VLM 分析图片并生成 prompt。"""
+    from agents.aesthetic_scorer import AestheticScorer
+    import json
+
+    scorer = AestheticScorer(auto_start=False)
+    if not scorer._check_server():
+        print("❌ VLM 服务未运行")
+        return
+
+    prompt = "Analyze this image in detail. Describe the subject, pose, composition, style, lighting, colors, and background. Then write a text-to-image prompt that could recreate this image."
+    result = scorer.score_from_prompt(image_path, prompt)
+
+    if result.get("available"):
+        print("\n  📷 图片分析:\n")
+        print(f"  {result['response'][:600]}")
+    else:
+        print(f"❌ {result.get('error')}")
+
+
+def _workshop_compare(img1: str, img2: str) -> None:
+    """VLM 对比两张图质量。"""
+    from agents.aesthetic_scorer import AestheticScorer
+    import json
+
+    scorer = AestheticScorer(auto_start=False)
+    if not scorer._check_server():
+        print("❌ VLM 服务未运行")
+        return
+
+    r1 = scorer.score(img1)
+    r2 = scorer.score(img2)
+
+    s1 = r1.get("overall_score", -1)
+    s2 = r2.get("overall_score", -1)
+
+    print(f"\n  🔍 质量对比:\n")
+    print(f"  [1] {img1}: {s1}/10 — {r1.get('overall_feedback', '')[:80]}")
+    print(f"  [2] {img2}: {s2}/10 — {r2.get('overall_feedback', '')[:80]}")
+
+    if s1 > s2:
+        print(f"\n  🏆 [1] 更好 (+{s1 - s2:.1f}分)")
+    elif s2 > s1:
+        print(f"\n  🏆 [2] 更好 (+{s2 - s1:.1f}分)")
+    else:
+        print(f"\n  🤝 质量相当")
+
+
+def _workshop_models(args: list[str]) -> None:
+    """workshop models [list|recommend <描述>] — 模型管理。"""
+    from workshop.engine.models import scan_available, print_model_list, recommend
+
+    if not args or args[0] == "list":
+        available = scan_available()
+        print_model_list(available)
+        return
+
+    if args[0] == "recommend" and len(args) > 1:
+        nl_text = " ".join(args[1:])
+        rec = recommend(nl_text)
+        print(f"\n  🏆 {rec['reason']}\n")
+        print(f"    引擎: {rec['engine'].upper()}")
+        print(f"    底模: {rec['checkpoint']}")
+        if rec['lora']:
+            print(f"    LoRA: {rec['lora']['name']} (强度 {rec['lora']['strength']})")
+        if rec['ipadapter']:
+            print(f"    IPAdapter: {rec['ipadapter']}")
+        return
+
+    if args[0] == "check":
+        _workshop_models_check()
+        return
+
+    if args[0] == "fetch":
+        _workshop_models_fetch(args[1:])
+        return
+
+    print("用法: python -m agents workshop models [list|recommend <描述>]")
+    print("  list              — 列出所有可用模型")
+    print('  recommend "描述"   — 根据描述推荐最优模型方案')
+    print('  check             — 检查缺失的关键模型')
+    print('  fetch <关键词>     — 从镜像搜索并下载模型')
+
+
+def _workshop_models_check() -> None:
+    """检查缺失的关键模型。"""
+    from workshop.engine.models import scan_available
+
+    available = scan_available()
+    all_names = []
+    for models in available.values():
+        all_names.extend(m["name"].lower() for m in models)
+
+    checks = []
+
+    # SDXL checkpoint
+    has_sdxl = any("illustrious" in n or "sdxl" in n for n in all_names)
+    checks.append(("SDXL 底模", has_sdxl,
+                   "waiIllustriousSDXL_v160.safetensors" if not has_sdxl else None,
+                   "anime 风格 SDXL，推荐"))
+
+    # Flux checkpoint
+    has_flux = any("flux-2-klein" in n for n in all_names)
+    checks.append(("Flux 底模 (9B)", has_flux,
+                   "flux-2-klein-9b-fp8.safetensors" if not has_flux else None,
+                   "主力 Flux 模型"))
+
+    # Upscale
+    has_us = any("realesrgan" in n for n in all_names)
+    checks.append(("Upscale 模型", has_us,
+                   "RealESRGAN_x4plus.pth" if not has_us else None,
+                   "4x 放大"))
+
+    # SDXL IPAdapter
+    has_ipa_sdxl = any("ip-adapter_sdxl" in n for n in all_names)
+    checks.append(("IPAdapter (SDXL)", has_ipa_sdxl,
+                   "ip-adapter_sdxl.safetensors" if not has_ipa_sdxl else None,
+                   "参考图控制"))
+
+    # Face detection model
+    has_yolo = any("face_yolov8m" in n for n in all_names)
+    if not has_yolo:
+        # YOLO 在 ultralytics 子目录
+        from pathlib import Path
+        try:
+            from agents.comfy_utils import resolve_comfy_root
+            yolo_path = Path(str(resolve_comfy_root())) / "models" / "ultralytics" / "bbox" / "face_yolov8m.pt"
+            has_yolo = yolo_path.is_file()
+        except Exception:
+            pass
+    checks.append(("人脸检测 (YOLO)", has_yolo,
+                   "face_yolov8m.pt" if not has_yolo else None,
+                   "FaceDetailer 必需"))
+
+    # SDXL CLIP vision
+    has_clip_vision = any("clip-vit" in n for n in all_names)
+    checks.append(("CLIP Vision", has_clip_vision,
+                   "CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors" if not has_clip_vision else None,
+                   "IPAdapter 必需"))
+
+    # Re:Zero character LoRA
+    has_emilia = any("emilia" in n or "rezero" in n or "re:zero" in n for n in all_names)
+    checks.append(("爱蜜莉雅 LoRA", has_emilia,
+                   "emilia_flux_lora.safetensors / emilia_sdxl.safetensors" if not has_emilia else None,
+                   "角色一致性（从 CivitAI/liblib 下载）"))
+
+    print("\n  📋 模型检查:\n")
+    all_ok = True
+    for label, ok, missing, note in checks:
+        if ok:
+            print(f"    ✅ {label}")
+        else:
+            all_ok = False
+            print(f"    ❌ {label} — 缺少 {missing}")
+            print(f"       💡 {note}")
+
+    if all_ok:
+        print("\n    ✅ 所有关键模型已就绪！")
+    else:
+        print("\n    ⚠️ 部分模型缺失，可能影响出图质量")
+
+
+def _workshop_models_fetch(model_args: list[str]) -> None:
+    """尝试从国内可达镜像搜索并下载模型。"""
+    if not model_args:
+        print("用法: python -m agents workshop models fetch <关键词>")
+        print('  例如: workshop models fetch "emilia lora"')
+        print('        workshop models fetch "rezero lora"')
+        return
+
+    keyword = " ".join(model_args)
+    print(f"\n  🔍 搜索 '{keyword}' ...\n")
+
+    # 在 hf-mirror 上搜索
+    import urllib.request, json, urllib.parse
+
+    found_any = False
+    for query in [keyword, keyword + " lora", keyword + " sdxl", keyword + " flux"]:
+        encoded = urllib.parse.quote(query)
+        url = f"https://hf-mirror.com/api/models?search={encoded}&sort=downloads&direction=-1&limit=10"
+        try:
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read())
+                for m in data:
+                    mid = m['modelId']
+                    dl = m.get('downloads', 0)
+                    # 过滤：只关心 lora / 动漫相关
+                    if any(k in mid.lower() for k in ['lora', 'sdxl', 'flux', 're:zero', 'rezero', 'emilia']):
+                        print(f"  📦 {mid}  (下载量: {dl})")
+                        found_any = True
+        except Exception:
+            pass
+
+    if not found_any:
+        print("  😅 镜像站未找到相关模型")
+        print()
+        print("  💡 建议手动下载:")
+        print("    1. 打开 liblib.art 搜索 '爱蜜莉雅 lora'")
+        print("    2. 或 civitai.com 搜索 'Emilia Re:Zero LoRA'")
+        print("    3. 下载 .safetensors 文件放到 ComfyUI/models/loras/")
+        print("    4. 运行 'workshop models list' 确认")
+        print("    5. 运行 'workshop create \"爱蜜莉雅\" --plan' 自动出图")
+    else:
+        print(f"\n  💡 下载后放到 ComfyUI/models/loras/ 目录")
+    print()
+
+
+def _workshop_draw(args: list[str]) -> None:
+    """workshop draw <描述> — 极简一句出图。"""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="一句出图：SDXL premium + FaceDetailer + Upscale + VLM 门禁")
+    parser.add_argument("nl_text", nargs="+", help="画面描述")
+    parser.add_argument("--quick", action="store_true", help="快速模式（bare，无修脸放大）")
+    parser.add_argument("--count", type=int, default=4, help="候选数")
+    parser.add_argument("--output", default=None, help="输出目录")
+    parser.add_argument("--ref", default=None, help="参考图路径")
+    parser.add_argument("--faceid", action="store_true", help="InstantID 单图保脸")
+    parser.add_argument("--controlnet", default=None, help="ControlNet: openpose/canny/depth")
+    parser.add_argument("--controlnet-strength", type=float, default=0.7, help="ControlNet 强度")
+    parsed = parser.parse_args(args)
+
+    nl_text = " ".join(parsed.nl_text)
+
+    if parsed.quick:
+        from workshop.create import create_from_nl
+        result = create_from_nl(
+            nl_text, count=parsed.count, model_type="sdxl",
+            output_dir=parsed.output, verbose=True,
+            ref_path=parsed.ref,
+            faceid=parsed.faceid,
+            controlnet_type=parsed.controlnet,
+            controlnet_strength=parsed.controlnet_strength,
+        )
+    else:
+        from workshop.create import create_from_nl
+        # SDXL premium: FaceDetailer + Upscale + VLM 门禁
+        # auto_plan=False 防止 planner 覆盖 model_type
+        result = create_from_nl(
+            nl_text, count=parsed.count, model_type="sdxl",
+            face_detailer=True, upscale=1.5,
+            use_vlm=False,
+            aesthetic_min_score=7, auto_plan=False,
+            output_dir=parsed.output, verbose=True,
+            ref_path=parsed.ref,
+            faceid=parsed.faceid,
+            controlnet_type=parsed.controlnet,
+            controlnet_strength=parsed.controlnet_strength,
+        )
+
+    best = result.get("best", {})
+    if best and best.get("image"):
+        print(f"\n  🎨 最优: {best['image']}")
+        if best.get("score") is not None:
+            print(f"  CLIP: {best['score']:.3f}")
+    else:
+        print("\n  ⚠️ 未能出图")
+
+
+def _workshop_bench(args: list[str]) -> None:
+    """workshop bench <描述> — 一键多等级对比出图。"""
+    import argparse
+    parser = argparse.ArgumentParser(description="质量对比：bare / standard / premium 三档对比")
+    parser.add_argument("nl_text", nargs="+", help="画面描述")
+    parser.add_argument("--output", default=None, help="输出目录")
+    parsed = parser.parse_args(args)
+
+    nl_text = " ".join(parsed.nl_text)
+    from workshop.create import create_from_nl
+    from pathlib import Path
+    from datetime import datetime
+
+    base_dir = Path(parsed.output or f"bench_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+    results = []
+
+    tiers = [
+        ("bare", {"face_detailer": False, "upscale": 1.0, "count": 2}),
+        ("standard", {"face_detailer": True, "upscale": 1.0, "count": 2}),
+        ("premium", {"face_detailer": True, "upscale": 1.5, "use_vlm": True, "aesthetic_min_score": 7, "count": 2}),
+    ]
+
+    print(f"\n  {'='*50}")
+    print(f"  📊 质量对比基准")
+    print(f"  {'='*50}")
+
+    for tier_name, params in tiers:
+        out_dir = base_dir / tier_name
+        print(f"\n  [{tier_name}]")
+        result = create_from_nl(
+            nl_text, model_type="sdxl",
+            output_dir=str(out_dir), verbose=True,
+            **params,
+        )
+        results.append({"tier": tier_name, "result": result})
+        best = result.get("best", {})
+        if best and best.get("image"):
+            print(f"    ✅ {best.get('image', '?')} score={best.get('score', -1):.3f}")
+
+    print(f"\n  {'='*50}")
+    print(f"  📋 对比总结")
+    print(f"  {'='*50}")
+    for r in results:
+        best = r["result"].get("best", {})
+        score = best.get("score", -1)
+        img = Path(str(best.get("image", ""))).name if best.get("image") else "-"
+        print(f"  {r['tier']:10s} | best={score:.3f} | {img}")
+    print(f"\n  输出目录: {base_dir.resolve()}")
+
 
 def _workshop_demo(args: list[str]) -> None:
     """workshop demo <角色描述> — 面试样张管线。"""
     import argparse
     parser = argparse.ArgumentParser(description="面试样张管线：5场景 × N张 Gallery + 质量报告")
-    parser.add_argument("char_desc", nargs="*", help="角色描述（如 '银发精灵 Alice, 蓝瞳, 白色长裙'）")
-    parser.add_argument("--count", type=int, default=1, help="每场景生成数 (默认 1，建议 1~2)")
+    parser.add_argument("char_desc", nargs="*", help="角色描述（如 '银发精灵, 蓝瞳, 白色长裙'）")
+    parser.add_argument("--count", type=int, default=4, help="每场景生成数 (默认 4)")
     parser.add_argument("--ref", default=None, help="参考图路径")
     parser.add_argument("--output", default=None, help="输出目录")
+    parser.add_argument("--model", default=None, help="模型: flux (默认) 或 sdxl")
     parser.add_argument("--ollama", action="store_true", help="使用 Ollama 增强 prompt")
     parsed = parser.parse_args(args)
 
@@ -1338,6 +1991,7 @@ def _workshop_demo(args: list[str]) -> None:
         count_per_scene=parsed.count,
         ref_path=parsed.ref,
         use_ollama=parsed.ollama,
+        model_type=parsed.model or "flux",
     )
 
 
@@ -1755,6 +2409,10 @@ def _workshop_manga(args: list[str]) -> None:
     parser.add_argument("--restore-face", default=None, nargs="?",
                         const="GFPGANv1.4.pth",
                         help='修脸模型 (GFPGANv1.4.pth / codeformer-v0.1.0.pth)')
+    parser.add_argument("--ckpt", default=None,
+                        help='指定 checkpoint 文件名（默认用模板自带的 anima/illustrious）')
+    parser.add_argument("--negative", default="",
+                        help='全局负向提示词，如 "bad hands, blurry, ugly"')
     parser.add_argument("--check", action="store_true",
                         help="分镜连贯性检查（不生成）")
     parsed = parser.parse_args(args)
@@ -1798,7 +2456,7 @@ def _workshop_manga(args: list[str]) -> None:
         print(f"   {name}: {info.get('服饰','?')} / {info.get('发型','?')} / {info.get('特征','?')}")
 
     print("\\n📋 生成分镜表...")
-    storyboard = script_to_storyboard(script, characters=chars, ollama_available=False)
+    storyboard = script_to_storyboard(script, characters=chars, ollama_available=True)
 
     # 分镜连贯性检查（可选）
     if parsed.check:
@@ -1821,7 +2479,7 @@ def _workshop_manga(args: list[str]) -> None:
               f"{shot.get('台词','')[:18]:<20} {shot.get('备注','')[:8]:<10}")
 
     print("\n🎨 生成逐格 Prompt...")
-    panels = storyboard_to_prompts(storyboard, chars, style_hint=parsed.style)
+    panels = storyboard_to_prompts(storyboard, chars, style_hint=parsed.style, model_type="sdxl" if parsed.sdxl else "flux")
 
     if parsed.preview:
         # 面板预览：带种子 + 尺寸
@@ -1850,9 +2508,10 @@ def _workshop_manga(args: list[str]) -> None:
     results = generate_panels(panels, dry_run=parsed.preview, max_retries=parsed.retry,
                               flux=not parsed.sdxl, char_refs=char_refs,
                               global_ref=global_ref, ip_weight=parsed.ip_weight,
-                              preset=parsed.preset)
-
-    # 处理 --output
+                              preset=parsed.preset,
+                              ckpt=parsed.ckpt, negative_prompt=parsed.negative)
+ 
+     # 处理 --output
     if parsed.output:
         from agents.comfy_utils import resolve_comfy_root
         out_dir = Path(parsed.output)
@@ -2011,6 +2670,11 @@ def main() -> None:
         "abtest": "go_abtest.py",
         "bestof": "go_abtest.py",
         "serve": "go_serve.py",
+        "reverse": "go_reverse.py",
+        "prompt-test": "go_prompt_test.py",
+        "analyze": "go_agent_loop.py",
+        "validate-workflow": "go_validate_workflow.py",
+        "loras": "lora_manager.py",
     }
 
     if command not in script_map:
@@ -2065,6 +2729,16 @@ def main() -> None:
             from agents.go_abtest import main_bestof as target_main
         elif command == "serve":
             from agents.go_serve import main as target_main
+        elif command == "reverse":
+            from agents.go_reverse import main as target_main
+        elif command == "prompt-test":
+            from agents.go_prompt_test import main as target_main
+        elif command == "analyze":
+            from agents.go_agent_loop import main as target_main
+        elif command == "validate-workflow":
+            from agents.go_validate_workflow import main as target_main
+        elif command == "loras":
+            from agents.lora_manager import main as target_main
         else:
             raise ValueError(f"Unknown command: {command}")
         target_main()
@@ -2099,7 +2773,10 @@ def _show_help() -> None:
         ("check", "环境检查（ComfyUI / Ollama 连通性）"),
         ("workflow", "工作流模板管理（list / show / schema / check）"),
         ("models", "模型管理（list / info / check / download / refresh）"),
-        ("outputs", "产出管理（list / show <id> [--info] / clean）"),
+        ('outputs', '产出管理（list / show <id> [--info] / clean）'),
+        ('reverse', '提示词反推（图片 → SDXL/Flux/Anima 三种格式提示词）'),
+        ('prompt-test', '测试/验证提示词质量（不用跑 ComfyUI）'),
+        ('analyze', '分析图片缺陷/VLM 评分（仅需 Ollama）'),
     ]:
         print(f"  {name:12s}  {desc}")
     print()

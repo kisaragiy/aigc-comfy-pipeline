@@ -82,6 +82,7 @@ def storyboard_to_prompts(
     storyboard: list[dict[str, str]],
     characters: dict[str, dict[str, str]],
     style_hint: str = "anime",
+    model_type: str = "sdxl",
 ) -> list[dict[str, Any]]:
     """分镜表 → 逐格出图参数。
 
@@ -142,7 +143,7 @@ def storyboard_to_prompts(
         if dialogue:
             full_desc += f", 正在说: {dialogue}"
 
-        enhanced = nls_to_prompt(full_desc, style_hint=style_hint, ollama_available=False)
+        enhanced = nls_to_prompt(full_desc, style_hint=style_hint, ollama_available=False, model_type=model_type)
 
         # 景别 → 画面尺寸
         w, h = _layout_size(camera)
@@ -175,6 +176,10 @@ def generate_panels(
     ip_weight: float = 0.7,
     preset: str | None = None,
     color_anchor: float = 0.0,
+    ckpt: str | None = None,
+    negative_prompt: str = "",
+    lora_name: str | None = None,
+    lora_strength: float = 0.9,
 ) -> list[dict[str, Any]]:
     """逐格提交 ComfyUI 出图，失败可重试。
 
@@ -226,15 +231,18 @@ def generate_panels(
             params["color_anchor"] = color_anchor
             workflow = build_flux_workflow(panel["prompt"], seed=panel["seed"], **params)
         else:
-            from agents.go_knives_lora import build_sdxl_workflow
-            workflow = build_sdxl_workflow(
+            from agents.go_knives_lora import build_sdxl_clean_workflow
+            wf_neg = panel.get("negative", "") or negative_prompt
+            workflow = build_sdxl_clean_workflow(
                 panel["prompt"],
                 seed=panel["seed"],
-                steps=20,
-                cfg=7.0,
+                steps=25,
+                cfg=6.5,
                 width=panel["width"],
                 height=panel["height"],
                 filename_prefix=f"{prefix}_{panel['shot']}",
+                negative_prompt=wf_neg,
+                ckpt=ckpt,
             )
 
         pid = ""
@@ -243,9 +251,11 @@ def generate_panels(
         retry_count = 0
         while retry_count <= max_retries:
             try:
+                from agents.comfy_utils import comfy_base_url
                 resp = comfy_post_prompt(workflow)
                 pid = resp.get("prompt_id", "")
-                images = wait_images(pid)
+                base = comfy_base_url()
+                images = wait_images(pid, base)
                 if images:
                     break  # 出图成功
                 error = "空结果（无图片返回）"
@@ -490,15 +500,17 @@ def _template_storyboard(
 
 
 def _layout_size(camera: str) -> tuple[int, int]:
-    """景别 → 画面尺寸。"""
+    """景别 → 画面尺寸（SDXL 原生分辨率）。"""
     if "特写" in camera or "大头" in camera:
-        return 768, 768
+        return 896, 896      # 1:1 方图
     elif "全身" in camera:
-        return 768, 1152
-    elif "远景" in camera:
-        return 1152, 768
+        return 768, 1344     # 9:16 竖版全身
+    elif "远景" in camera or "远" in camera:
+        return 1344, 768     # 16:9 横版风景
+    elif "双人" in camera or "两人" in camera:
+        return 1216, 832     # ~3:2 双人构图
     else:
-        return 768, 1024  # 半身/中景默认
+        return 896, 1152     # 3:4 半身/中景默认
 
 
 def _seed_from_shot(shot_id: str) -> int:

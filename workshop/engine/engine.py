@@ -19,7 +19,7 @@ STYLE_PRESETS: dict[str, dict[str, str]] = {
     "anime": {
         "quality": "masterpiece, best quality, ultra-detailed, anime key visual, vibrant illustration",
         "style": "anime style, cel shading, clean lineart, vibrant colors, expressive eyes, detailed hair",
-        "negative": "lowres, bad anatomy, bad hands, text, error, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry",
+        "negative": "worst quality, low quality, normal quality, blurry, jpeg artifacts, lowres, bad anatomy, bad hands, ugly, deformed, bad proportions, extra limbs, fused fingers, missing fingers, extra fingers, mutated hands, poorly drawn face, bad eyes, cross-eyed, signature, watermark, username, text, error, extra digit, fewer digits, cropped, monochrome, grayscale, nsfw",
     },
     "anime_commercial": {
         "quality": "masterpiece, best quality, absurdres, 8k, detailed anime illustration, key visual quality, magazine cover style",
@@ -135,34 +135,80 @@ STYLE_KEYWORDS: dict[str, str] = {
 
 # ── 模板化系统 ──────────────────────────────────────────
 
-_OLLAMA_TEMPLATE = """You are a professional AI prompt engineer for Stable Diffusion / Flux. Convert the user's natural language description into a high-quality English prompt.
+_OLLAMA_TEMPLATE = """You are a professional SDXL prompt engineer. Output a concise comma-separated prompt.
 
-First, analyze INTENT to determine optimal config:
-- CONTENT TYPE: portrait / half-body / full-body / landscape / group-scene / close-up / action
-- STYLE: anime / anime_commercial / photoreal / CG / cinematic / fantasy
-- MOOD: warm / cool / dramatic / serene / energetic / mysterious
+ORDER (weight front-to-back): quality, style, lens, lighting, scene, subject, details.
 
-Then generate a single English prompt:
-1. Quality tags (masterpiece, best quality, etc.)
-2. Subject (appearance, clothing, expression, pose)
-3. Environment/background
-4. Lighting and color palette
-5. Composition and framing
-6. Style-specific keywords
+STRUCTURE (follow exactly):
+MASTERPIECE, best quality,
+[style: anime style, cel shading, vibrant colors],
+[camera: close-up/medium/full/wide, eye-level/high/low/dutch angle],
+[lighting: soft/volumetric/rim/dramatic, warm/cool/mood],
+[scene: environment, background, setting, time of day],
+[subject main: character name or object, key action, pose],
+[subject details: appearance, clothing (color+style), expression, features],
+[extra: specific elements, color palette],
+anime style, detailed illustration
 
-Rules:
-- Output ONLY the English prompt — no explanations, no notes, no markup
-- For anime: cel shading, clean lineart, vibrant colors, expressive eyes
-- For commercial: key visual quality, magazine cover style, absurdres, 8k
-- Include specific lighting (rim light, volumetric, soft diffused)
-- Include camera angle (low angle, dutch angle, eye level)
-- Be specific about expression and mood
+CRITICAL RULES:
+- Output ONLY one line — comma-separated, NO explanations
+- TARGET: ~50-70 tokens total (maximum 75)
+- NO redundant quality tags — start with exactly: MASTERPIECE, best quality,
+- Multi-character: describe each, then their spatial relationship (left/right/foreground/background)
+- Use (keyword:1.2) for emphasis on important elements, [keyword:0.8] for de-emphasis
+- Example: (silver hair:1.2), [background:0.8]
+- Do NOT include negative prompt keywords
+- End with: anime style, detailed illustration
 
-User description:
+User input:
 {user_input}
 
-Output format (English only, comma-separated tags):
-MASTERPIECE, best quality, [detailed description], [composition], [lighting], [style terms]"""
+Output (one comma-separated line, start with MASTERPIECE, best quality,):"""
+
+_OLLAMA_ANIMA_TEMPLATE = """You are an Anima prompt expert. Anima uses metadata tags then natural language description. You MUST output BOTH parts.
+
+OUTPUT FORMAT (exactly TWO parts separated by a period):
+Part1 (metadata tags, comma-separated): Character, Pose, Scene
+Part2 (natural language): 2-3 complete sentences describing lighting, atmosphere, style
+
+EXAMPLE OUTPUT:
+Character: Emilia silver hair half-elf white-purple dress, Pose: sitting reading under tree, Scene: cherry blossom park. Soft afternoon sunlight filtering through pink petals, casting dappled shadows on her white and violet gradient dress. A gentle breeze lifts her silver hair as she turns a page, surrounded by falling sakura petals. @wlop style, ethereal atmosphere.
+
+PART 1 - METADATA TAGS (BEFORE the period, comma-separated):
+Character: name, key visual features (hair color, outfit, distinguishing traits)
+Pose: what the character is doing, body position
+Scene: location, setting
+
+PART 2 - NATURAL LANGUAGE (AFTER the period, 2-3 sentences minimum):
+Describe lighting, atmosphere, color palette, mood in flowing sentences
+Mention character expression and emotion
+For multi-character: describe eye contact, body language, spatial positions
+Include @artistname for style reference (e.g. @wlop, @ask, @mkw)
+
+CRITICAL:
+- Period SEPARATES Part1 from Part2 — there MUST be a period between them
+- Part2 must be 2-3 COMPLETE SENTENCES (not fragments)
+- NO quality tags like MASTERPIECE — describe naturally with specific details
+- Character binding: "name + visual feature" pattern
+- End with @artist style reference + overall atmosphere
+
+User input:
+{user_input}
+
+Output (tags period space natural language):"""
+
+_OLLAMA_FLUX_TEMPLATE = """You are a professional AI prompt writer for FLUX.2 image generation. Convert the user's natural language description into a single flowing English paragraph.
+
+Rules:
+- Write ONE flowing paragraph — NOT comma-separated tags
+- Describe: subject appearance, clothing, expression, pose, background, lighting, atmosphere, mood
+- Be specific about facial expression and emotion
+- Do NOT use quality tags like "masterpiece, best quality, 8k" — describe the scene naturally
+- Mention the art style briefly at the end (e.g. "anime style with cel shading and vibrant colors")
+- Output ONLY the paragraph — no explanations, no notes, no markup
+
+User description:
+{user_input}"""
 
 _FALLBACK_TEMPLATE = """你是一位专业的 AI 绘画提示词工程师。请将用户的自然语言描述，转化为高质量的英文绘画提示词。
 
@@ -179,25 +225,40 @@ def nls_to_prompt(
     ollama_available: bool = True,
     ollama_url: str | None = None,
     ollama_model: str | None = None,
+    model_type: str = "flux",
+    use_vlm: bool = False,  # 使用 Qwen3.5-9B VLM 替代 Ollama
 ) -> str:
     """自然语言描述 → 专业绘画提示词。
 
     Args:
-        nl_text: 用户自然语言描述（比如"一个银发少女穿着校服在教室窗边看书，逆光"）
-        style_hint: 可选风格提示（anime/photoreal/cg/cosplay/…，或任意关键词）
+        nl_text: 用户自然语言描述
+        style_hint: 可选风格提示
         ollama_available: Ollama 是否可用
         ollama_url: Ollama API 地址
         ollama_model: Ollama 模型名
+        model_type: "flux" 或 "sdxl"
+        use_vlm: 使用 Qwen3.5-9B VLM 优化（替代 Ollama）
 
     Returns:
         优化后的英文提示词
     """
+    if use_vlm:
+        try:
+            from agents.aesthetic_scorer import AestheticScorer
+            _vlm = AestheticScorer(auto_start=False)
+            result = _vlm.generate_prompt(nl_text, style_hint=style_hint, model_type=model_type)
+            if result.get("available") and result.get("prompt"):
+                return result["prompt"]
+        except Exception:
+            pass  # VLM 不可用，降级到 Ollama
     if ollama_available:
         try:
-            result = _ollama_enhance(nl_text, style_hint, url=ollama_url, model=ollama_model)
+            result = _ollama_enhance(nl_text, style_hint, url=ollama_url, model=ollama_model, model_type=model_type)
             return result
         except Exception:
             pass  # 降级到模板
+    if model_type == "flux":
+        return _flux_template_fallback(nl_text, style_hint)
     return _template_fallback(nl_text, style_hint)
 
 
@@ -219,6 +280,7 @@ def generate_prompt_variants(
     ref_analysis: dict[str, Any] | None = None,
     count: int = 3,
     ollama_available: bool = True,
+    model_type: str = "flux",
 ) -> list[dict[str, Any]]:
     """生成多个不同侧重的 prompt。
 
@@ -228,12 +290,13 @@ def generate_prompt_variants(
         ref_analysis: ref_analyze_to_prompt() 的分析结果（可选）
         count: 生成数 (1~5)
         ollama_available: Ollama 是否可用
+        model_type: "flux" 或 "sdxl"
 
     Returns:
         [{"prompt": "...", "focus": "portrait", "camera": "..."}, ...]
     """
     # 先获取基础 prompt
-    base = nls_to_prompt(nl_text, style_hint, ollama_available=ollama_available)
+    base = nls_to_prompt(nl_text, style_hint, ollama_available=ollama_available, model_type=model_type)
 
     results = []
     templates = _VARIANT_TEMPLATES[:count]
@@ -284,10 +347,11 @@ def ref_analyze_to_prompt(
     ollama_available: bool = True,
     ollama_url: str | None = None,
     ollama_model: str | None = None,
+    use_vlm: bool = True,  # 默认用 Qwen3.5-9B-VLM
 ) -> dict[str, Any]:
     """参考图 + 自然语言 → 分析角色/画风特征 + 组合 prompt。
 
-    使用 Ollama VL 模型（qwen2.5vl:7b）分析参考图，然后结合用户描述生成 prompt。
+    默认用 VLM (Qwen3.5-9B)，不可用时降级到 Ollama qwen2.5vl:7b。
 
     Returns:
         包含以下键的字典:
@@ -304,10 +368,36 @@ def ref_analyze_to_prompt(
     colors = ""
     background = ""
 
-    # 1. 分析参考图（需要 VL 模型）
-    if ollama_available:
+    # 1. 分析参考图 — 使用统一 VLM 分析引擎（Ollama qwen3.5:9b）
+    if use_vlm or ollama_available:
         try:
-            analysis = _ollama_vl_analyze(ref_path, url=ollama_url, model=ollama_model or "qwen2.5vl:7b")
+            from agents.vlm_analyzer import unified_vlm_analyze, CHARACTER_PROMPT
+            result = unified_vlm_analyze(
+                ref_path, CHARACTER_PROMPT,
+                prefer_vlm=use_vlm,
+                fallback_to_ollama=ollama_available,
+            )
+            if result.get("available"):
+                import json as _json
+                resp = result["response"]
+                if "{" in resp:
+                    json_str = resp[resp.index("{"):resp.rindex("}")+1]
+                    analysis = _json.loads(json_str)
+                    character_desc = analysis.get("character", "") or \
+                        analysis.get("character_desc", "") or \
+                        analysis.get("overall_impression", "")
+                    style_desc = analysis.get("style", "")
+                    composition = analysis.get("composition", "")
+                    lighting = analysis.get("lighting", "")
+                    colors = analysis.get("colors", "")
+                    background = analysis.get("background", "")
+        except ImportError:
+            pass  # vlm_analyzer 不存在（旧版本）
+
+    if not character_desc and ollama_available:
+        try:
+            analysis = _ollama_vl_analyze(ref_path, url=ollama_url,
+                                          model=ollama_model or "qwen3-vl:8b")
             character_desc = analysis.get("character", "")
             style_desc = analysis.get("style", "")
             composition = analysis.get("composition", "")
@@ -367,6 +457,7 @@ def _ollama_enhance(
     *,
     url: str | None = None,
     model: str | None = None,
+    model_type: str = "flux",
 ) -> str:
     """使用 Ollama 增强提示词。
 
@@ -390,7 +481,12 @@ def _ollama_enhance(
 
     model_name = model or __import__("os").environ.get("OLLAMA_MODEL") or "qwen3:14b"
 
-    template = _OLLAMA_TEMPLATE
+    if model_type == "flux":
+        template = _OLLAMA_FLUX_TEMPLATE
+    elif model_type == "anima":
+        template = _OLLAMA_ANIMA_TEMPLATE
+    else:
+        template = _OLLAMA_TEMPLATE
     if style_hint:
         template = f"(User-specified style direction: {style_hint})\n\n" + template
 
@@ -411,8 +507,12 @@ def _ollama_enhance(
 
 
 def _clean_ollama_output(result: str) -> str:
-    """清理 Ollama 输出：去空白/引号/中文行/尾随分隔符。"""
+    """清理 Ollama 输出：去思维链/空白/引号/中文行/尾随分隔符。"""
     result = result.strip().strip("，,。、")
+    # 去掉 <think>...</think> 思维链（Qwen3 / DeepSeek-R1 等模型）
+    import re
+    result = re.sub(r'<think>.*?</think>', '', result, flags=re.DOTALL).strip()
+    result = re.sub(r'^Thinking[^a-zA-Z]*', '', result).strip()
     # 去掉引号包裹
     if (result.startswith('"') and result.endswith('"')) or \
        (result.startswith("'") and result.endswith("'")):
@@ -537,6 +637,63 @@ def _template_fallback(nl_text: str, style_hint: str | None = None) -> str:
             unique_parts.append(p_stripped)
 
     return ", ".join(unique_parts)
+
+
+# ── Flux 自然语言模板 ──────────────────────────────────
+
+_FLUX_STYLE_PHRASES: dict[str, dict[str, str]] = {
+    "anime": {
+        "quality": "A beautiful anime-style illustration",
+        "style": "with cel shading, clean lineart, vibrant colors, expressive eyes, and detailed hair",
+    },
+    "anime_commercial": {
+        "quality": "A professional anime key visual",
+        "style": "with commercial-grade cel shading, soft gradient shadows, layered depth, atmospheric background, and vibrant saturated colors",
+    },
+    "photoreal": {
+        "quality": "A photorealistic portrait",
+        "style": "with natural skin texture, sharp focus, and realistic lighting",
+    },
+    "cg": {
+        "quality": "A high-quality CG render",
+        "style": "with subsurface scattering, global illumination, and volumetric lighting",
+    },
+    "cinematic": {
+        "quality": "A cinematic scene",
+        "style": "with film grain, dramatic lighting, depth of field, and rich shadows",
+    },
+    "photography": {
+        "quality": "A professional photograph",
+        "style": "with studio lighting, shallow depth of field, and bokeh background",
+    },
+    "cosplay": {
+        "quality": "A cosplay photograph",
+        "style": "with professional studio lighting, detailed costume, and fabric texture visible",
+    },
+}
+
+
+def _flux_template_fallback(nl_text: str, style_hint: str | None = None) -> str:
+    """Flux 自然语言 prompt 模板 — 输出完整描述句而非逗号标签。"""
+    detected_style = _detect_style(nl_text, style_hint)
+    preset = _FLUX_STYLE_PHRASES.get(detected_style, _FLUX_STYLE_PHRASES["anime"])
+
+    lighting = _detect_lighting(nl_text)
+    subject = _clean_subject(nl_text)
+
+    # 自然语句拼接（完整句子，非逗号列表）
+    parts = [
+        preset["quality"],
+    ]
+    if subject:
+        parts.append(f"featuring {subject}")
+    if lighting:
+        parts.append(f"with {lighting}")
+    style_str = preset.get("style", "")
+    if style_str:
+        parts.append(style_str)
+
+    return ". ".join(p for p in parts if p) + "."
 
 
 def _detect_style(text: str, hint: str | None = None) -> str:
