@@ -53,33 +53,33 @@ class TestSeedFromShot:
 class TestLayoutSize:
     def test_close_up(self):
         w, h = _layout_size("特写")
-        assert (w, h) == (768, 768)
+        assert (w, h) == (896, 896)
 
     def test_big_head(self):
         w, h = _layout_size("大头")
-        assert (w, h) == (768, 768)
+        assert (w, h) == (896, 896)
 
     def test_full_body(self):
         w, h = _layout_size("全身")
-        assert (w, h) == (768, 1152)
+        assert (w, h) == (768, 1344)
 
     def test_wide_shot(self):
         w, h = _layout_size("远景")
-        assert (w, h) == (1152, 768)
+        assert (w, h) == (1344, 768)
 
     def test_medium_default(self):
         w, h = _layout_size("中景")
-        assert (w, h) == (768, 1024)
+        assert (w, h) == (896, 1152)
 
     def test_unknown_fallback(self):
         """未识别的景别返回半身/中景默认尺寸。"""
         w, h = _layout_size("未知景别")
-        assert (w, h) == (768, 1024)
+        assert (w, h) == (896, 1152)
 
     def test_close_up_variant(self):
         """包含特写关键词的变体。"""
         w, h = _layout_size("面部特写")
-        assert (w, h) == (768, 768)
+        assert (w, h) == (896, 896)
 
 
 # ── _template_storyboard ─────────────────────────────────
@@ -190,8 +190,8 @@ class TestStoryboardToPrompts:
              "音频提示": "", "画面描述": "站立", "台词": "", "备注": ""},
         ]
         panels = storyboard_to_prompts(storyboard, self._chars(), style_hint="anime")
-        assert panels[0]["width"] == 768 and panels[0]["height"] == 768  # 特写
-        assert panels[1]["width"] == 768 and panels[1]["height"] == 1152  # 全身
+        assert panels[0]["width"] == 896 and panels[0]["height"] == 896  # 特写
+        assert panels[1]["width"] == 768 and panels[1]["height"] == 1344  # 全身
 
     def test_negative_from_style_preset(self):
         storyboard = self._sample_storyboard(1)
