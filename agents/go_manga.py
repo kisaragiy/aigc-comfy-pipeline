@@ -640,7 +640,18 @@ Rules:
             }
         })
 
-        conn = http.client.HTTPConnection("127.0.0.1", 11434, timeout=self.timeout)
+        # WSL IP 漂移兜底：127.0.0.1 不通时探测 WSL 地址（localhost 转发失效——已知坑）
+        host, port = "127.0.0.1", 11434
+        try:
+            import subprocess as _sp
+            _r = _sp.run(["wsl", "-e", "bash", "-c", "hostname -I | awk '{print $1}'"],
+                         capture_output=True, text=True, timeout=8)
+            _ip = _r.stdout.strip().split()[0] if _r.stdout.strip() else ""
+            if _ip:
+                host = _ip
+        except Exception:
+            pass
+        conn = http.client.HTTPConnection(host, port, timeout=self.timeout)
         try:
             conn.request("POST", "/api/chat", body=payload,
                          headers={"Content-Type": "application/json"})

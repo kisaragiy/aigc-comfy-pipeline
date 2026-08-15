@@ -1,0 +1,30 @@
+{
+  "name": "silver_wolf",
+  "trigger": "silvoc",
+  "desc": "银狼少女",
+  "identity": {
+    "hair": "long twintails",
+    "hair_color": "silver white",
+    "eyes": "almond",
+    "eye_color": "crimson red",
+    "skin": "",
+    "face_shape": "",
+    "height": "",
+    "body": "",
+    "concept_anchor": "animal_ears",
+    "memory_point": "color_anchor,hair_sign",
+    "worldview": "fantasy"
+  },
+  "style": {
+    "art_style": "detailed illustration, best quality",
+    "color_palette": "",
+    "lighting": ""
+  },
+  "outfits": [
+    "arknight"
+  ],
+  "personality": "",
+  "background": "",
+  "created": "2026-08-14 22:37",
+  "version": "1.0"
+}

@@ -1,0 +1,37 @@
+{
+  "created_at": "2026-08-15T20:28:04",
+  "version": "1.10.0",
+  "prompt": "MASTERPIECE, best quality, anime style, clean lineart, soft cel shading, [camera: wide angle], extreme wide shot, very small figure in vast environment, sense of scale, 1girl (black short hair:1.2), side braids by ears (0.8), school uniform girl (blue blazer white shirt:0.9), cheerful expression, walking down hallway, warm sunny corridor background, dust motes dancing in light beams, vibrant color palette, blue and yellow tones, anime style, detailed illustration",
+  "negative_prompt": "worst quality, low quality, blurry, noise, grainy, dirty, colorful hair, gradient hair, tears, watermark, text, extra fingers",
+  "candidates_count": 1,
+  "ref_image": null,
+  "ip_weight": 0.7,
+  "ip_balance": 0.5,
+  "best": {
+    "seed": 19577912194520,
+    "score": -1,
+    "image_relative": "best.png",
+    "inspect": {
+      "status": "ok",
+      "summary": "[脸:ok] [左眼:ok] [右眼:ok] [手:ok] [脚:ok] [模糊:正常]",
+      "overall": 1.0
+    }
+  },
+  "candidates": [
+    {
+      "seed": 19577912194520,
+      "score": -1,
+      "retries": 0,
+      "error": null,
+      "inspect_status": "ok",
+      "inspect_overall": 1.0,
+      "inspect_summary": "[脸:ok] [左眼:ok] [右眼:ok] [手:ok] [脚:ok] [模糊:正常]"
+    }
+  ],
+  "engine_detection": {
+    "style": "anime_commercial",
+    "composition": "medium shot, balanced composition, eye level",
+    "lighting": "soft natural lighting, diffused illumination",
+    "auto_negative": ""
+  }
+}

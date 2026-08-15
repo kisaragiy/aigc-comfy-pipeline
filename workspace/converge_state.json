@@ -1,0 +1,46 @@
+{
+  "round": 2,
+  "history": [
+    {
+      "round": 1,
+      "name": "动漫番剧",
+      "prompt": "A silhouette of a female character stands in a deep-sea environment, slightly side-facing with crossed legs in an elegant, seductive pose, showcasing a slim waist and curved back; she wears a tight, semi-transparent deep-blue combat suit with lace trim, high-waisted knee-high stockings with a thigh split, and a glowing pearl-white cloak with tidal fringes, all rendered in anime cel shading with game character art style, under deep-sea blue lighting that enhances the glowing blue accents and wet, translucent fabric effects, evoking a mystical, powerful underwater atmosphere.",
+      "images": [
+        "C:\\Users\\zwq\\aigc-comfy-pipeline\\workspace\\converge\\r1_anchors\\01_动漫番剧\\best.png",
+        "C:\\Users\\zwq\\aigc-comfy-pipeline\\workspace\\converge\\r1_anchors\\01_动漫番剧\\gallery\\candidate_00.png"
+      ]
+    },
+    {
+      "round": 1,
+      "name": "电影感",
+      "prompt": "A cinematic silhouette of a female character stands in a deep-sea environment, slightly side-facing with crossed legs in an elegant and seductive pose, revealing a slim waist and curved back; she wears a tight, semi-transparent deep-blue combat suit with lace trim, high-waisted stockings, and a glowing pearl-white cloak with tidal patterns, illuminated by ethereal blue light, rendered in a film-style with dramatic lighting, moody atmosphere, and high-detail anime cel shading.",
+      "images": [
+        "C:\\Users\\zwq\\aigc-comfy-pipeline\\workspace\\converge\\r1_anchors\\02_电影感\\best.png",
+        "C:\\Users\\zwq\\aigc-comfy-pipeline\\workspace\\converge\\r1_anchors\\02_电影感\\gallery\\candidate_00.png"
+      ]
+    },
+    {
+      "round": 1,
+      "name": "游戏原画",
+      "prompt": "A silhouette of a female character standing in a deep-sea environment, slightly side-facing with crossed legs in an elegant seductive pose, showcasing a slim waist and curved back; she wears a tight, semi-transparent deep-blue combat suit with lace trim, high-waisted knee-high stockings, and a glowing pearl-white cloak with tidal wave effects, featuring glowing blue patterns, a tidal sigil, and the number 'T-04-01'—rendered in game character art style with anime cel shading, summer swimsuit-level exposure, wet translucent fabric, and a deep-sea blue (#0A2A5F) palette accented with glowing blue (#00FFFF) and pearl white (#E0E0E0), under soft bioluminescent lighting in a mystical underwater atmosphere.",
+      "images": [
+        "C:\\Users\\zwq\\aigc-comfy-pipeline\\workspace\\converge\\r1_anchors\\03_游戏原画\\best.png",
+        "C:\\Users\\zwq\\aigc-comfy-pipeline\\workspace\\converge\\r1_anchors\\03_游戏原画\\gallery\\candidate_00.png"
+      ]
+    },
+    {
+      "round": 1,
+      "name": "精致插画",
+      "prompt": "A silhouette of a female character in a deep-sea environment, slightly side-facing with crossed legs in an elegant and seductive pose, showcasing a slim waist and curved back; she wears a tight, semi-transparent deep-blue combat suit with lace trim, high-waisted knee-high stockings, and a glowing pearl-white cloak with tidal wave effects, illuminated by soft bioluminescent light, rendered in refined illustration style with anime cel shading and game character art details.",
+      "images": [
+        "C:\\Users\\zwq\\aigc-comfy-pipeline\\workspace\\converge\\r1_anchors\\04_精致插画\\best.png",
+        "C:\\Users\\zwq\\aigc-comfy-pipeline\\workspace\\converge\\r1_anchors\\04_精致插画\\gallery\\candidate_00.png"
+      ]
+    }
+  ],
+  "pick": null,
+  "notes": [],
+  "best": null,
+  "desc": "A silhouette of a female character standing in a deep-sea environment, slightly side-facing with crossed legs, elegant seductive pose, showing a slim waist and curved back. She wears a tight, semi-transparent deep-blue combat suit with lace trim on the shoulders and waist, revealing the curves of the upper body and waist. Her lower body is covered by a high-waisted, knee-high stocking with a deep-blue tight pants, with an open split at the thigh, showing long legs. A semi-transparent pearl-white cloak with glowing blue fringes flows around her. A glowing tidal sigil hovers at her chest, with the number 'T-04-01' engraved on it. Her pose is elegant yet powerful, with glowing blue patterns on her arms and legs, and a tidal wave-like effect radiating from the cloak's edges. The color palette is deep-sea blue (#0A2A5F) as the main color, pearl white (#E0E0E0) as the secondary, and glowing blue (#00FFFF) as the accent., white long hair, blue eyes, bare midriff showing slim waist, off-shoulder top exposing shoulders and collarbone, high-cut leg opening showing upper thighs, thin shoulder straps, wet translucent fabric effect, summer swimsuit level exposure, anime cel shading, game character art, full body",
+  "ref": null
+}

@@ -131,7 +131,17 @@ def create_from_nl(
             "inspection_summary": "...",
         }
     """
-    # 0. planner 自动选路（auto_plan=True 时覆盖参数）
+    # 0. 空描述校验（防止默默生成默认模板图——用户以为生成的是自己的描述）
+    if not nl_text or not nl_text.strip():
+        raise ValueError('描述不能为空（create 需要至少一句自然语言描述）')
+    if count is not None and count < 1:
+        raise ValueError(f'count 必须 >= 1（当前: {count}）')
+    if count is None:
+        count = 4
+    if seed is not None and not isinstance(seed, int):
+        raise ValueError(f'seed 必须是整数（当前: {seed!r}）')
+
+    # 0.1 planner 自动选路（auto_plan=True 时覆盖参数）
     if auto_plan:
         from workshop.engine.planner import plan_from_nl
         plan = plan_from_nl(
@@ -238,7 +248,13 @@ def create_from_nl(
             pass  # auto_download 模块不存在时跳过
 
     # 2. 生成专业提示词（支持多 variant）
-    ollama_avail = use_ollama
+    # 中文检测：含 CJK 字符时必须走 Ollama 翻译（中文直塞 SDXL/Flux 英文 tag 模型会主体跑偏）
+    import re as _re
+    _has_cjk = bool(_re.search(r'[\u4e00-\u9fff]', nl_text))
+    ollama_avail = use_ollama or (_has_cjk and model_type == "sdxl")
+    if _has_cjk and not use_ollama and model_type == "sdxl":
+        if verbose:
+            print("🔤 检测到中文描述，自动启用 Ollama 翻译（SDXL 需要英文 tag）")
 
     ref_analysis = None
     if ref_path and Path(ref_path).is_file() and not prompt_ready:
@@ -392,6 +408,7 @@ def create_from_nl(
                     max_retries=retry,
                     no_validate=no_validate,
                     seed=s,
+                    vlm_min_score=aesthetic_min_score,  # VLM 审美门禁（0-10）
                     negative_prompt=negative_prompt,
                     filename_prefix=f"pipeline_create_{idx:02d}",
                     ref_image=ref_image_name or ref_path,
@@ -402,7 +419,6 @@ def create_from_nl(
                     lora_name=lora_name,
                     steps=c_steps,
                     cfg=c_cfg,
-                    aesthetic_min_score=aesthetic_min_score,
                     faceid=faceid,
                     controlnet_type=controlnet_type,
                     controlnet_strength=controlnet_strength,
@@ -510,6 +526,7 @@ def create_from_nl(
                     max_retries=retry,
                     no_validate=no_validate,
                     seed=retry_seed,
+                    vlm_min_score=aesthetic_min_score,  # VLM 审美门禁（0-10）
                     negative_prompt=negative_prompt,
                     filename_prefix=f"pipeline_retry_{retry_round + 1:02d}",
                     ref_image=ref_image_name or ref_path,
@@ -521,7 +538,6 @@ def create_from_nl(
                     lora_strength=lora_strength,
                     steps=retry_steps,
                     cfg=retry_cfg,
-                    aesthetic_min_score=aesthetic_min_score,
                     faceid=faceid,
                     controlnet_type=controlnet_type,
                     controlnet_strength=controlnet_strength,
@@ -1274,6 +1290,7 @@ def create_batch(
     use_ollama: bool = False,
     output_dir: str | None = None,
     verbose: bool = False,
+    resume: bool = False,
 ) -> list[dict[str, Any]]:
     """从文本文件批量执行多条 prompt 的完整创作管线。
 
@@ -1317,6 +1334,28 @@ def create_batch(
     # 2. 准备输出目录
     batch_root = Path(output_dir) if output_dir else Path.cwd() / "_batch_output"
     batch_root.mkdir(parents=True, exist_ok=True)
+
+    # 2b. 断点续跑：读上次 batch_metadata.json，跳过已成功的条目
+    skipped = 0
+    if resume:
+        meta_path = batch_root / "batch_metadata.json"
+        if meta_path.is_file():
+            try:
+                prev = json.loads(meta_path.read_text(encoding="utf-8"))
+                done_ok = {p["text"] for p in prev.get("prompts", [])
+                           if p.get("output_dir") and not p.get("error")}
+                before = len(prompts)
+                prompts = [(p, r) for p, r in prompts
+                           if (p if isinstance(p, str) else p[0]) not in done_ok]
+                skipped = before - len(prompts)
+                print(f"♻️ 断点续跑: 跳过 {skipped} 条已成功条目，剩 {len(prompts)} 条")
+            except Exception as exc:
+                print(f"  ⚠️ 读取上次元数据失败，从头跑: {exc}")
+        else:
+            print(f"  ⚠️ 未找到 {meta_path}，从头跑")
+    if not prompts and skipped:
+        print("🎉 全部条目已完成，无需重跑")
+        return []
 
     results: list[dict[str, Any]] = []
     ok_count = 0
@@ -1388,13 +1427,23 @@ def create_batch(
         print(f"  [{idx}/{total}] {'✅' if not has_err else '❌'} {prompt_text[:50]} → seed={seed} {score_s}")
     print(f"{'='*60}\n")
 
-    # 4. 保存批量元数据
+    # 4. 保存批量元数据（resume 时合并上次成功记录，防止覆盖丢失）
+    prev_prompts: list[dict] = []
+    if resume:
+        meta_path = batch_root / "batch_metadata.json"
+        if meta_path.is_file():
+            try:
+                prev_meta = json.loads(meta_path.read_text(encoding="utf-8"))
+                prev_prompts = [p for p in prev_meta.get("prompts", [])
+                                if p.get("output_dir") and not p.get("error")]
+            except Exception:
+                pass
     batch_meta = {
         "created_at": datetime.now().isoformat(timespec="seconds"),
         "total": total,
-        "success": ok_count,
+        "success": ok_count + len(prev_prompts),
         "fail": fail_count,
-        "prompts": [
+        "prompts": prev_prompts + [
             {
                 "text": r.get("prompt_text", ""),
                 "output_dir": r.get("output_dir", ""),

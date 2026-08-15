@@ -1,0 +1,27 @@
+{
+  "name": "celeste",
+  "trigger": "celeoc",
+  "desc": "银白长发少女",
+  "identity": {
+    "hair": "双马尾",
+    "hair_color": "银白",
+    "eyes": "凤眼",
+    "eye_color": "琥珀金",
+    "skin": "",
+    "face_shape": "",
+    "height": "",
+    "body": ""
+  },
+  "style": {
+    "art_style": "电影感光影，日漫线条，游戏立绘结构",
+    "color_palette": "",
+    "lighting": ""
+  },
+  "outfits": [
+    "黑色哥特连衣裙，蕾丝细节"
+  ],
+  "personality": "",
+  "background": "",
+  "created": "2026-08-14 19:09",
+  "version": "1.0"
+}

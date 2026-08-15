@@ -476,10 +476,18 @@ def _ollama_enhance(
     # 默认（git-bash 下 env 可能未传递）
     from agents.comfy_utils import DEFAULT_OLLAMA_URL
     candidates.append(DEFAULT_OLLAMA_URL)
-    # WSL 备用地址
-    candidates.append("http://172.18.9.126:11434/api/generate")
+    # WSL 动态探测（IP 会漂移，硬编码会失效）
+    try:
+        import subprocess as _sp
+        _r = _sp.run(["wsl", "-e", "bash", "-c", "hostname -I | awk '{print $1}'"],
+                     capture_output=True, text=True, timeout=8)
+        _ip = _r.stdout.strip().split()[0] if _r.stdout.strip() else ""
+        if _ip:
+            candidates.append(f"http://{_ip}:11434/api/generate")
+    except Exception:
+        pass
 
-    model_name = model or __import__("os").environ.get("OLLAMA_MODEL") or "qwen3:14b"
+    model_name = model or __import__("os").environ.get("OLLAMA_MODEL") or "qwen3.5:9b"  # 9b 比 14b 加载快 3 倍，翻译够用
 
     if model_type == "flux":
         template = _OLLAMA_FLUX_TEMPLATE
@@ -496,7 +504,7 @@ def _ollama_enhance(
     last_err = None
     for try_url in dict.fromkeys(candidates):  # dedup preserving order
         try:
-            result = ollama_generate(prompt, url=try_url, model=model_name, timeout=30)
+            result = ollama_generate(prompt, url=try_url, model=model_name, timeout=60)  # 60s：冷加载 14b 也要 ~40s
             if result:
                 return _clean_ollama_output(result)
         except Exception as e:
@@ -539,8 +547,17 @@ def _ollama_vl_analyze(
     import requests
     import os
 
-    # 自动探测 Ollama 地址
-    env_url = url or os.environ.get("OLLAMA_URL", "http://172.18.9.126:11434/api/generate")
+    # 自动探测 Ollama 地址（IP 会漂移，动态探测）
+    env_url = url or os.environ.get("OLLAMA_URL", "")
+    if not env_url:
+        try:
+            import subprocess as _sp
+            _r = _sp.run(["wsl", "-e", "bash", "-c", "hostname -I | awk '{print $1}'"],
+                         capture_output=True, text=True, timeout=8)
+            _ip = _r.stdout.strip().split()[0] if _r.stdout.strip() else ""
+            env_url = f"http://{_ip}:11434/api/generate" if _ip else "http://127.0.0.1:11434/api/generate"
+        except Exception:
+            env_url = "http://127.0.0.1:11434/api/generate"
     ollama_url = env_url
     if not ollama_url.endswith("/api/generate"):
         ollama_url = ollama_url.rstrip("/") + "/api/generate"

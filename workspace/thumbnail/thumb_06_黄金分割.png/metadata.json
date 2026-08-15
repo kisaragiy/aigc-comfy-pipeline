@@ -1,0 +1,37 @@
+{
+  "created_at": "2026-08-15T20:33:58",
+  "version": "1.10.0",
+  "prompt": "MASTERPIECE, best quality, anime style, clean lineart, soft cel shading, vibrant colors, [camera: close-up/medium], [lighting: volumetric/warm/golden hour], [scene: school corridor with sunlight filtering through windows], 1girl, (natural black hair:1.2), short hairstyle, side braid hanging beside ear, energetic expression, wearing blue and white school uniform, standing at golden point intersection of frame, dynamic pose holding a book, detailed illustration",
+  "negative_prompt": "worst quality, low quality, blurry, noise, grainy, dirty, colorful hair, gradient hair, tears, watermark, text, extra fingers",
+  "candidates_count": 1,
+  "ref_image": null,
+  "ip_weight": 0.7,
+  "ip_balance": 0.5,
+  "best": {
+    "seed": 187774200941907,
+    "score": -1,
+    "image_relative": "best.png",
+    "inspect": {
+      "status": "issues_found",
+      "summary": "[脸:崩了] [左眼:ok] [右眼:ok] [手:ok] [脚:异常] [模糊:正常]",
+      "overall": 0.75
+    }
+  },
+  "candidates": [
+    {
+      "seed": 187774200941907,
+      "score": -1,
+      "retries": 0,
+      "error": null,
+      "inspect_status": "issues_found",
+      "inspect_overall": 0.75,
+      "inspect_summary": "[脸:崩了] [左眼:ok] [右眼:ok] [手:ok] [脚:异常] [模糊:正常]"
+    }
+  ],
+  "engine_detection": {
+    "style": "anime_commercial",
+    "composition": "medium shot, balanced composition, eye level",
+    "lighting": "soft natural lighting, diffused illumination",
+    "auto_negative": ""
+  }
+}

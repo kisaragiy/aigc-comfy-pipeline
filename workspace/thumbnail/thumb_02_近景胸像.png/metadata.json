@@ -1,0 +1,37 @@
+{
+  "created_at": "2026-08-15T20:29:22",
+  "version": "1.10.0",
+  "prompt": "MASTERPIECE, best quality, [style: anime style, cel shading, vibrant colors], [camera: medium close-up, eye-level], [lighting: soft volumetric rim light, warm golden mood], [scene: school corridor interior with lockers, daytime sunlight streaming through windows], [subject main: high school girl running playfully towards viewer], [subject details: natural black short hair, front-side braid near ears, school uniform sailor collar (blue jacket white shirt), joyful smiling expression, flushed cheeks], [extra: soft pastel blue and yellow color palette], anime style, detailed illustration",
+  "negative_prompt": "worst quality, low quality, blurry, noise, grainy, dirty, colorful hair, gradient hair, tears, watermark, text, extra fingers",
+  "candidates_count": 1,
+  "ref_image": null,
+  "ip_weight": 0.7,
+  "ip_balance": 0.5,
+  "best": {
+    "seed": 195258222994414,
+    "score": -1,
+    "image_relative": "best.png",
+    "inspect": {
+      "status": "issues_found",
+      "summary": "[脸:崩了] [左眼:ok] [右眼:ok] [手:ok] [脚:ok] [模糊:正常]",
+      "overall": 0.833
+    }
+  },
+  "candidates": [
+    {
+      "seed": 195258222994414,
+      "score": -1,
+      "retries": 0,
+      "error": null,
+      "inspect_status": "issues_found",
+      "inspect_overall": 0.833,
+      "inspect_summary": "[脸:崩了] [左眼:ok] [右眼:ok] [手:ok] [脚:ok] [模糊:正常]"
+    }
+  ],
+  "engine_detection": {
+    "style": "anime_commercial",
+    "composition": "medium shot, balanced composition, eye level",
+    "lighting": "soft natural lighting, diffused illumination",
+    "auto_negative": ""
+  }
+}

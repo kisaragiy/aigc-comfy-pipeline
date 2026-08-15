@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><title>创作工坊 · Gallery</title>
+<style>
+:root, .dark{--bg:#1a1a2e;--fg:#eee;--card:#16213e;--prompt:#999;--neg:#d4a5a5;--prompt-bg:#16213e;--neg-bg:#1f1f35;--engine:#7ec8e3;--engine-bg:#1f1f35;--summary:#aaa;--best:#e8a87c;--best-shadow:rgba(232,168,124,.3);--score:#7ec8e3;--overall:#a8e6cf;--summary-color:#d4a5a5;--heading:#e8a87c;--ref-label:#7ec8e3;--error:#666;--placeholder:#555;--modal-bg:rgba(0,0,0,.9);--dl-bg:rgba(0,0,0,.6);--dl-color:#eee;--dl-border:rgba(255,255,255,.2);--dl-hover:rgba(80,80,80,.8);--counter-bg:rgba(0,0,0,.6);--zoom-bg:rgba(0,0,0,.7)}
+.light{--bg:#f5f5f7;--fg:#1d1d1f;--card:#ffffff;--prompt:#555;--neg:#b91c1c;--prompt-bg:#f0f0f2;--neg-bg:#fee2e2;--engine:#0369a1;--engine-bg:#e0f2fe;--summary:#666;--best:#d97706;--best-shadow:rgba(217,119,6,.2);--score:#0369a1;--overall:#059669;--summary-color:#b91c1c;--heading:#d97706;--ref-label:#0369a1;--error:#999;--placeholder:#ccc;--modal-bg:rgba(255,255,255,.95);--dl-bg:rgba(255,255,255,.8);--dl-color:#333;--dl-border:rgba(0,0,0,.2);--dl-hover:rgba(200,200,200,.9);--counter-bg:rgba(0,0,0,.5);--zoom-bg:rgba(0,0,0,.5)}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:system-ui,sans-serif;padding:20px}
+h1{font-size:1.5rem;margin-bottom:8px;color:var(--heading)}
+.toolbar{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.theme-btn{background:var(--card);color:var(--fg);border:1px solid var(--fg);border-radius:6px;padding:4px 10px;font-size:.8rem;cursor:pointer;opacity:.7}
+.theme-btn:hover{opacity:1}
+.prompt{color:var(--prompt);font-size:.85rem;margin-bottom:8px;padding:10px;background:var(--prompt-bg);border-radius:8px;word-break:break-all}
+.negative{color:var(--neg);font-size:.82rem;margin-bottom:4px;padding:4px 10px;background:var(--neg-bg);border-radius:6px;word-break:break-all}
+.engine{color:var(--engine);font-size:.82rem;margin-bottom:12px;padding:4px 10px;background:var(--engine-bg);border-radius:6px}
+.summary-row{margin-bottom:16px;font-size:.9rem;color:var(--summary)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+.card{background:var(--card);border-radius:10px;overflow:hidden;border:2px solid transparent;transition:transform .15s}
+.card:hover{transform:translateY(-2px)}
+.card.best{border-color:var(--best);box-shadow:0 0 12px var(--best-shadow)}
+.card img{width:100%;height:auto;display:block;cursor:pointer}
+.card.error{padding:20px;text-align:center;color:var(--error)}
+.img-placeholder{font-size:2rem;padding:40px 0;color:var(--placeholder)}
+.info{padding:8px 10px;font-size:.8rem;display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.parts{padding:0 10px 8px;display:flex;flex-wrap:wrap;gap:3px}
+.part{padding:1px 6px;border-radius:4px;font-size:.72rem;font-weight:600}
+.p-ok{background:#1a3a2a;color:#4ade80}
+.p-warn{background:#3a3a1a;color:#facc15}
+.p-bad{background:#3a1a1a;color:#f87171}
+.score{color:var(--score)}
+.overall{color:var(--overall)}
+.summary{color:var(--summary-color)}
+.badge{font-size:.7rem;padding:2px 6px;border-radius:4px}
+.best-badge{background:#e8a87c33;color:var(--best)}
+.error-badge{background:#ff444433;color:#ff4444}
+.copy-seed{cursor:pointer;font-size:.85rem;padding:0 4px;user-select:none;opacity:.6}
+.copy-seed:hover{opacity:1}
+.sort-note{font-size:.75rem;color:var(--summary);margin-left:8px}
+/* score bar */
+.score-bar{display:flex;flex-wrap:wrap;gap:2px 6px;padding:4px 10px 6px}
+.sbar{display:inline-flex;align-items:center;gap:2px;font-size:.68rem}
+.sbar-label{color:var(--summary);min-width:28px}
+.sbar-track{display:inline-block;width:60px;height:6px;background:var(--card);border-radius:3px;overflow:hidden}
+.sbar-fill{height:100%;border-radius:3px;transition:width .3s}
+.bar-ok{background:#4ade80}
+.bar-warn{background:#facc15}
+.bar-bad{background:#f87171}
+.sbar-val{color:var(--summary);min-width:20px}
+.ref-section{margin-bottom:16px;padding:10px;background:var(--card);border-radius:8px;text-align:center}
+.ref-label{font-size:.82rem;color:var(--ref-label);margin-bottom:6px}
+.ref-img{max-height:180px;border-radius:6px;cursor:pointer;border:1px solid var(--fg);opacity:.8}
+.ref-img:hover{opacity:1}
+/* modal */
+#modal{display:none;position:fixed;inset:0;z-index:1000;background:var(--modal-bg);cursor:zoom-out;align-items:center;justify-content:center}
+#modal.show{display:flex}
+#modal-zoom-container{display:flex;align-items:center;justify-content:center;width:100%;height:100%;overflow:hidden;cursor:zoom-in}
+#modal-zoom-inner{position:relative;transition:transform .1s ease;transform-origin:center center;will-change:transform}
+#modal-zoom-inner img{display:block;max-width:95vw;max-height:95vh;object-fit:contain;border-radius:4px;user-select:none;-webkit-user-drag:none}
+#modal-overlay{position:absolute;inset:0;pointer-events:none}
+.ov-badge{position:absolute;padding:2px 6px;border-radius:4px;font-size:.72rem;font-weight:600;transform:translate(-50%,-50%);white-space:nowrap}
+.ov-ok{background:#1a3a2acc;color:#4ade80;border:1px solid #4ade8080}
+.ov-warn{background:#3a3a1acc;color:#facc15;border:1px solid #facc1580}
+.ov-bad{background:#3a1a1acc;color:#f87171;border:1px solid #f8717180}
+.ov-ov{background:#1a2a3acc;color:#7ec8e3;border:1px solid #7ec8e380;transform:none}
+#modal-zoom-level{position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:var(--zoom-bg);color:var(--fg);padding:2px 10px;border-radius:8px;font-size:.75rem;display:none;pointer-events:none}
+#modal-counter{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:var(--counter-bg);color:var(--fg);padding:4px 14px;border-radius:12px;font-size:.82rem;pointer-events:none}
+#modal-dl{position:fixed;top:20px;right:20px;background:var(--dl-bg);color:var(--dl-color);text-decoration:none;padding:6px 14px;border-radius:8px;font-size:1.1rem;cursor:pointer;z-index:1001;border:1px solid var(--dl-border);transition:background .15s}
+#modal-dl:hover{background:var(--dl-hover)}
+#modal-slide-status{position:fixed;top:20px;left:20px;background:var(--dl-bg);color:var(--dl-color);padding:4px 12px;border-radius:8px;font-size:.78rem;display:none;pointer-events:none}
+#modal-compare-btn{position:fixed;top:20px;left:90px;background:var(--dl-bg);color:var(--dl-color);border:1px solid var(--dl-border);padding:4px 12px;border-radius:8px;font-size:.78rem;cursor:pointer;display:none;z-index:1001;transition:background .15s}
+#modal-compare-btn:hover{background:var(--dl-hover)}
+#modal-compare-overlay{position:absolute;inset:0;background-size:cover;background-position:center;opacity:0;pointer-events:none;transition:opacity .3s;border-radius:4px}
+#modal-compare-overlay.show{opacity:0.4}
+</style></head>
+<body class="dark">
+<div class="toolbar">
+  <h1>🖼️ 创作工坊 · Gallery</h1>
+  <button class="theme-btn" onclick="toggleTheme()" title="切换主题">☀️</button>
+</div>
+
+<div class="prompt">MASTERPIECE, best quality, [style: anime style, cel shading, vibrant colors], [camera: medium, high, dutch angle], [lighting: soft volumetric, warm, hopeful mood], [scene: school corridor with sunlight beams, daytime], [subject main: 1girl standing alone looking away slightly], [subject details: natural black hair bob cut, side braid in front of ear, school uniform outfit blue and white plaid skirt, innocent expression, dynamic unease posture], anime style, detailed illustration</div>
+<div class="negative">⛔ 负向: worst quality, low quality, blurry, noise, grainy, dirty, colorful hair, gradient hair, tears, watermark, text, extra fingers</div>
+
+<div class="summary-row">质检: [脸:崩了] [左眼:ok] [右眼:ok] [手:ok] [脚:ok] [模糊:正常] · 共 1 张<span class="sort-note" title="按综合分降序 · 🏆 最优在前">  已排序</span></div>
+<div class="grid">
+<div class="card best">
+  <img src="candidate_00.png" loading="lazy" onclick="openModal(0)" />
+  <div class="info">#1 · seed: 105874925371705 <span class='copy-seed' onclick='navigator.clipboard.writeText("105874925371705");this.textContent="✅"'>📋</span>  <span class='overall'>综合: 0.83</span> <span class='summary'>[脸:崩了] [左眼:ok] [右眼:ok] [手:ok] [脚:ok] [模糊:正常]</span> <span class='badge best-badge'>🏆 最优</span></div>
+  <div class="score-bar"><span class="sbar"><span class="sbar-label">Face</span><span class="sbar-track"><span class="sbar-fill bar-bad" style="width:0px"></span></span><span class="sbar-val">0.0</span></span><span class="sbar"><span class="sbar-label">L-Eye</span><span class="sbar-track"><span class="sbar-fill bar-ok" style="width:60px"></span></span><span class="sbar-val">1.0</span></span><span class="sbar"><span class="sbar-label">R-Eye</span><span class="sbar-track"><span class="sbar-fill bar-ok" style="width:60px"></span></span><span class="sbar-val">1.0</span></span><span class="sbar"><span class="sbar-label">Hand</span><span class="sbar-track"><span class="sbar-fill bar-ok" style="width:60px"></span></span><span class="sbar-val">1.0</span></span><span class="sbar"><span class="sbar-label">Foot</span><span class="sbar-track"><span class="sbar-fill bar-ok" style="width:60px"></span></span><span class="sbar-val">1.0</span></span><span class="sbar"><span class="sbar-label">Blur</span><span class="sbar-track"><span class="sbar-fill bar-ok" style="width:60px"></span></span><span class="sbar-val">1.0</span></span></div>
+</div></div>
+|<div id="modal" onclick="closeModal(event)">
+|  <div id="modal-counter"></div>
+|  <div id="modal-zoom-container" ondblclick="resetZoom()">
+|    <div id="modal-zoom-inner">
+|      <img id="modal-img" src="" alt="" draggable="false"/>
+|      <div id="modal-overlay"></div>
+|    </div>
+|  </div>
+<a id="modal-dl" href="#" download="gallery.png" onclick="event.stopPropagation();" title="下载当前图片">⬇</a>
+<div id="modal-zoom-level"></div>
+<div id="modal-slide-status">▶ 播放中</div>
+<button id="modal-compare-btn" onclick="toggleCompare()" title="对比参考图 (C)">🔍 对比</button>
+</div>
+|<script>
+|var images = ['candidate_00.png'];
+|var partsData = [{"overall": 0.833, "parts": {"\u8138": 0.0, "\u5de6\u773c": 1.0, "\u53f3\u773c": 1.0, "\u624b": 1.0, "\u811a": 1.0, "\u6a21\u7cca": 1.0}}];
+|var refImage = null;
+|var currentIdx = -1;
+|var zoom = 1, panX = 0, panY = 0, isPanning = false, startX, startY;
+|var container = document.getElementById('modal-zoom-container');
+|var inner = document.getElementById('modal-zoom-inner');
+|var mImg = document.getElementById('modal-img');
+|var overlay = document.getElementById('modal-overlay');
+|var zoomLevel = document.getElementById('modal-zoom-level');
+|var compareBtn = document.getElementById('modal-compare-btn');
+|var compareShown = false;
+|if (refImage) compareBtn.style.display = 'block';
+|
+|function toggleCompare(){
+|    compareShown = !compareShown;
+|    compareBtn.textContent = compareShown ? '🔍 原图' : '🔍 对比';
+|    if (compareShown) {
+|        inner.style.backgroundImage = 'url(' + refImage + ')';
+|        inner.style.backgroundSize = 'contain';
+|        inner.style.backgroundRepeat = 'no-repeat';
+|        inner.style.backgroundPosition = 'center';
+|        mImg.style.opacity = '0.5';
+|    } else {
+|        inner.style.backgroundImage = '';
+|        mImg.style.opacity = '1';
+|    }
+|}
+|
+function closeModal(e){
+    if (e.target === e.currentTarget || e.target.id === 'modal-img' || e.target.id === 'modal-zoom-container' || e.target.id === 'modal-zoom-inner') {
+        document.getElementById('modal').classList.remove('show');
+        currentIdx = -1; resetZoom(); resetCompare();
+    }
+}
+function openModal(idx){
+    currentIdx = idx; resetZoom(); resetCompare();
+    mImg.src = images[idx];
+|    document.getElementById('modal').classList.add('show');
+|    updateCounter(); updateDownload(); updateOverlay();
+|}
+|function updateCounter(){
+|    var c = document.getElementById('modal-counter');
+|    if (currentIdx >= 0 && images.length > 1) {
+|        c.textContent = (currentIdx + 1) + ' / ' + images.length + ' ← →';
+|        c.style.display = 'block';
+|    } else { c.style.display = 'none'; }
+|}
+|function updateDownload(){
+|    var dl = document.getElementById('modal-dl');
+|    if (currentIdx >= 0 && images[currentIdx]) {
+|        dl.href = images[currentIdx];
+|        dl.download = images[currentIdx].split('/').pop() || 'gallery.png';
+|        dl.style.display = 'block';
+|    } else { dl.style.display = 'none'; }
+|}
+|function updateOverlay(){
+|    overlay.innerHTML = '';
+|    if (currentIdx < 0 || !partsData[currentIdx]) return;
+|    var p = partsData[currentIdx].parts || {};
+|    var parts_list = [
+|        ['Face', 0.5, 0.2], ['L-Eye', 0.35, 0.3], ['R-Eye', 0.65, 0.3],
+|        ['Hand', 0.5, 0.7], ['Foot', 0.5, 0.85], ['Blur', 0.85, 0.05]
+|    ];
+|    parts_list.forEach(function(item){
+|        var key = item[0], x = item[1], y = item[2];
+|        var val = p[key];
+|        if (val === undefined) return;
+|        var badge = document.createElement('span');
+|        badge.className = 'ov-badge ' + (val >= 0.8 ? 'ov-ok' : val >= 0.3 ? 'ov-warn' : 'ov-bad');
+|        badge.textContent = key + ' ' + val.toFixed(1);
+|        badge.style.left = (x * 100) + '%'; badge.style.top = (y * 100) + '%';
+|        overlay.appendChild(badge);
+|    });
+|    var ov = partsData[currentIdx].overall || 0;
+|    if (ov > 0) {
+|        var ob = document.createElement('span');
+|        ob.className = 'ov-badge ov-ov';
+|        ob.textContent = '综合 ' + ov.toFixed(2);
+|        ob.style.left = '3%'; ob.style.top = '3%';
+|        overlay.appendChild(ob);
+|    }
+|}
+|// Zoom & Pan
+|function applyTransform(){
+|    inner.style.transform = 'scale(' + zoom + ') translate(' + panX + 'px,' + panY + 'px)';
+|    zoomLevel.textContent = (zoom * 100).toFixed(0) + '%';
+|    zoomLevel.style.display = zoom > 1 ? 'block' : 'none';
+|}
+function resetZoom(){
+    zoom = 1; panX = 0; panY = 0; applyTransform();
+}
+function resetCompare(){
+    if (compareShown) toggleCompare();
+}
+|container.addEventListener('wheel', function(e){
+|    e.preventDefault();
+|    var delta = e.deltaY > 0 ? -0.1 : 0.1;
+|    zoom = Math.max(0.5, Math.min(10, zoom + delta));
+|    applyTransform();
+|});
+|container.addEventListener('mousedown', function(e){
+|    if (zoom > 1) { isPanning = true; startX = e.clientX - panX; startY = e.clientY - panY; inner.style.cursor = 'grabbing'; }
+|});
+|window.addEventListener('mousemove', function(e){
+|    if (!isPanning) return;
+|    panX = e.clientX - startX; panY = e.clientY - startY;
+|    inner.style.transform = 'scale(' + zoom + ') translate(' + panX + 'px,' + panY + 'px)';
+|});
+|window.addEventListener('mouseup', function(){
+|    isPanning = false; inner.style.cursor = 'default';
+|});
+// Theme toggle
+function toggleTheme(){
+    var b = document.body;
+    if (b.className === 'dark') {
+        b.className = 'light'; localStorage.setItem('gallery-theme', 'light');
+    } else {
+        b.className = 'dark'; localStorage.setItem('gallery-theme', 'dark');
+    }
+}
+(function(){
+    var t = localStorage.getItem('gallery-theme');
+    if (t) document.body.className = t;
+    document.querySelector('.theme-btn').textContent = t === 'light' ? '🌙' : '☀️';
+})();
+// Slideshow
+var slideTimer = null;
+function toggleSlide(){
+    if (slideTimer) { clearInterval(slideTimer); slideTimer = null; document.getElementById('modal-slide-status').style.display = 'none'; return; }
+    if (currentIdx < 0 || images.length < 2) return;
+    document.getElementById('modal-slide-status').style.display = 'block';
+    slideTimer = setInterval(function(){
+        if (currentIdx < images.length - 1) {
+            currentIdx++; mImg.src = images[currentIdx]; resetZoom();
+            updateCounter(); updateDownload(); updateOverlay();
+        } else {
+            clearInterval(slideTimer); slideTimer = null;
+            document.getElementById('modal-slide-status').style.display = 'none';
+        }
+    }, 3000);
+}
+// Update keyboard nav to support slideshow
+document.addEventListener('keydown', function(e){
+    if (currentIdx < 0) return;
+    if (e.key === ' ') { e.preventDefault(); toggleSlide(); return; }
+    if (e.key === 'c' || e.key === 'C') { e.preventDefault(); if (refImage) toggleCompare(); return; }
+    if (e.key === 'ArrowLeft' && currentIdx > 0) {
+        if (slideTimer) toggleSlide();
+        currentIdx--; mImg.src = images[currentIdx]; resetZoom();
+        updateCounter(); updateDownload(); updateOverlay(); e.preventDefault();
+    } else if (e.key === 'ArrowRight' && currentIdx < images.length - 1) {
+        if (slideTimer) toggleSlide();
+        currentIdx++; mImg.src = images[currentIdx]; resetZoom();
+        updateCounter(); updateDownload(); updateOverlay(); e.preventDefault();
+    } else if (e.key === 'Escape') {
+        if (slideTimer) toggleSlide();
+        document.getElementById('modal').classList.remove('show');
+        currentIdx = -1; resetZoom();
+    }
+});
+|</script>
+</body></html>

@@ -26,7 +26,24 @@ from typing import Any
 import requests
 
 # ── Ollama 配置（主力） ──
-OLLAMA_API = os.environ.get("OLLAMA_API", "http://127.0.0.1:11434")
+def _detect_ollama_api() -> str:
+    """自动探测 Ollama 地址：环境变量 → WSL IP → 127.0.0.1"""
+    env = os.environ.get("OLLAMA_API", "").strip()
+    if env:
+        return env.rstrip("/")
+    # 尝试通过 wsl 获取 IP（Windows 侧 127.0.0.1 转发经常失效）
+    try:
+        r = subprocess.run(
+            ["wsl", "-e", "bash", "-c", "hostname -I | awk '{print $1}'"],
+            capture_output=True, text=True, timeout=8)
+        ip = r.stdout.strip().split()[0] if r.stdout.strip() else ""
+        if ip:
+            return f"http://{ip}:11434"
+    except Exception:
+        pass
+    return "http://127.0.0.1:11434"
+
+OLLAMA_API = _detect_ollama_api()
 OLLAMA_VL_MODEL = os.environ.get("OLLAMA_VL_MODEL", "qwen3-vl:8b")
 
 # ── 专用 VLM 配置（备选） ──
@@ -38,7 +55,7 @@ LLAMA_SERVER = LLAMA_DIR / "llama-server.exe"
 MODEL_PATH = LLAMA_DIR / "models" / "Qwen3.5-9B-Q4_K_M.gguf"
 MMPROJ_PATH = LLAMA_DIR / "models" / "Qwen3.5-9B-mmproj-F16.gguf"
 
-# ── 合并评估 Prompt（6维度, 1次调用） ──
+# ── 合并评估 Prompt（6维度+符合度, 1次调用） ──
 COMBINED_EVAL_PROMPT = """Analyze this image aesthetically. Return ONLY valid JSON (no markdown, no extra text):
 {
   "composition": <0-10>,
@@ -47,8 +64,10 @@ COMBINED_EVAL_PROMPT = """Analyze this image aesthetically. Return ONLY valid JS
   "character": <0-10>,
   "emotional": <0-10>,
   "overall": <0-10>,
+  "has_subject": <true/false>,
+  "subject_match": "<does the image contain the main subject described in the request? be honest, empty image or wrong subject = false>",
   "strength": "<main advantage of this image>",
-  "weakness": "<main flaw if any>",
+  "weakness": "<main flaw if any, e.g. missing subject, deformed hands, wrong clothing>",
   "summary": "<1 sentence overall assessment>"
 }"""
 
@@ -188,8 +207,15 @@ class AestheticScorer:
             return {"available": False, "error": "Ollama not running", "overall_score": -1}
 
         try:
-            with open(image_path, "rb") as f:
-                img_b64 = base64.b64encode(f.read()).decode("utf-8")
+            # 压缩图片再评分：原始图常 1-2MB，base64 后 2-3MB 会撑爆 WSL 桥接 + VLM 处理慢
+            # 512px 内足够 VLM 看构图/光影/崩坏，速度快 10 倍
+            from PIL import Image
+            import io
+            img = Image.open(image_path)
+            img.thumbnail((512, 512), Image.LANCZOS)
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
+            img_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
 
             payload = {
                 "model": OLLAMA_VL_MODEL,
