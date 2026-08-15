@@ -10,6 +10,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 import requests
+import urllib.request  # ComfyUI /free 卸载调用
 
 AGENTS_DIR = Path(__file__).resolve().parent
 _COMFY_HOST = os.environ.get("COMFY_HOST", "127.0.0.1")
@@ -193,10 +194,23 @@ def ollama_generate(
 ) -> str:
     ollama_url = url or DEFAULT_OLLAMA_URL
     ollama_model = model or DEFAULT_OLLAMA_MODEL
+    # WSL IP 漂移兜底：127.0.0.1 不通时探测 WSL 地址（IP 每次重启会变）
+    if "127.0.0.1" in ollama_url or "localhost" in ollama_url:
+        try:
+            import subprocess as _sp
+            _r = _sp.run(["wsl", "-e", "bash", "-c", "hostname -I | awk '{print $1}'"],
+                         capture_output=True, text=True, timeout=8)
+            _ip = _r.stdout.strip().split()[0] if _r.stdout.strip() else ""
+            if _ip:
+                ollama_url = f"http://{_ip}:11434/api/generate"
+        except Exception:
+            pass
     try:
         r = requests.post(
             ollama_url,
-            json={"model": ollama_model, "prompt": prompt, "stream": False},
+            # think=False 必须显式关闭：qwen3.5 系默认思考模式，
+            # 小预算下只输出 thinking 不输出 response → 返回空（2026-08-14 verify 实测）
+            json={"model": ollama_model, "prompt": prompt, "stream": False, "think": False},
             timeout=timeout,
         )
         r.raise_for_status()
@@ -266,7 +280,17 @@ def wait_images(
         if __debug__:
             print("[dry-run] 跳过等待出图")
         return []
-    deadline = time.monotonic() + timeout_s
+    # 队列感知：提交前查队列深度，超时按排队任务数扩展（避免"等不到就超时"假失败）
+    est = timeout_s
+    try:
+        q = requests.get(f"{base}/queue", timeout=10).json()
+        n_pend = len(q.get("queue_pending", []))
+        if n_pend > 0:
+            est = timeout_s + n_pend * 90
+            print(f"  ⏳ ComfyUI 队列: 运行中 {len(q.get('queue_running', []))}，等待 {n_pend}（超时已扩展 {est:.0f}s）", file=sys.stderr)
+    except Exception:
+        pass
+    deadline = time.monotonic() + est
     while time.monotonic() < deadline:
         try:
             r = requests.get(f"{base}/history/{prompt_id}", timeout=30)
@@ -460,6 +484,7 @@ def generate_with_quality(
     preset: str | None = None,
     no_validate: bool = False,
     wait_timeout: float = 900.0,
+    vlm_min_score: float = 0.0,   # VLM 审美门槛（0-10，>0 启用）
     **kwargs: Any,
 ) -> dict[str, Any]:
     """生成 + 质量验证 + 自动重试。
@@ -472,10 +497,13 @@ def generate_with_quality(
         preset: 质量预设名
         no_validate: 强制跳过验证
         wait_timeout: 等待出图超时秒数（视频需要更长）
+        vlm_min_score: VLM 审美门槛（0-10，>0 时每张图过 AestheticScorer，
+                       不达标自动换 seed 重试）
         kwargs: 传给 build_fn 的参数
 
     Returns:
-        {"workflow": wf, "seed": seed, "images": [...], "score": score, "retries": n}
+        {"workflow": wf, "seed": seed, "images": [...], "score": score,
+         "vlm_score": vlm_score, "retries": n}
     """
     import random
 
@@ -484,9 +512,27 @@ def generate_with_quality(
         params.pop(skip_key, None)
 
     do_validate = not no_validate and min_score > 0
+    do_vlm = not no_validate and vlm_min_score > 0
 
     best_score = -1.0
+    best_vlm = -1.0
     best_result: dict[str, Any] | None = None
+    # 循环外用到的变量默认值（wait_images 失败 continue 时最后 return 需要）
+    image_paths: list[str] = []
+    score: float | None = None
+    vlm_score: float | None = None
+    wf: dict[str, Any] = {}
+    actual_seed: int = -1
+
+    # VLM 评分器（惰性加载，只有启用时才初始化）
+    _scorer = None
+    if do_vlm:
+        try:
+            from agents.aesthetic_scorer import AestheticScorer
+            _scorer = AestheticScorer(backend="ollama")
+        except Exception as exc:
+            print(f"  [warn] VLM 评分器初始化失败，跳过审美门禁: {exc}", file=sys.stderr)
+            do_vlm = False
 
     for attempt in range(max_retries + 1):
         # seed 由 generate_with_quality 管理，不在 params 中传递
@@ -527,23 +573,61 @@ def generate_with_quality(
             except Exception as exc:
                 print(f"  [warn] 验证失败: {exc}", file=sys.stderr)
 
-        current = {"workflow": wf, "seed": actual_seed, "images": image_paths,
-                   "score": score, "retries": attempt}
+        # VLM 审美评分（商业质量标准）
+        vlm_score: float | None = None
+        if do_vlm and image_paths and _scorer is not None:
+            try:
+                # 关键：评分前卸载 ComfyUI 模型释放显存（12G 单卡，ComfyUI 8-9GB 模型会挤死 VLM）
+                try:
+                    _free = urllib.request.Request(
+                        comfy_base_url() + "/free",
+                        data=b'{"unload_models": true}',
+                        headers={"Content-Type": "application/json"},
+                        method="POST")
+                    with urllib.request.urlopen(_free, timeout=5):
+                        pass
+                    time.sleep(2)  # 等显存真正释放
+                except Exception:
+                    pass  # 卸载失败不阻塞评分（可能本来就没模型）
+                t1 = time.time()
+                sr = _scorer.score(image_paths[0])
+                vlm_score = sr.get("overall_score", -1.0)
+                has_subject = sr.get("has_subject", True)  # 默认 true 兼容旧版
+                fb = sr.get("feedback", "")
+                print(f"  🎨 VLM 审美: {vlm_score:.1f}/10 (耗时 {time.time()-t1:.1f}s) {fb[:40]}")
+                if not has_subject:
+                    print(f"  ⚠️ 主体缺失（画面无目标主体），按不达标处理")
+                    vlm_score = min(vlm_score, vlm_min_score - 0.1)  # 强制不达标触发重试
+            except Exception as exc:
+                print(f"  [warn] VLM 评分失败: {exc}", file=sys.stderr)
 
+        current = {"workflow": wf, "seed": actual_seed, "images": image_paths,
+                   "score": score, "vlm_score": vlm_score, "retries": attempt}
+
+        # 综合评估：CLIP 分（若启用）+ VLM 分（若启用）
+        passed = True
         if score is not None and score > best_score:
             best_score = score
             best_result = current
+        if vlm_score is not None and vlm_score > best_vlm:
+            best_vlm = vlm_score
+            best_result = current
+        if score is not None and score < min_score:
+            passed = False
+        if vlm_score is not None and vlm_score < vlm_min_score:
+            passed = False
 
-        if score is not None and score >= min_score:
-            print(f"  ✅ score={score:.3f} ≥ {min_score}")
+        if passed:
+            print(f"  ✅ score={score} vlm={vlm_score} 达标")
             return current
 
         if attempt < max_retries:
-            s = f"{score:.3f}" if score is not None else "N/A"
-            print(f"  ⚠️ score={s} < {min_score}，重试 ({attempt+1}/{max_retries})")
+            s = f"{score}" if score is not None else "N/A"
+            vs = f"{vlm_score:.1f}" if vlm_score is not None else "N/A"
+            print(f"  ⚠️ score={s} vlm={vs} < 门槛，重试 ({attempt+1}/{max_retries})")
 
     if best_result:
         return best_result
 
     return {"workflow": wf, "seed": actual_seed, "images": image_paths,
-            "score": score, "retries": attempt}
+            "score": score, "vlm_score": vlm_score, "retries": attempt}

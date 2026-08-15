@@ -54,6 +54,7 @@ def build_sdxl_workflow(
     # 参考图
     ref_image: str | None = None,
     ip_weight: float = 0.7,
+    ip_balance: float = 0.5,   # ⚠️ SDXL 走 InstantID/ControlNet 分支，此参数仅兼容 create.py 传参，不生效
     # 质量增强
     face_detailer: bool = False,
     upscale: float = 1.0,

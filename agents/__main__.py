@@ -490,12 +490,24 @@ def _run_workshop() -> None:
         print("  engine  \"描述\"   — 测试 prompt 引擎（显示优化后提示词）")
         print("  inspect <图片>   — 逐部位质检")
         print("  manga   \"剧本\"   — 漫画/分镜生成")
+        print('  manga-book "剧本" — 整本漫画（多页+封面，一句话→整本）')
+        print('  cover "描述" [--title] — B站视频封面（16:9 高冲击力+标题留白）')
+        print('  emotes "角色描述" [--emotes] — 角色表情包批量（12表情库）')
+        print('  wallpaper "描述" [--type] — 壁纸/头像（phone 9:16/avatar 1:1/desktop 16:9）')
         print("  video   \"描述\"   — 视频生成")
         print("  verify  <目录>   — 一致性验证（比对多张画中同角色质检结果）")
         print("  demo    \"描述\"   — 面试样张管线（5场景 Gallery + 报告）")
         print('  review  <目录>   — 人工审核 Web UI (评分/删除/归类/标签)')
         print('  draw    "描述"   — 一句出图（SDXL premium 默认全配）')
         print('  plan    "描述"   — 预览自动计划')
+        print('  converge "描述" — 意图逼近工作流（锚点→变体→微调，多轮收敛）')
+        print('  fix <图片> --prompt — 局部修复（inpaint: 指定区域/自动脸手/羽化mask）')
+        print('  compose "描述" — 构图先行（缩略图风暴→Canny结构线→ControlNet精修）')
+        print('  compose --value <序号> — 黑白光影稿（上色前确认明暗结构，画师流程）')
+        print('  layer "角色" --bg "背景" — 分层绘制（角色/背景分离→SAM抠图→合成）')
+        print('  finalcheck <图片> — 终检清单（透视/比例/光影/边缘/色彩/崩坏 + --flip 倒置镜像 + --focus 焦点引导）')
+        print('  colorgrade <图片> — 色彩氛围统一（自动白平衡/色温/饱和度，画师 M4）')
+        print('  character "概念" — 角色设计先行（剪影/配色/标志/服装 → 接生成）')
         print('  demo    "描述"   — 面试样张管线')
         print('  aesthetic <图片> — VLM 审美评分')
         print('  aesthetic compare <图1> <图2> — VLM 质量对比')
@@ -519,6 +531,89 @@ def _run_workshop() -> None:
         _workshop_inspect(args)
     elif sub == "manga":
         _workshop_manga(args)
+    elif sub == "manga-book":
+        _workshop_manga_book(args)
+    elif sub == "cover":
+        from workshop.cover import main as cover_main
+        cover_main(args)
+    elif sub == "emotes":
+        from workshop.emotes import main as emotes_main
+        emotes_main(args)
+    elif sub == "wallpaper":
+        from workshop.wallpaper import main as wp_main
+        wp_main(args)
+    elif sub == "merch":
+        from workshop.merch import main as merch_main
+        merch_main(args)
+    elif sub == "multi":
+        from workshop.multi import main as multi_main
+        multi_main(args)
+    elif sub == "restore":
+        from workshop.restore import main as restore_main
+        restore_main(args)
+    elif sub == "idphoto":
+        from workshop.idphoto import main as idphoto_main
+        idphoto_main(args)
+    elif sub == "outfit":
+        from workshop.outfit import main as outfit_main
+        outfit_main(args)
+    elif sub == "colorize":
+        from workshop.colorize import main as colorize_main
+        colorize_main(args)
+    elif sub == "verify-page":
+        from workshop.verify_page import main as vp_main
+        vp_main(args)
+    elif sub == "interrogate":
+        from workshop.interrogate import main as ig_main
+        ig_main(args)
+    elif sub == "img2img":
+        from workshop.img2img import main as i2i_main
+        i2i_main(args)
+    elif sub == "inpaint":
+        from workshop.inpaint import main as ip_main
+        ip_main(args)
+    elif sub == "outpaint":
+        from workshop.outpaint import main as op_main
+        op_main(args)
+    elif sub == "blend":
+        from workshop.blend import main as bl_main
+        bl_main(args)
+    elif sub == "compare":
+        from workshop.compare import main as cp_main
+        cp_main(args)
+    elif sub == "stylize":
+        from workshop.stylize import main as st_main
+        st_main(args)
+    elif sub == "enhance":
+        from workshop.enhance import main as en_main
+        en_main(args)
+    elif sub == "bg-replace":
+        from workshop.bg_replace import main as br_main
+        br_main(args)
+    elif sub == "panorama":
+        from workshop.panorama import main as pn_main
+        pn_main(args)
+    elif sub == "info":
+        from workshop.info import main as if_main
+        if_main(args)
+    elif sub == "biz":
+        from workshop.biz import main as bz_main
+        bz_main(args)
+    elif sub == "biztext":
+        from workshop.biztext import main as bt_main
+        bt_main(args)
+    elif sub == "kb":
+        from workshop.kb import main as kb_main
+        kb_main(args)
+    elif sub == "style-distill":
+        from workshop.style_distill import main as sd_main
+        sd_main(args)
+    elif sub == "oc":
+        from workshop.oc import main as oc_main
+        oc_main(args)
+    elif sub == "wardrobe":
+        from workshop.wardrobe import main as wd_main
+        wd_main(args)
     elif sub == "video":
         _workshop_video(args)
     elif sub == "extract":
@@ -535,6 +630,36 @@ def _run_workshop() -> None:
         _workshop_review(args)
     elif sub == "plan":
         _workshop_plan(args)
+    elif sub == "converge":
+        from workshop.converge import main as converge_main
+        converge_main(args)
+    elif sub == "fix":
+        from workshop.fix import main as fix_main
+        fix_main(args)
+    elif sub == "compose":
+        from workshop.compose import main as compose_main
+        compose_main(args)
+    elif sub == "layer":
+        from workshop.layer import main as layer_main
+        layer_main(args)
+    elif sub == "finalcheck":
+        from workshop.finalcheck import main as fc_main
+        fc_main(args)
+    elif sub == "colorgrade":
+        from workshop.colorgrade import main as cg_main
+        cg_main(args)
+    elif sub == "commercial_flow":
+        from workshop.commercial_flow import main as cf_main
+        sys.exit(cf_main(args))
+    elif sub == "thumbnail":
+        from workshop.thumbnail import main as th_main
+        sys.exit(th_main(args))
+    elif sub == "consistency_check":
+        from workshop.consistency_check import main as cc_main
+        sys.exit(cc_main(args))
+    elif sub == "character":
+        from workshop.character import main as ch_main
+        ch_main(args)
     elif sub == "bench":
         _workshop_bench(args)
     elif sub == "bench-report":
@@ -580,7 +705,7 @@ def _workshop_create(args: list[str]) -> None:
                         help="超分倍数 (2.0/4.0, 0=不超分)")
     parser.add_argument("--restore-face", default=None, nargs="?",
                         const="GFPGANv1.4.pth",
-                        help='修脸模型 (GFPGANv1.4.pth / codeformer-v0.1.0.pth)')
+                        help='[废弃] 旧 MTB 修脸——现自动映射为 --face-detailer (内嵌 FaceDetailer)')
     parser.add_argument("--lora", default=None,
                         help="LoRA 权重文件名（ComfyUI/models/loras/ 下）")
     parser.add_argument("--lora-strength", type=float, default=1.0,
@@ -652,6 +777,8 @@ def _workshop_create(args: list[str]) -> None:
     parser.add_argument("--character", default=None,
                         help="当前生成的角色名（配合 --cast 使用）")
     parser.add_argument("--batch-file", default=None, help="批量文件路径（每行一条 prompt，空行和 # 注释行跳过）")
+    parser.add_argument("--resume", action="store_true",
+                        help="断点续跑：跳过 batch_metadata.json 中已成功的条目")
     parser.add_argument("--from-scenes", default=None,
                         help="从 scenes JSON 批量生成插画（workshop extract 输出）")
     parsed = parser.parse_args(args)
@@ -714,6 +841,11 @@ def _workshop_create(args: list[str]) -> None:
             return
 
     # 快捷预设：--commercial 覆盖相关参数
+    # --restore-face 废弃兼容（GG18：MTB 已移除——映射到内嵌 FaceDetailer）
+    if parsed.restore_face is not None and not parsed.face_detailer:
+        parsed.face_detailer = True
+        print("  🔧 [废弃] --restore-face 已映射为 --face-detailer（内嵌 FaceDetailer）")
+
     if parsed.commercial:
         if not parsed.style:
             parsed.style = "anime_commercial"
@@ -1058,13 +1190,12 @@ def _workshop_create(args: list[str]) -> None:
     if had_err:
         print(f"\n⚠️ 部分候选生成失败（ComfyUI 可能不稳定）")
 
-    # ── 后处理：超分 + 修脸 ─────────────────────────────────
+    # ── 后处理：超分（修脸由内嵌 FaceDetailer 承担——GG18 废弃 MTB）──
     if best and best.get("image"):
         img_path = best["image"]
-        needs_restore = parsed.restore_face is not None
         needs_upscale = parsed.upscale > 0
 
-        if needs_upscale or needs_restore:
+        if needs_upscale:
             from agents.comfy_utils import comfy_post_prompt, comfy_base_url, wait_images
             current_img = img_path
 
@@ -1079,21 +1210,6 @@ def _workshop_create(args: list[str]) -> None:
                     imgs = wait_images(pid, comfy_base_url(), timeout_s=300)
                     current_img = str(Path(comfy_base_url()).parent.parent / "output" / imgs[0][0] / imgs[0][1]) if imgs else current_img
                     print(f"  ✅ 超分完成: {current_img}")
-
-            # 修脸
-            if needs_restore:
-                from agents.go_flux import build_restore_face_workflow
-                print(f"\n🔧 修脸 ({parsed.restore_face}) ...")
-                wf = build_restore_face_workflow(current_img, model_name=parsed.restore_face)
-                r = comfy_post_prompt(wf)
-                pid = r.get("prompt_id", "")
-                if pid:
-                    imgs = wait_images(pid, comfy_base_url(), timeout_s=300)
-                    if imgs:
-                        from agents.comfy_utils import resolve_comfy_root
-                        cr = resolve_comfy_root()
-                        current_img = str(cr / "output" / imgs[0][0] / imgs[0][1])
-                        print(f"  ✅ 修脸完成: {current_img}")
 
             # 更新 result 中的 best image
             if current_img != img_path:
@@ -1138,6 +1254,7 @@ def _workshop_create_batch(parsed) -> None:
         use_ollama=parsed.ollama,
         output_dir=parsed.output,
         verbose=parsed.verbose,
+        resume=parsed.resume,
     )
 
     # --open 打开第一个成功的结果
@@ -1151,12 +1268,11 @@ def _workshop_create_batch(parsed) -> None:
                 print(f"\\n📂 已打开: {best_img}")
                 break
 
-    # 批量后处理：超分 + 修脸
+    # 批量后处理：超分（修脸由内嵌 FaceDetailer 承担——GG18 废弃 MTB）
     needs_upscale = parsed.upscale > 0
-    needs_restore = parsed.restore_face is not None
-    if (needs_upscale or needs_restore) and results:
+    if needs_upscale and results:
         from agents.comfy_utils import comfy_post_prompt, comfy_base_url, wait_images
-        from agents.go_flux import build_upscale_workflow, build_restore_face_workflow
+        from agents.go_flux import build_upscale_workflow
         from agents.comfy_utils import resolve_comfy_root
         ok_count = 0
         for r in results:
@@ -1168,15 +1284,6 @@ def _workshop_create_batch(parsed) -> None:
             if needs_upscale:
                 wf = build_upscale_workflow(current, upscale_factor=parsed.upscale,
                                             prefix=f"batch_up_{r.get('prompt_text','')[:16]}")
-                pid = comfy_post_prompt(wf).get("prompt_id", "")
-                if pid:
-                    imgs = wait_images(pid, comfy_base_url(), timeout_s=300)
-                    if imgs:
-                        cr = resolve_comfy_root()
-                        current = str(cr / "output" / imgs[0][0] / imgs[0][1])
-            if needs_restore:
-                wf = build_restore_face_workflow(current, model_name=parsed.restore_face,
-                                                  prefix=f"batch_rf_{r.get('prompt_text','')[:16]}")
                 pid = comfy_post_prompt(wf).get("prompt_id", "")
                 if pid:
                     imgs = wait_images(pid, comfy_base_url(), timeout_s=300)
@@ -2379,6 +2486,64 @@ def _workshop_video(args: list[str]) -> None:
     print(f"  🎲 种子: {seed_used}")
 
 
+def _workshop_manga_book(args: list[str]) -> None:
+    """python -m agents workshop manga-book <剧本> [--pages 2] [--shots-per-page 4]"""
+    import argparse
+    from workshop.manga.manga import manga_book
+
+    parser = argparse.ArgumentParser(description="多页漫画（一句话 → 整本）")
+    parser.add_argument("script_text", nargs="*", help="剧本/故事描述")
+    parser.add_argument("--pages", type=int, default=1, help="页数（默认 1）")
+    parser.add_argument("--shots-per-page", type=int, default=4, help="每页格数（默认 4）")
+    parser.add_argument("--batch-size", type=int, default=2, help="E1 逐批续写批大小（默认 2）")
+    parser.add_argument("--no-cover", action="store_true", help="不生成封面")
+    parser.add_argument("--webtoon", action="store_true", help="条漫模式（竖排，手机阅读）")
+    parser.add_argument("--style", default="anime", help="画风")
+    parser.add_argument("--sdxl", action="store_true", help="使用 SDXL（默认）")
+    parser.add_argument("--output", default=None, help="输出目录")
+    parser.add_argument("--char", action="append", default=None,
+                        help='角色定义 (可重复): "名:服饰:发型:特征"')
+    parsed = parser.parse_args(args)
+
+    script = " ".join(parsed.script_text)
+    if not script:
+        print("用法: manga-book \"剧本\" [--pages 2] [--shots-per-page 4]")
+        return
+
+    chars: dict[str, dict[str, str]] = {}
+    if parsed.char:
+        for c in parsed.char:
+            parts = [p.strip() for p in c.split(":")]
+            name = parts[0]
+            chars[name] = {
+                "服饰": parts[1] if len(parts) > 1 else "",
+                "发型": parts[2] if len(parts) > 2 else "",
+                "特征": parts[3] if len(parts) > 3 else "",
+            }
+    else:
+        chars = {
+            "Knives": {"服饰": "白色校服", "发型": "银白长发", "特征": "猫耳, 红瞳"},
+            "Caster": {"服饰": "黑色连衣裙", "发型": "粉色短发", "特征": "蓝瞳"},
+        }
+
+    print(f"📖 剧本: {script}")
+    print(f"📄 目标: {parsed.pages} 页 × {parsed.shots_per_page} 格 = {parsed.pages * parsed.shots_per_page} 格")
+    try:
+        manga_book(
+            script, chars,
+            pages=parsed.pages,
+            shots_per_page=parsed.shots_per_page,
+            batch_size=parsed.batch_size,
+            output_dir=parsed.output,
+            cover=not parsed.no_cover,
+            style_hint=parsed.style,
+            model_type="sdxl" if parsed.sdxl else "sdxl",
+            webtoon=parsed.webtoon,
+        )
+    except Exception as e:
+        print(f"❌ 漫画生成失败: {str(e)[:200]}")
+
+
 def _workshop_manga(args: list[str]) -> None:
     """python -m agents workshop manga <script_text> [options]"""
     import argparse
@@ -2387,7 +2552,7 @@ def _workshop_manga(args: list[str]) -> None:
     parser.add_argument("script_text", nargs="*", help="剧本/场景描述")
     parser.add_argument("--style", default="anime", help="画风")
     parser.add_argument("--preview", action="store_true", help="预览")
-    parser.add_argument("--layout", default="auto", help="拼页布局 (auto/4koma)")
+    parser.add_argument("--layout", default="auto", help="拼页布局 (auto/4koma/webtoon 条漫)")
     parser.add_argument("--char", action="append", default=None,
                         help='角色定义 (可重复): "名:服饰:发型:特征" 例：--char "Knives:白校服:银发:猫耳红瞳"')
     parser.add_argument("--script-file", default=None,
@@ -2396,6 +2561,10 @@ def _workshop_manga(args: list[str]) -> None:
                         help="输出目录（保存拼页 + 逐格图 + metadata.json）")
     parser.add_argument("--retry", type=int, default=0,
                         help="每格失败后最大重试次数（默认 0=不重试）")
+    parser.add_argument("--batch-size", type=int, default=0,
+                        help="E1 逐批续写批大小（0=一次性全量生成，2=每批 2 格逐批续写，保证长故事连贯）")
+    parser.add_argument("--max-shots", type=int, default=8,
+                        help="分镜格数上限（默认 8，与 --batch-size 配合）")
     parser.add_argument("--sdxl", action="store_true",
                         help="使用 SDXL 代替 Flux（更快，支持 LoRA）")
     parser.add_argument("--ref", action="append", default=None,
@@ -2408,7 +2577,7 @@ def _workshop_manga(args: list[str]) -> None:
                         help="超分倍数 (2.0/4.0, 0=不超分)")
     parser.add_argument("--restore-face", default=None, nargs="?",
                         const="GFPGANv1.4.pth",
-                        help='修脸模型 (GFPGANv1.4.pth / codeformer-v0.1.0.pth)')
+                        help='[废弃] 旧 MTB 修脸——现自动映射为 --face-detailer (内嵌 FaceDetailer)')
     parser.add_argument("--ckpt", default=None,
                         help='指定 checkpoint 文件名（默认用模板自带的 anima/illustrious）')
     parser.add_argument("--negative", default="",
@@ -2455,8 +2624,11 @@ def _workshop_manga(args: list[str]) -> None:
     for name, info in chars.items():
         print(f"   {name}: {info.get('服饰','?')} / {info.get('发型','?')} / {info.get('特征','?')}")
 
-    print("\\n📋 生成分镜表...")
-    storyboard = script_to_storyboard(script, characters=chars, ollama_available=True)
+    print("\n📋 生成分镜表...")
+    storyboard = script_to_storyboard(
+        script, characters=chars, ollama_available=True,
+        batch_size=parsed.batch_size, max_shots=parsed.max_shots,
+    )
 
     # 分镜连贯性检查（可选）
     if parsed.check:
@@ -2566,8 +2738,8 @@ def _workshop_manga(args: list[str]) -> None:
             char_refs=char_refs,
         )
 
-        # 后处理：超分 + 修脸
-        if output and (parsed.upscale > 0 or parsed.restore_face is not None):
+        # 后处理：超分（修脸由内嵌 FaceDetailer 承担——GG18 废弃 MTB）
+        if output and parsed.upscale > 0:
             from agents.comfy_utils import comfy_post_prompt, comfy_base_url, wait_images
             current = output
             if parsed.upscale > 0:
@@ -2583,19 +2755,6 @@ def _workshop_manga(args: list[str]) -> None:
                         cr = resolve_comfy_root()
                         current = str(cr / "output" / imgs[0][0] / imgs[0][1])
                         print(f"  ✅ 超分完成")
-            if parsed.restore_face:
-                from agents.go_flux import build_restore_face_workflow
-                print(f"\n🔧 修脸拼页 ({parsed.restore_face}) ...")
-                wf = build_restore_face_workflow(current, model_name=parsed.restore_face, prefix="manga_restored")
-                r = comfy_post_prompt(wf)
-                pid = r.get("prompt_id", "")
-                if pid:
-                    imgs = wait_images(pid, comfy_base_url(), timeout_s=300)
-                    if imgs:
-                        from agents.comfy_utils import resolve_comfy_root
-                        cr = resolve_comfy_root()
-                        current = str(cr / "output" / imgs[0][0] / imgs[0][1])
-                        print(f"  ✅ 修脸完成")
     else:
         print("\n📄 拼页...")
         output = assemble_page(results)

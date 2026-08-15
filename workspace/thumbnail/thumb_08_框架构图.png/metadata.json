@@ -1,0 +1,37 @@
+{
+  "created_at": "2026-08-15T20:36:59",
+  "version": "1.10.0",
+  "prompt": "MASTERPIECE, best quality, anime style, clean lineart, soft cel shading, vibrant colors, 1girl, natural black hair, school uniform, short black hair, side braid before ear, youthful vibe, framed composition (school corridor:0.9), seen through door frame [foreground elements:0.8], warm sunlight lighting, bright morning atmosphere, detailed illustration",
+  "negative_prompt": "worst quality, low quality, blurry, noise, grainy, dirty, colorful hair, gradient hair, tears, watermark, text, extra fingers",
+  "candidates_count": 1,
+  "ref_image": null,
+  "ip_weight": 0.7,
+  "ip_balance": 0.5,
+  "best": {
+    "seed": 155155777962695,
+    "score": -1,
+    "image_relative": "best.png",
+    "inspect": {
+      "status": "ok",
+      "summary": "[脸:ok] [左眼:ok] [右眼:ok] [手:ok] [脚:ok] [模糊:正常]",
+      "overall": 1.0
+    }
+  },
+  "candidates": [
+    {
+      "seed": 155155777962695,
+      "score": -1,
+      "retries": 0,
+      "error": null,
+      "inspect_status": "ok",
+      "inspect_overall": 1.0,
+      "inspect_summary": "[脸:ok] [左眼:ok] [右眼:ok] [手:ok] [脚:ok] [模糊:正常]"
+    }
+  ],
+  "engine_detection": {
+    "style": "anime_commercial",
+    "composition": "medium shot, balanced composition, eye level",
+    "lighting": "soft natural lighting, diffused illumination",
+    "auto_negative": ""
+  }
+}

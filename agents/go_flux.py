@@ -68,6 +68,11 @@ def build_flux_workflow(
     hand_refiner: bool = False,    # HandRefiner 修手(未实现，占位)
     upscale: float = 1.0,          # 放大倍数（1.0=不放大）
     ref_method: str = "reference_latent",  # "reference_latent" | "ipadapter" | None
+    # ── create.py 兼容参数（暂为占位，接受但不实现） ──
+    aesthetic_min_score: float = 0.0,   # 审美门槛（由调用方做门禁，工作流不消费）
+    faceid: bool = False,               # FaceID 修复（占位）
+    controlnet_type: str | None = None,  # ControlNet 类型（占位）
+    controlnet_strength: float = 1.0,   # ControlNet 强度（占位）
 ) -> tuple[dict[str, Any], int]:
     """构建 Flux.2 Klein API 格式工作流。
 
@@ -483,54 +488,8 @@ def build_upscale_workflow(
     wf[n1] = {"class_type": "LoadImage", "inputs": {"image": input_image}}
     n2 = nxt()
     wf[n2] = {"class_type": "ImageScaleBy", "inputs": {
-        "image": [n1, 0], "upscale_by": upscale_factor, "method": method}}
+        "image": [n1, 0], "scale_by": upscale_factor, "upscale_method": method}}
     n3 = nxt()
     wf[n3] = {"class_type": "SaveImage", "inputs": {
         "images": [n2, 0], "filename_prefix": prefix}}
-    return wf
-
-
-def build_restore_face_workflow(
-    input_image: str,
-    *,
-    model_name: str = "GFPGANv1.4.pth",
-    prefix: str = "restored",
-) -> dict[str, Any]:
-    """构建 ComfyUI 修脸工作流（使用 MTB RestoreFace）。
-
-    Args:
-        input_image: 输入图片路径
-        model_name: 修脸模型 (GFPGANv1.4.pth / codeformer-v0.1.0.pth)
-        prefix: 输出前缀
-
-    Returns:
-        workflow_dict
-    """
-    nid = [0]
-    def nxt() -> str:
-        nid[0] += 1
-        return str(nid[0])
-
-    wf: dict[str, Any] = {}
-    # LoadImage
-    n1 = nxt()
-    wf[n1] = {"class_type": "LoadImage", "inputs": {"image": input_image}}
-    # Load face enhance model
-    n2 = nxt()
-    wf[n2] = {"class_type": "MTB_LoadFaceEnhanceModel", "inputs": {
-        "model_name": model_name}}
-    # Restore face
-    n3 = nxt()
-    wf[n3] = {"class_type": "MTB_RestoreFace", "inputs": {
-        "image": [n1, 0],
-        "model": [n2, 0],
-        "aligned": False,
-        "only_center_face": False,
-        "weight": 0.5,
-        "save_tmp_steps": False,
-        "preserve_alpha": True,
-    }}
-    n4 = nxt()
-    wf[n4] = {"class_type": "SaveImage", "inputs": {
-        "images": [n3, 0], "filename_prefix": prefix}}
     return wf

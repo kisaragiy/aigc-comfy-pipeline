@@ -1,0 +1,8 @@
+{
+  "char_prompt": "银发少女，白裙，蓝瞳，微笑",
+  "bg_prompt": "春日樱花林，阳光穿透花瓣，飘落的花瓣",
+  "char_path": "C:\\Users\\zwq\\aigc-comfy-pipeline\\outputs\\layer_20260812_054746\\char\\best.png",
+  "bg_path": "C:\\Users\\zwq\\aigc-comfy-pipeline\\outputs\\layer_20260812_054746\\bg\\best.png",
+  "final": "C:\\Users\\zwq\\aigc-comfy-pipeline\\outputs\\layer_20260812_054746\\final.png",
+  "scale": 0.75
+}

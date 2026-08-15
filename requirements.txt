@@ -1,2 +1,10 @@
+# AIGC 管线运行时依赖（2026-08-14 补全：此前只声明 requests，导致质检 cv2 缺失静默跳过）
 requests>=2.28.0
-# pillow 可选 — 仅 scripts/bootstrap_portfolio.py 需要（开发用）
+numpy>=1.24
+opencv-python-headless>=4.8   # 质检：模糊/脚/脸检测（headless 无 GUI 依赖）
+Pillow>=10.0                  # 图像处理
+
+# 可选（按功能模块）：
+# torch          # go_train.py（LoRA 训练）
+# uvicorn        # serve API
+# mediapipe      # 面部关键点分析（质检增强）

@@ -1,0 +1,31 @@
+{
+  "created_at": "2026-08-12T13:19:47",
+  "version": "1.10.0",
+  "prompt": "A cinematic silhouette of a female character stands in a deep-sea environment, slightly side-facing with crossed legs in an elegant and seductive pose, revealing a slim waist and curved back; she wears a tight, semi-transparent deep-blue combat suit with lace trim, high-waisted stockings, and a glowing pearl-white cloak with tidal patterns, illuminated by ethereal blue light, rendered in a film-style with dramatic lighting, moody atmosphere, and high-detail anime cel shading.",
+  "negative_prompt": "worst quality, low quality, normal quality, blurry, jpeg artifacts, lowres, bad anatomy, bad hands, ugly, deformed, bad proportions, extra limbs, fused fingers, missing fingers, extra fingers, mutated hands, poorly drawn face, bad eyes, cross-eyed, signature, watermark, username, text, error, extra digit, fewer digits, cropped, monochrome, grayscale, nsfw",
+  "candidates_count": 1,
+  "ref_image": null,
+  "ip_weight": 0.7,
+  "ip_balance": 0.5,
+  "best": {
+    "seed": 83741971988296,
+    "score": -1,
+    "image_relative": "best.png",
+    "inspect": {
+      "status": "ok",
+      "summary": "[脸:ok] [左眼:ok] [右眼:ok] [手:ok] [脚:ok] [模糊:?]",
+      "overall": 0.917
+    }
+  },
+  "candidates": [
+    {
+      "seed": 83741971988296,
+      "score": -1,
+      "retries": 0,
+      "error": null,
+      "inspect_status": "ok",
+      "inspect_overall": 0.917,
+      "inspect_summary": "[脸:ok] [左眼:ok] [右眼:ok] [手:ok] [脚:ok] [模糊:?]"
+    }
+  ]
+}

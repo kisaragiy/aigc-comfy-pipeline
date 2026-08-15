@@ -1,0 +1,37 @@
+{
+  "created_at": "2026-08-15T19:49:40",
+  "version": "1.10.0",
+  "prompt": "MASTERPIECE, best quality, [style: anime style, cel shading, vibrant colors], [camera: close-up/medium/face-level], [lighting: soft/volumetric/warm/sunny-mood], [scene: school corridor environment, blurred background, daytime], 1girl, natural black hair, side braid in front of ear, youthful expression (silver eyes), wearing blue and white Chinese student uniform jacket, detailed illustration",
+  "negative_prompt": "worst quality, low quality, blurry, noise, grainy, dirty, colorful hair, gradient hair, tears, watermark, text, extra fingers",
+  "candidates_count": 1,
+  "ref_image": null,
+  "ip_weight": 0.7,
+  "ip_balance": 0.5,
+  "best": {
+    "seed": 54927531989554,
+    "score": -1,
+    "image_relative": "best.png",
+    "inspect": {
+      "status": "issues_found",
+      "summary": "[脸:崩了] [左眼:ok] [右眼:ok] [手:ok] [脚:ok] [模糊:正常]",
+      "overall": 0.833
+    }
+  },
+  "candidates": [
+    {
+      "seed": 54927531989554,
+      "score": -1,
+      "retries": 0,
+      "error": null,
+      "inspect_status": "issues_found",
+      "inspect_overall": 0.833,
+      "inspect_summary": "[脸:崩了] [左眼:ok] [右眼:ok] [手:ok] [脚:ok] [模糊:正常]"
+    }
+  ],
+  "engine_detection": {
+    "style": "anime_commercial",
+    "composition": "medium shot, balanced composition, eye level",
+    "lighting": "soft natural lighting, diffused illumination",
+    "auto_negative": ""
+  }
+}

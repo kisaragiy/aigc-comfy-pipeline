@@ -11,7 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "agents"))
 
-from go_flux import build_flux_workflow, MODEL_CONFIGS, build_upscale_workflow, build_restore_face_workflow
+from go_flux import build_flux_workflow, MODEL_CONFIGS, build_upscale_workflow
 
 
 class TestBuildFluxWorkflow:
@@ -151,16 +151,15 @@ class TestPostProcessWorkflows:
         wf = build_upscale_workflow("test.png", upscale_factor=2.0)
         for n in wf.values():
             if n["class_type"] == "ImageScaleBy":
-                assert n["inputs"]["upscale_by"] == 2.0
+                assert n["inputs"]["scale_by"] == 2.0
+                assert "upscale_method" in n["inputs"]
 
-    def test_restore_face_workflow_nodes(self):
-        wf = build_restore_face_workflow("test.png")
+    def test_face_detailer_adds_nodes(self):
+        wf, _ = build_flux_workflow("test prompt", face_detailer=True)
         types = {n["class_type"] for n in wf.values()}
-        assert "LoadImage" in types
-        assert "MTB_LoadFaceEnhanceModel" in types
-        assert "MTB_RestoreFace" in types
-        assert "SaveImage" in types
+        assert "FaceDetailer" in types
 
-    def test_restore_face_workflow_count(self):
-        wf = build_restore_face_workflow("test.png")
-        assert len(wf) == 4
+    def test_face_detailer_off_by_default(self):
+        wf, _ = build_flux_workflow("test prompt")
+        types = {n["class_type"] for n in wf.values()}
+        assert "FaceDetailer" not in types

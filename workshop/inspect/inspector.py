@@ -210,7 +210,10 @@ def _check_face_detail(image_path: str, use_mediapipe: bool = True) -> dict[str,
     # 尝试 MediaPipe（更精确）
     if use_mediapipe:
         try:
-            return _mediapipe_face_analysis(image_path)
+            mp_result = _mediapipe_face_analysis(image_path)
+            # MediaPipe 真正检测到脸才用；否则（不可用/跳过）继续降级链
+            if mp_result.get("face_count", 0) > 0:
+                return mp_result
         except ImportError:
             pass  # 降级
         except Exception:
@@ -359,20 +362,31 @@ def _eye_aspect_ratio(landmarks: list) -> float:
 
 
 def _ultralytics_face_check(image_path: str) -> dict[str, Any]:
-    """使用 Ultralytics YOLO face_yolov8m 进行面部检测（对 anime 画风更好）。"""
-    from ultralytics import YOLO
-    import cv2
+    """使用 Ultralytics YOLO face_yolov8m 进行面部检测（对 anime 画风更好）。
 
+    优先本进程 import；失败则 subprocess 调 ComfyUI venv（有 ultralytics 8.4.51）。
+    """
     model_path = r"C:\DrawingLive\ComfyUI\models\ultralytics\bbox\face_yolov8m.pt"
     import os
     if not os.path.isfile(model_path):
         return {"ok": True, "detail": "YOLO face 模型不存在", "face_count": 0, "max_confidence": 0}
 
-    model = YOLO(model_path)
+    # 尝试本进程 import
+    try:
+        from ultralytics import YOLO
+    except ImportError:
+        # 降级：subprocess 调 ComfyUI venv 的 python
+        try:
+            return _ultralytics_face_check_subprocess(image_path, model_path)
+        except Exception as exc:
+            return {"ok": True, "detail": f"YOLO 不可用: {exc}", "face_count": 0, "max_confidence": 0}
+
+    import cv2
     img = cv2.imread(image_path)
     if img is None:
         return {"ok": True, "detail": "无法读取图片", "face_count": 0, "max_confidence": 0}
 
+    model = YOLO(model_path)
     results = model(img, verbose=False)
     if not results or len(results) == 0:
         return {"ok": False, "detail": "未检测到人脸", "face_count": 0, "max_confidence": 0}
@@ -405,6 +419,37 @@ def _ultralytics_face_check(image_path: str) -> dict[str, Any]:
         "method": "ultralytics_yolo",
         "eyes": {},  # YOLO 不做眼部检测
     }
+
+
+def _ultralytics_face_check_subprocess(image_path: str, model_path: str) -> dict[str, Any]:
+    """subprocess 调 ComfyUI venv 的 python 跑 YOLO 人脸检测（本进程无 ultralytics 时）。"""
+    import json
+    import subprocess
+    code = (
+        "import sys, json\n"
+        "from ultralytics import YOLO\n"
+        f"m = YOLO({model_path!r})\n"
+        f"r = m({image_path!r}, verbose=False)\n"
+        "boxes = r[0].boxes\n"
+        "if boxes is None or len(boxes) == 0:\n"
+        "    print(json.dumps({'ok': False, 'face_count': 0, 'max_confidence': 0, 'detail': '未检测到人脸'}))\n"
+        "else:\n"
+        "    confs = [float(c) for c in boxes.conf]\n"
+        "    valid = sum(1 for c in confs if c >= 0.3)\n"
+        "    n = len(confs)\n"
+        "    print(json.dumps({'ok': valid > 0, 'face_count': n, 'max_confidence': round(max(confs), 3),\n"
+        "                       'detail': str(n) + ' 张人脸', 'method': 'ultralytics_yolo_subprocess'}))\n"
+    )
+    r = subprocess.run(
+        [r"C:\DrawingLive\ComfyUI\venv\Scripts\python.exe", "-c", code],
+        capture_output=True, text=True, timeout=90,
+    )
+    if r.returncode != 0:
+        raise RuntimeError(f"YOLO subprocess 失败: {r.stderr[-200:]}")
+    out = r.stdout.strip().splitlines()[-1] if r.stdout.strip() else "{}"
+    result = json.loads(out)
+    result.setdefault("eyes", {})
+    return result
 
 
 def _yolo_face_check(image_path: str) -> dict[str, Any]:
