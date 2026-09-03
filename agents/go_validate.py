@@ -139,7 +139,7 @@ def _check_face(image_path: str) -> dict[str, Any]:
 
     models_root = resolve_models_root()
     model_path = models_root / ".." / "ultralytics" / "face_yolov8m.pt" if models_root else None
-    alt_path = Path(r"C:\DrawingLive\ComfyUI\models\ultralytics\face_yolov8m.pt")
+    alt_path = Path(r"C:\DrawingLive\ComfyUI\models\ultralytics\bbox\face_yolov8m.pt")
 
     # 尝试 YOLO
     for candidate in [model_path, alt_path]:

@@ -10,6 +10,151 @@
 
 V0.X.0 = 大功能，V0.0.XXX = 小修。
 
+- **V1.87.0** — 管线 P2 完成：候选池 + VLM 评分择优 + 超分 + 全链路终检（2026-09-01）<br>
+　　　　　　**★ 候选池**：S1 批量出 N 张 → 门禁分层（PASS>MANUAL>FAIL）→ 非全 PASS 时 VLM 美学评分择优（`s11_vlm_score.py`）<br>
+　　　　　　**★ S9 超分工位**：RealESRGAN x4（4x-UltraSharp/RealESRGAN_x4plus），交付前自动补商业尺寸<br>
+　　　　　　**★ 超分后终检**：超分可能引入伪影 → 交付前再过一次门禁（实测 PASS）<br>
+　　　　　　**★ VLM 串行调度**：S11 等 ComfyUI 队列空闲 → 启动 WSL ollama（qwen3-vl:8b 六维评分 8s/图）→ 评分 → 卸载模型释放显存<br>
+　　　　　　　⚠️ **坑**：wsl-ollama.py 的 `setsid nohup ollama serve &` 在非交互 shell 会被回收（服务没起来）→ 改为直接 wsl 命令拉起 + 轮询 /api/ps<br>
+　　　　　　实测：修复链产物六维 8/8/9/9/9/9 = **8.67 分**；全链路 `E4→MANUAL→S5→S6 PASS→S9→终检 PASS` 闭环<br>
+　　　　　　边界：候选池 PASS 分层内不评分（省资源，全 PASS 取第一个）；FAIL(C1) 直接丢弃
+- **V1.86.0** — 管线架构落地 P0/P1：编排器+工位（2026-09-01）<br>
+　　　　　　**★ 架构决策（评审后落地）**：ComfyUI（执行层）+ 编排器（管线层）——不是大工作流。
+　　　　　　　原因：ComfyUI 无原生条件分支/一次提交一个 DAG/调试地狱（colorize.py 坏一年没人发现）；
+　　　　　　　商业化 AIGC 服务的"生成→筛选→精修→终检"都建在服务端。证据：pipeline-architecture-review-20260901.md<br>
+　　　　　　**★ 工位化**：精修技术封装为 `pipeline/stages/sXX.py`，统一接口 `--input --outdir` → 图+manifest<br>
+　　　　　　**★ manifest 契约**：`manifests/<job>.json` 记录 history/params/gate，工位间接力唯一依据<br>
+　　　　　　**★ 修复链（实测通过）**：门禁 MANUAL_REVIEW → S5 tile(表层) → 仍MANUAL → S6 lineart(中度) → S7 openpose(重度) → 人工复核<br>
+　　　　　　　E4 撕裂废图实测：S5 细节 5276→4417 仍 MANUAL → S6 lineart 1081 ✅PASS → 交付 7/10（结构重建成功、撕裂清除~80%）<br>
+　　　　　　　**核心行为**：管线如实报告 MANUAL_REVIEW，不谎报 PASS；修复链按代价递增，PASS 即停<br>
+　　　　　　　交付文档：`knowledge/aigc/pipeline-p0p1-delivery-20260901.md`<br>
+　　　　　　**边界**：S7 未单测 · S9 超分未接 · 门禁仅代码层（VLM 与 ComfyUI 同机资源冲突未启用）· C1_broken 直接丢弃<br>
+　　　　　　新目录：`pipeline/`（orchestrator_v1.py + stages/s1_s5_s6_s7_s10 + common.py）
+- **V1.86.0** — HunyuanImage 工作流固化 + 质检三层化二层验证 + Koren 三角色定稿（2026-09-02）<br>
+　　　　　　**★ HunyuanImage-3.0 Lite 固化**（`docs/engine-hunyuanimage.md`）：80B MoE 语义引擎，8 步快出图（10.5min vs Qwen-2512 23min，快 2x+，中文场景更强）→ **角色定稿/难图首选**；SDXL 批量主力；Qwen-2512 备胎；Qwen-Edit 应急<br>
+　　　　　　**★★ 质检三层化二层验证（推翻 8-30 搁置结论）**：VLM 判质"不可靠"是指美学题（主观）；**二值事实题（数人/颜色/特征/服装）4/4 全对**（百炼 qwen3.8-flash 视觉，免费额度）——连"蓝发卡 vs 蓝挑染"都判对。质检从 ①代码+③人眼 推进到 ①②③：文档 `knowledge/aigc/qc-layer2-vlm-binary-test-20260902.md`<br>
+　　　　　　**Koren 三角色定稿**：陈霸南(精瘦痞气✅)/晨煊(便装蓝发卡✅)/田地(秃顶眼镜✅手部重roll) —— VLM 二值题审图 + vision 人眼复核<br>
+　　　　　　**百炼免费额度全线探测**：文本 8 模型 + 视觉 5 模型 + 语音 3 + 向量 2 可用（每模型独立 100 万 token，90 天，用完即停不扣费）；qwen3.8 系列保留仅多模态识别。报告：`knowledge/reports/bailian-free-quota-20260902.md`；bailian profile 已建（`hermes -p bailian`）<br>
+- **V1.85.0** — ⑨ IPAdapter 根因定位（推翻 V1.83.0 错误结论）+ ③ 偏好标定 + ⑩ A6 判据 + 本机性能杀手修复（2026-08-31）<br>
+　　　　　　**★★ 推翻旧结论**：V1.83.0「IPAdapter 在本机整图数字错乱——弃用」是**错误归因**。OFAT 9 组控变量实测（`scripts/diag_ipadapter_rootcause.py`，132s）证明 **IPAdapter 完全可用**<br>
+　　　　　　　根因（源码 `IPAdapterPlus.py` L255-268）：`weight_type='linear'` = 全部 block 无差别注入，参考图颜色/结构/纹理全灌进 UNet 每层 → 与 prompt 冲突 → 撕裂；`embeds_scaling='V only'` 加剧<br>
+　　　　　　　实测：E0(linear+K+V)❌红边噪点/结构撕裂/**手融化** · **E4(V only)❌最严重**(整图黄绿撕裂/面部崩坏/多手) · E1(style transfer)✅ · E2(composition)✅ · E3(w0.25)✅ · E7(end_at0.4)✅ · E8(无IPA)✅<br>
+　　　　　　　**与史料完美吻合**：C 阶段两次失败(PLUS+0.7+V only / PLUS FACE+0.5+K+V) 恰好对应 E4/E0，**两次都固定 linear 没变过** = 变量覆盖不足导致错误归因<br>
+　　　　　　**★ ⑨.3 场景配置卡（已实测）**：只要画风→`style transfer`(SDXL 仅注入 block6) · 只要构图→`composition`(仅 block3) · 角色锚定→`linear`+weight≤0.25 · 锚定但保 prompt 自由→`linear`+`end_at=0.4` · ❌禁用→`linear`+weight≥0.5+全程注入<br>
+　　　　　　　文档：`knowledge/aigc/ipadapter-field-reference-20260831.md`（12 个 weight_type / 4 个 embeds_scaling / preset→模型→clip_vision 映射，**源码级一手**）· `ipadapter-rootcause-20260831.md`<br>
+　　　　　　**★★ 性能杀手修复（影响所有出图任务）**：`.wslconfig` `memory=20GB` 在 32G 机器过大 → WSL2(ollama) 吃满 15.86G 不归还 → ComfyUI(`--lowvram` 靠系统 RAM 存权重)可用内存仅 **0.53G** → **单图 24.37s 劣化到 23分07秒(57倍, 49s/it)**<br>
+　　　　　　　修复：`memory=8GB` + `autoMemoryReclaim=gradual` + `pageReporting=true` + `wsl --shutdown` → 可用内存 **16.77G**，出图恢复 **9~26s**（盲测 12 张 106s）<br>
+　　　　　　　⚠️ **铁律：本地 LLM 推理与 ComfyUI 出图不可同时跑**（12G VRAM + 32G RAM 硬约束）。教训：派子代理被 config 路由到本地 `qwen3:14b-128k`（**该模型不会调工具**，死循环 `tool_call requires a 'name' argument`），33min 零产出还吃 10G RAM+9.6G VRAM 挤死 ComfyUI<br>
+　　　　　　**★ ③ 个人偏好标定（盲测 v1 + 泛化 v2）**：`scripts/blindtest_style.py` / `blindtest_prefer_v2.py`<br>
+　　　　　　　偏好向量：**平涂系(明确线稿+干净色块) ✅ / 厚涂系(弱线稿+光影堆写实) ❌**——接受 official game cg(最爱)/cel shading/watercolor(仅人像)；拒绝 cinematic semi-real/korean semi-real/thick oil painting。**零交叉，不是随机偏好**<br>
+　　　　　　　⚠️ **自查纠错**：首轮泛化验证每变体仅 2 样本就下结论"V4 稳定更干净/有冷调副作用"，违反本项目铁律(样本≥4+同 seed 配对)。补 3 seed 后**"V4 冷调"被证伪**(冷调仅 1/3 seed 出现)；真实差异是**背景繁简**(反厚涂负向的 `muddy colors`/`soft blurry shading` 连背景渐变一起压掉)<br>
+　　　　　　　→ V3(融合)=场景插画/封面 · V4(融合+反厚涂负向)=角色立绘/头像。文档 `knowledge/aigc/preference-profile-zwq-v1.md`<br>
+　　　　　　**★ ⑩ A6_over_detail 判据（新增并验证）**：旧门禁对「高频伪细节」整类失明——**故障图 E0 锐度7288/细节3873 判 PASS 且分数全场最高**，按旧指标选图会把最废的选成最好<br>
+　　　　　　　原计划用锐度上限被数据否决(BAD锐度[7288,2998] 与 GOOD[4518..1315] **重叠**)；改用 `detail_density` 上限(完全不重叠)<br>
+　　　　　　　`OVER_DETAIL_MAX=3500` 定标：真商业立绘79张 max=3280 · 正常AI图 max=3348 · 故障图 min=3873 → 卡中间双侧有余量<br>
+　　　　　　　验证 88 张：**故障检出 2/2 · 真商业立绘误杀 0/79 = 0.0%**（对比 8-24 旧判据误杀真素材 90%）<br>
+　　　　　　　设计：**不进 hard_dead**，走 `suspect` → `gate.py` 标 `MANUAL_REVIEW`（小样本阈值 + 代码层不拍板审美，沿用 8-24/8-30 教训）<br>
+　　　　　　**⚠️ 顺带发现两个既有 bug**：①`DETAIL_MIN=2.5` 与实际值域 273~5277 差三个数量级 → `A2_detail_density` **永远 PASS**，而它是死点之一 → **实际死点只剩 `C1_broken` 一个在工作** ②`gate.py batch` 模式指标全返回 None 且 verdict 大小写与单张不一致<br>
+　　　　　　**坑**：ComfyUI 对完全相同的工作流**缓存命中时 `/history` 的 outputs 为空** → `wait_images` 无限空等（表现为"任务 0.01s 执行完但脚本卡死"）。破解：`filename_prefix` 加 run_id（seed/参数不变，控变量仍成立）+ 断点续传<br>
+　　　　　　新脚本：`diag_ipadapter_rootcause.py` · `blindtest_style.py` · `blindtest_prefer_v2.py` · `make_grid.py` · `probe_artifact_metrics.py`<br>
+　　　　　　版本 1.85.0<br>
+- **V1.84.0** — 质量门禁·失败模式诊断 + M1多主体/空间分区修复（2026-08-30）<br>
+　　　　　　对标一手官方（SOUL 强化：对标须一手源头——GenEval arXiv2310.11513 / T2I-CompBench++(被DALL-E3采用) / PartiPrompts / ComfyUI「Area Composition」examples）<br>
+　　　　　　**★ 诊断集 v1（新脚本 `scripts/diag_suite.py` + `scripts/diag_grid.py`）**——6类30题×2seed=60张压测，寻找管线失败模式<br>
+　　　　　　　基准：加权通过率 **40%**（PASS20/PARTIAL8/FAIL32）。各类：D5复杂组合85%(最强) > D3属性55% > D4手部40% > D1数量30% > D2空间15% = D6文字15%(最弱)<br>
+　　　　　　　核心结论：管线**擅长"讲故事"不擅长"守规矩"**——6要素叙事长prompt 85%，计数/空间/文字结构约束型15-30%。**为何一直没发现：D阶段产出全是单人叙事图落85%强项区，题材同质=盲区**<br>
+　　　　　　　失败模式TOP：M1多人塌缩(8/8=100%) > M2文字破损(MAGIC/RAMEN 0/4) > M3空间介词(on/under/前后景 4/4) > M4物体计数(4-5个→0-2) > M6手道具脱离 > M5修饰词溢出(purple ribbon→紫发 2/2)<br>
+　　　　　　　**坑（管线自身缺陷·已修）**：质量前缀 `clean lineart`（商业去脏词）在极简prompt下主导画面→出纯线稿设定稿，颜色类整类失效。已改 `full color`+负向防线稿 → 教训：**质量词不是场景无关的**，应按prompt复杂度分档<br>
+　　　　　　**★ M1多主体塌缩修复（新脚本 `scripts/diag_area.py` + `scripts/gen_two.py` 生产入口）**<br>
+　　　　　　　根因（官方直引）："SD tries to make the overall image consistent with itself … merging the hair colors together"——模型为整体一致性合并主体<br>
+　　　　　　　方案：base(全局不设area) + 左区ConditioningSetAreaPercentage(x=0,w=0.5) + 右区(x=0.5,w=0.5) → ConditioningCombine链 → KSampler。**本机零依赖**（3458节点已有全部区域节点）<br>
+　　　　　　　实测：恰好2人 7/8(基线0/8)、左右属性 6/8、加权87.5%(基线0%)。17s/张(单区8.9s的1.9x)<br>
+　　　　　　　overlap 定参：**0.05 = 最优默认**（消接缝伪影0/8 + 消灭两区交界带"语义真空"多出的人）。已设 `gen_two.py --overlap` 默认<br>
+　　　　　　**★ R4精确颜色守恒（附录C）**——`red hair ribbon` 溢出到 hair（=M5实例，非光照）<br>
+　　　　　　　双人场景铁律：**正向分区，负向必须同样分区**。全局负向(单条)对两区同等施压→会误伤另一角色合法颜色(B组银发角色面部黑块/构图崩)。解法：`--guard-left/--guard-right` 分区负向<br>
+　　　　　　　⚠️**更高阶铁律（2026-08-31 实测）：分区负向只懂"keep色"粒度，`--guard-left black` 会连累共享 token 的 `red hair ribbon`（红发带被压黑）。**解法用 `--neg-left/--neg-right` **直传精确负向**——只禁"染色/渐变/发梢"类词（`gradient hair, colored hair tips, hair tinted red`），**别写整条 `red hair`**（会和 `red hair ribbon` 抢共享 token）。需保的核心特征词用权重括号强化（`(red hair ribbon:1.3)`）。<br>
+　　　　　　　证伪：权重括号(无效甚至加剧—ComfyUI权重=相对空嵌入外推) / 全局色相后处理(连坐毁掉该保留的红色，须分割mask)<br>
+　　　　　　**★ M3空间介词（新脚本 `scripts/diag_m3.py`，上下区域方案·部分成功）**<br>
+　　　　　　　3/6（D25 PASS / D22 PARTIAL / D23 FAIL）。**结论：区域Conditioning只懂"几何坐标"不懂"包含关系"**——能锁左右并列(M1已用)和上下，但锁不住"猫在桌下/前后景z轴"→ 前后景需 depth ControlNet（D22/D25已证区域力不从心）<br>
+　　　　　　　**★ M3 决定性结论（2026-08-30 附录D 四路实验后定调）：M3 空间介词 ≠ 管线缺陷，是模型 seed 敏感，靠多 seed 筛选解决，勿上 depth 控制层。**<br>
+　　　　　　　四路证据：方案C(草图→DepthAnything→ControlNet)链崩溃——草图错→深度错→ControlNet固化错误，比纯prompt差；方案A'深度模板(几何/轮廓)都把电车当"最近"→人物变小；prompt镜头化 vs 平铺 3seed=6/6全"人前车后"成立→**元凶是撞上坏seed不是prompt写法**。<br>
+　　　　　　　与M1多人塌缩(结构性100%复现可彻底修复)不同——M3是seed敏感随机性，**go_abtest --bestof 多seed择优本来就吃掉，勿上重型控制层**。深度通路(12G SDXL depth 17s无OOM)已验证保留，但正确定位=image-to-image从参考图估深度，非"从文字生成布局"。<br>
+　　　　　　　范围界定：D2-1(左读书/右叉腰)其实已在M1=8/8落网；M3真正剩余=靠多seed筛选+prompt镜头化，不靠架构<br>
+　　　　　　版本 1.84.0<br>
+- **V1.83.0** — C阶段 celeste 角色锚定/一致性（2026-08-30）<br>
+　　　　　　交付：celeste 定稿图 + 6场景（哥特图书馆/战斗/泳装/雨夜/咖啡厅/特写），C1门禁6/6 PASS，角色一致可辨识<br>
+　　　　　　关键教训：**IPAdapter 在本机(4070S 12G)整图数字错乱——弃用（实测3次撕裂）。纯prompt+角色卡+固定seed 已足够一致性**（NoobAI对celeste风格响应稳定）<br>
+　　　　　　一致性验证：**优先人眼复核(vision)**，本地VLM判质不可靠（B阶段已证）<br>
+　　　　　　工具：agents/gen_celeste_keyframe.py / gen_celeste_scenes.py；celeste.json v1.2<br>
+　　　　　　版本 1.83.0<br>
+- **V1.82.0** — B阶段 VLM 结构层校准（2026-08-30）<br>
+　　　　　　目标：路线①（链式VLM半自动抓崩坏）实测 qwen3.5:9b 能力边界<br>
+　　　　　　工具：`scripts/vlm_chain_check.py`（链式：全身→手→脸区域prompt；qwen3.5:9b，**think:false 必须**否则输出空；走 WSL 内 127.0.0.1:11434）<br>
+　　　　　　校准实测（人眼vision复核 vs qwen3.5判定）：
+　　　　　　　- pipeline_create_01_00001（真崩坏·手崩）→ qwen3.5 抓到 ✅<br>
+　　　　　　　- celeste_01/05、multi_battle/group/couple（干净）→ qwen3.5 全误报 ❌<br>
+　　　　　　　- 10/10 全报"崩坏"——**recall 高 / precision≈0**，宁可错杀一千<br>
+　　　　　　结论：**本地VLM判结构崩坏不可靠（已实证）**。qwen3-vl:8b漏报（被美观带偏，8-24），qwen3.5:9b过报（干净图全误报，今天）。半自动"报疑似→人眼复核"因全图报疑似而不成立=等于没自动化<br>
+　　　　　　最终方案（与 V1.80.0 一致并加深）：门禁=代码层C1故障(误杀0%)+分辨率提示；美学层可选LAION；**结构崩坏靠人工过目**，VLM仅作人工复核辅助（提示候选，不自动拦截）。自动结构门禁在当前本地环境不可行<br>
+　　　　　　坑：Windows python 直连 WSL IP 172.22.175.253:11434 失败（NAT/防火墙）→ 必须走 WSL 内 localhost 调 ollama，图经 /mnt/c 路径；payload 写文件避免命令行超长(WinError 206)<br>
+　　　　　　⚠️ 认知修正：AI生成≠负样本；00216图按金标准应PASS（此前"00216手崩实锤"为错误记忆）<br>
+　　　　　　版本 1.82.0
+- **V1.81.0** — 门禁代码层收敛·对齐业界（2026-08-30）<br>
+　　　　　　动因：A3 回归实测发现代码层把"柔焦/平涂官方立绘"当"糊图"误杀 35%<br>
+　　　　　　业界对标（一手官方源）：
+　　　　　　　✅ LAION-AI/aesthetic-predictor（731⭐）：CLIP向量+线性层→美学分0-10。美学=基准分，不是缺陷检测<br>
+　　　　　　　✅ ComfyUI（130k⭐）：编排/API框架，**无内置质量门控节点**——质量判定在它之外<br>
+　　　　　　　✅ 8-24实测：单一VLM美学打分分不出结构崩坏（正负都5-8乱跳）→ 结构崩坏只能"定位+人眼复核"<br>
+　　　　　　核心结论：**业界三层分工，风格判据不属于质量门禁**。① 故障层(代码C1)= 黑/花/错乱 ② 结构层(半自动VLM)= 手/脸崩 ③ 美学层(可选LAION)= 排序参考 ④ 风格层(柔焦/平涂/白底) = ❌移出门禁<br>
+　　　　　　实测决策：**金标准 = 主流游戏官方立绘质量**。柔焦/平涂/白底是碧蓝/原神官方立绘合法艺术处理 → 必须 PASS<br>
+　　　　　　代码改动（quality_judge.py + gate.py）：
+　　　　　　　- A4_sharpness 移出死点（3处：单张hard_dead / batch dead_keys / gate.py dead_hits）——柔焦/平涂不误杀，实测误杀率从35%→0%<br>
+　　　　　　　- C1_broken 修白底豁免：删 `mean>245` 判据（bug复现明石白底立绘 mean=246 误杀），只保留`var<30`低方差判据<br>
+　　　　　　　- 死点收敛为 C1_broken + A2_detail_density 两项<br>
+　　　　　　回归数据（20正20负）：正样本官方立绘误杀率 **0%**（20/20 PASS）；漏放率100%为**预期**——现有"负样本"多为够格AI图，B阶段重建后重估<br>
+　　　　　　⚠️ 认知修正：**AI生成 ≠ 负样本**。00216图手部结构正常、接近官方立绘，按金标准应 PASS（此前记"00216手崩实锤"为错误记忆）<br>
+　　　　　　B阶段任务：重建负样本集为"真·结构崩坏图"（手崩/脸崩/道具崩），验证 VLM 定位层捕获能力（vlm_auto_eval.py 链式+区域专用）<br>
+　　　　　　版本 1.81.0
+- **V1.80.0** — 商业立绘质量门禁·半自动方案（2026-08-24）<br>
+　　　　　　核心结论：**商业级审美判断无可靠全自动替代**。用真商业立绘(kohya 364张官方素材)实测，推翻早期判据——代码层(锐度/细节/空白)对真图误杀90%（商业立绘的柔焦/平涂/白底全是艺术处理），VLM整体评分分不出好坏(AI灾难图8.0与真立绘同分)<br>
+　　　　　　基准教训：output/ 目录 AI 生成图均非商业立绘，用它们校准判据=用次品校准次品。真基准在 kohya_ss/train_data/<角色>/1_<角色>/<br>
+　　　　　　最终方案（半自动）：出图→VLM定位(报可疑区)→人眼放大复核(拍板)。机器=VLM缩小范围+C1故障图拦截；人=最终判定<br>
+　　　　　　交付：quality_judge.py(只留C1故障图+分辨率提示) / vlm_auto_eval.py(scan/batch/crop) / gate.py(半自动编排) / compliance.py(提示词符合度辅助) / comfy_utils.generate_with_quality 加 gate_commercial 参数<br>
+　　　　　　skill: commercial-liqi-gate（触发词：审图/立绘质量/能不能交付）<br>
+　　　　　　版本 1.80.0
+　　　　　　实审发现 control/abtest/ipadapter/video 模块已存在，真差距是「验证闭环」而非功能缺失<br>
+　　　　　　go_control.py：SDXL 路径 ckpt 硬编码 `sd_xl_base.safetensors`（本机无此文件→400）→ 加 `--ckpt` 参数默认 NoobAI-XL-v1.1，实测 depth 出图 ✅<br>
+　　　　　　坑：ComfyUI/input/__REF__.png 是 0 字节占位文件 → 参考图必须用真实图片，否则 PIL.UnidentifiedImageError<br>
+　　　　　　go_abtest.py：死绑定 build_flux_workflow → `_select_build_fn()` 跨引擎路由（9b/4b=Flux / sdxl=NoobAI）<br>
+　　　　　　bestof 语义修正：--seed 是起始值逐张 +i（多 seed 探测），非统一 seed；abtest/bestof 补 --width/--height<br>
+　　　　　　go_video.py：加 `--camera` 运镜参数（prompt 级注入，Wan2.2 响应良好）<br>
+　　　　　　go_flux.py：CLI 补 `--ref/--ip-weight`（Klein 原生 ReferenceLatent 参考图，构图/风格锁定替代 ControlNet）<br>
+　　　　　　新增模型：flux-controlnet-depth-v1.safetensors（3.58GB，hf-mirror 直连 jasperai/Flux.1-dev-Controlnet-Depth）<br>
+　　　　　　实测结论：SDXL ControlNet depth ✅ / SDXL bestof 跨引擎 ✅ / Flux abtest ✅（A/B 双图实测出图，lowvram 下每张 10-40min 慢但可用）<br>
+　　　　　　Flux.2 Klein + FLUX.1-dev ControlNet ❌ 不兼容（latent 通道 1152x512 vs 64x3072）<br>
+　　　　　　⚠️ Klein 原生 ReferenceLatent 在 12G VRAM lowvram 下 14min 无产出（GPU 5% 换页死循环特征）→ 12G 环境 Klein 参考图不可用，构图控制走 SDXL ControlNet；go_flux --ref 仅限高 VRAM<br>
+　　　　　　版本 1.79.0
+- **V1.78.0** — 生成成本账 G8（2026-08-19）<br>
+　　　　　　workshop/cost_tracker.py：JSONL 成本日志（ts/engine/seed/耗时/重试/评分/达标/prompt 摘要）<br>
+　　　　　　generate_with_quality 全链路计时+记账（达标/best_result/兜底三 return 点；dry-run 跳过）<br>
+　　　　　　`workshop cost [--days N] [--json]` 汇总命令：总数/达标率/总耗时/引擎对比/按日期分布<br>
+　　　　　　实测：NoobAI SDXL 420s/张 vs Flux 95s/张——引擎对比立现，可估算批量任务时长<br>
+　　　　　　坑：批量替换缩进易坏——__main__.py help 块 8 空格缩进（此前 4 空格缩进编译崩）<br>
+　　　　　　测试：test_cost_tracker 9 项（record/summarize/坏行容错/extra/days 过滤/CLI）；全量 718 过<br>
+　　　　　　版本 1.78.0
+- **V1.77.0** — 元数据透传·成品可溯源 COMM-14（2026-08-19）<br>
+　　　　　　image_utils 新增 save_image_with_meta/read_png_meta（业界最佳：PNG tEXt 透传）<br>
+　　　　　　后处理接入 7 模块：colorgrade/biztext/restore(3点)/blend/idphoto/cover/biz_variants/emotes-wx(5点)<br>
+　　　　　　成品自动携带 AI 生成参数（prompt/seed/模型）——`workshop info` 可溯源，面试作品可复现<br>
+　　　　　　坑：PIL≥12 `Image.PngImagePlugin` 不存在 → 需 `from PIL.PngImagePlugin import PngInfo`<br>
+　　　　　　坑：批量替换保存点必须核对函数作用域变量（restore upscale 曾误引用 color 致 NameError，回归测试抓出）<br>
+　　　　　　测试：test_edge_cases 新 5 项（透传/extra/标准键过滤/无源不崩/JPEG 兼容）；全量 709 过<br>
+　　　　　　版本 1.77.0
+- **V1.76.0** — 商业流程 NoobAI+风格LoRA 升级 COMM-13（2026-08-16）<br>
+　　　　　　用户反馈"商业感不够"→ commercial_flow 支持 SDXL_CHECKPOINT 环境变量换底模（NoobAI-XL-v1.1）+ --lora 透传<br>
+　　　　　　风格 LoRA style_cine_manga 触发词 mystyle（ss_tag_frequency 实证）——不加触发词靠隐性强度会偏移发色（红渐变）<br>
+　　　　　　负向词强化：red/purple hair gradient / huge eyes / color cast / amateur art（对应三反馈：商业感/眼睛比例/脸部色彩）<br>
+　　　　　　NoobAI 参数：steps 28 / cfg 5.5（比 Illustrious 的 20/7.0 慢一倍——每张约 7min lowvram）<br>
 - **V1.75.0** — cover 负向词+wx 导出实测 COMM-11~12（2026-08-15）<br>
 　　　　　　默认负向词加人物硬伤词（bad hands/extra fingers/mutated hands 等）<br>
 　　　　　　wx 表情上架全套规格实测（10 文件：主图/缩略图/横幅/封面/头像/标题图）<br>
@@ -940,3 +1085,23 @@ metadata.json 包含完整的生成参数，面试时打开即可证明工程化
 
 | `~/stock_analyzer/` | 股票分析系统 (analyzer + app + cron + config) | `cd ~/stock_analyzer && uv run python analyzer.py` |
 | `~/boss-agent-cli-dev/` | BOSS直聘 CLI (外部项目 v1.15.0, 264测试) | `boss-agent-cli search --keyword "Python"` |
+
+---
+## 2026-08-30 AIGC 战略会议追加（由小ber执行）
+
+路线：A → B → C。A阶段不压（求职不急），C阶段再分角色（角色设计师/Prompt工程师/一致性QA），A/B阶段保持当前双角色。
+
+A阶段真实状态（无推断，均为已查证）：
+- 门禁V1.80.0已实装（gate.py + vlm_auto_eval v2 + quality_judge + commercial_collector + aesthetic_scorer），半自动方案（代码层C1+VLM定位+人眼放大复核）已被8-24实测确认为唯一可靠路径。
+- 全自动标记已被推翻：代码层对真商业立绘误杀90%；VLM整体评分正负同分；不可自动拦截。
+- A阶段任务已调整为验证+闭环+文档（非重建）：
+  ✓ A1已确认（文件存在）
+  ✓ A2部分完成（kohya基准存在，需结构化目录）
+  ✗ A3/A4/A5尚未执行（需选20正+20负跑batc；依赖A2完成后执行）
+  ✗ A6需要追加（已写知识文档A-phase-plan，AGENTS.md本次追加完成）
+- 角色配置：A/B阶段不扩；C阶段再分。
+- 评价标准：已按场景分（SOUL写入）；对标须一手官方（SOUL写入）；验收标准前置（SOUL写入）；大事预检门（SOUL写入）。
+
+B阶段铺路（未执行，已写入A-phase-plan）：DS涨价应对方案（高峰9-18走远程DS/非高峰本地Wan2.1兜底）、视频门禁缺口（无现成视频评分prompt）。
+
+证据分级：本次输出带分级（✅查证/VLM源代码/AGENTS.md版本 / ⚠️二手/记忆/D涨价时间 / 🔶推断/视频门禁缺口大小 / ❌未验证/角色LoRA实际训练效果）

@@ -325,7 +325,7 @@ QUALITY_PRESETS: dict[str, dict[str, Any]] = {
     "portrait": {"width": 896, "height": 1152, "cfg": 7.5,
                  "sampler": "dpmpp_2m", "scheduler": "karras"},
     "commercial": {"steps": 50, "cfg": 7.5, "sampler": "dpmpp_3m_sde",
-                   "scheduler": "karras", "width": 1216, "height": 832},
+                   "scheduler": "karras", "width": 856, "height": 1200},
     "illustration": {"width": 856, "height": 1200, "cfg": 7.5,
                      "sampler": "dpmpp_2m", "scheduler": "karras"},
     "lightnovel": {"width": 856, "height": 1200, "steps": 40, "cfg": 7.5,
@@ -475,6 +475,50 @@ def apply_preset(params: dict[str, Any], preset: str | None = None,
     return result
 
 
+def commercial_gate_check(image_path: str, deep: bool = False) -> tuple[bool, dict]:
+    """商业级质量门禁（半自动，2026-08-24 修正）。
+
+    实测结论：代码层只可靠抓 C1 故障图(黑/花/白)，锐度/细节/空白会误杀
+    真商业立绘(柔焦/平涂/白底是艺术处理)。所以：
+      - passed=False 仅当 C1 故障图(生成失败) → 触发重试
+      - deep=True 时额外跑 VLM scan 报可疑区域(缩小人工复核范围, 不自动判定)
+
+    Returns:
+        (passed, report): passed=False=生成失败需重试; report 含 dead_hits/regions
+    """
+    try:
+        bootstrap_agents_path()
+        from quality_judge import judge
+        res = judge(image_path)
+        if res.get("error"):
+            return True, {"error": res["error"]}
+        # 只留 C1 故障图(唯一可靠硬判据)
+        dead = [k for k, v in res.get("checks", {}).items()
+                if k in ("C1_broken",) and not v["passed"]]
+        passed = len(dead) == 0
+        report: dict = {"dead_hits": dead, "metrics": res.get("metrics", {})}
+        # deep: VLM 定位报可疑区(半自动, 缩小人眼复核范围)
+        if deep:
+            try:
+                import subprocess
+                script = os.path.expanduser(
+                    "~/AppData/Local/hermes/scripts/vlm_auto_eval.py")
+                if not os.path.exists(script):
+                    report["vlm_error"] = f"script not found: {script}"
+                else:
+                    r = subprocess.run(
+                        [sys.executable, script, "scan", image_path, "--no-local"],
+                        capture_output=True, text=True, timeout=180)
+                    report["vlm_output"] = (r.stdout or "")[-2000:]
+                    report["vlm_returncode"] = r.returncode
+            except Exception as e:
+                report["vlm_error"] = str(e)[:120]
+        return passed, report
+    except Exception as e:
+        # 门禁失败不阻断生成(增强非核心), 放行
+        return True, {"error": f"gate: {e}"}
+
+
 def generate_with_quality(
     build_fn: callable,
     prompt: str,
@@ -485,6 +529,7 @@ def generate_with_quality(
     no_validate: bool = False,
     wait_timeout: float = 900.0,
     vlm_min_score: float = 0.0,   # VLM 审美门槛（0-10，>0 启用）
+    gate_commercial: bool = False, # 商业级质量门禁(代码层): 糊/平涂/黑图 → 触发重试
     **kwargs: Any,
 ) -> dict[str, Any]:
     """生成 + 质量验证 + 自动重试。
@@ -517,6 +562,27 @@ def generate_with_quality(
     best_score = -1.0
     best_vlm = -1.0
     best_result: dict[str, Any] | None = None
+    _t_start = time.time()  # 成本追踪：整次生成总耗时（含重试）
+
+    def _record_cost(result: dict[str, Any], passed_flag: bool) -> None:
+        """成本追踪：写一行 JSONL（G8·业界最佳：每张图成本核算）。"""
+        try:
+            from workshop.cost_tracker import record_generation
+            eng = getattr(build_fn, "__name__", "build")
+            eng = eng.replace("build_", "").replace("_workflow", "").replace("_wf", "") or "build"
+            record_generation(
+                engine=eng,
+                seed=result.get("seed", actual_seed),
+                elapsed_sec=time.time() - _t_start,
+                retries=result.get("retries", 0),
+                score=result.get("score"),
+                vlm_score=result.get("vlm_score"),
+                passed=passed_flag,
+                prompt_hint=str(prompt)[:40],
+            )
+        except Exception:
+            pass  # 成本记录失败不阻断主流程（增强非核心）
+
     # 循环外用到的变量默认值（wait_images 失败 continue 时最后 return 需要）
     image_paths: list[str] = []
     score: float | None = None
@@ -604,7 +670,7 @@ def generate_with_quality(
         current = {"workflow": wf, "seed": actual_seed, "images": image_paths,
                    "score": score, "vlm_score": vlm_score, "retries": attempt}
 
-        # 综合评估：CLIP 分（若启用）+ VLM 分（若启用）
+        # 综合评估：CLIP 分（若启用）+ VLM 分（若启用）+ 商业级门禁（若启用）
         passed = True
         if score is not None and score > best_score:
             best_score = score
@@ -616,9 +682,20 @@ def generate_with_quality(
             passed = False
         if vlm_score is not None and vlm_score < vlm_min_score:
             passed = False
+        if gate_commercial and image_paths:
+            gate_ok, gate_report = commercial_gate_check(image_paths[0])
+            if not gate_ok:
+                passed = False
+                print(f"  🚫 商业门禁: {' / '.join(gate_report.get('dead_hits', []))} "
+                      f"(锐度{gate_report.get('metrics', {}).get('sharpness')}) 不达标")
+            elif gate_ok and gate_report.get("metrics"):
+                # 做基准: 记录最佳通过图(首张通过即记)
+                if best_result is None:
+                    best_result = current
 
         if passed:
             print(f"  ✅ score={score} vlm={vlm_score} 达标")
+            _record_cost(current, passed_flag=True)
             return current
 
         if attempt < max_retries:
@@ -627,7 +704,9 @@ def generate_with_quality(
             print(f"  ⚠️ score={s} vlm={vs} < 门槛，重试 ({attempt+1}/{max_retries})")
 
     if best_result:
+        _record_cost(best_result, passed_flag=False)
         return best_result
 
+    _record_cost({"seed": actual_seed, "score": score, "vlm_score": vlm_score, "retries": attempt}, passed_flag=False)
     return {"workflow": wf, "seed": actual_seed, "images": image_paths,
             "score": score, "vlm_score": vlm_score, "retries": attempt}

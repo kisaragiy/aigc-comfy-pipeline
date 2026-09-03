@@ -45,7 +45,9 @@ def _restore_basic(image_path, output_path, color=False, sharpness=1.6,
         img = Image.merge('RGB', (r, g, b))
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    img.save(output_path, quality=95)
+    from workshop.image_utils import save_image_with_meta
+    save_image_with_meta(img, output_path, source_path=image_path,
+                         extra_meta={'restore': 'basic', 'restore_color': str(color)})
     return output_path
 
 
@@ -64,7 +66,9 @@ def _restore_upscale(image_path, output_path, factor=2):
     w, h = img.size
     img = img.resize((w * factor, h * factor), Image.LANCZOS)
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    img.save(output_path, quality=95)
+    from workshop.image_utils import save_image_with_meta
+    save_image_with_meta(img, output_path, source_path=image_path,
+                         extra_meta={'restore': 'upscale', 'restore_factor': str(factor)})
     return output_path
 
 
@@ -99,7 +103,9 @@ def _restore_scratch(image_path, output_path, strength=2):
         mask = diff2 > (diff2.std() + 1e-6) * 3.0
 
     out_img = Image.fromarray(out_arr.astype(np.uint8)).convert('RGB')
-    out_img.save(output_path)
+    from workshop.image_utils import save_image_with_meta
+    save_image_with_meta(out_img, output_path, source_path=image_path,
+                         extra_meta={'restore': 'scratch', 'restore_strength': str(strength)})
     print(f'  🩹 划痕修复: {n_fixed} 像素')
     return output_path
 

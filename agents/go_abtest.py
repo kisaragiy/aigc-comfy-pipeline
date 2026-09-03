@@ -24,7 +24,22 @@ from comfy_utils import (
 bootstrap_agents_path()
 
 from go_flux import build_flux_workflow  # noqa: E402
+from go_sdxl import build_sdxl_workflow  # noqa: E402
 from output_manager import save_run  # noqa: E402
+
+
+def _build_kwargs(model: str, **kwargs) -> dict[str, Any]:
+    """按 model 映射 build_fn 参数名（Flux: model_variant；SDXL: 默认 checkpoint）。"""
+    out = dict(kwargs)
+    out.pop("model", None)  # model 已作位置参数传入，去掉 keyword 冗余
+    if model != "sdxl":
+        out["model_variant"] = model
+    return out
+
+
+def _select_build_fn(model: str):
+    """按 model 选择工作流构建函数（9b/4b=Flux.2 Klein, sdxl=NoobAI/Illustrious）。"""
+    return build_sdxl_workflow if model == "sdxl" else build_flux_workflow
 
 
 def _make_grid(
@@ -123,17 +138,19 @@ def run_abtest(
         }
 
         result = generate_with_quality(
-            build_flux_workflow,
+            _select_build_fn(kwargs.get("model", "9b")),
             prompt_text,
             seed=ab_seed,
-            model=kwargs.get("model", "9b"),
-            lora=kwargs.get("lora"),
-            lora_strength=kwargs.get("lora_strength", 1.0),
-            steps=kwargs.get("steps", 20),
-            cfg=kwargs.get("cfg", 1.0),
-            width=kwargs.get("width", 1024),
-            height=kwargs.get("height", 1024),
-            filename_prefix=f"abtest_{label.lower()}",
+            **_build_kwargs(
+                kwargs.get("model", "9b"),
+                lora=kwargs.get("lora"),
+                lora_strength=kwargs.get("lora_strength", 1.0),
+                steps=kwargs.get("steps", 20),
+                cfg=kwargs.get("cfg", 1.0),
+                width=kwargs.get("width", 1024),
+                height=kwargs.get("height", 1024),
+                filename_prefix=f"abtest_{label.lower()}",
+            ),
             **quality_kwargs,
         )
 
@@ -197,18 +214,24 @@ def run_bestof(
     for i in range(count):
         print(f"  [{i+1}/{count}] 提交 (seed=随机)...")
 
+        # bestof 语义 = 多 seed 探测挑优：--seed 是起始值，逐张 +i；-1 则全随机
+        seed_base = kwargs.get("seed", -1)
+        seed_val = -1 if seed_base == -1 else seed_base + i
+
         result = generate_with_quality(
-            build_flux_workflow,
+            _select_build_fn(kwargs.get("model", "9b")),
             prompt,
-            seed=-1,  # 每次随机
-            model=kwargs.get("model", "9b"),
-            lora=kwargs.get("lora"),
-            lora_strength=kwargs.get("lora_strength", 1.0),
-            steps=kwargs.get("steps", 20),
-            cfg=kwargs.get("cfg", 1.0),
-            width=kwargs.get("width", 1024),
-            height=kwargs.get("height", 1024),
-            filename_prefix=f"bestof_{i+1}",
+            seed=seed_val,
+            **_build_kwargs(
+                kwargs.get("model", "9b"),
+                lora=kwargs.get("lora"),
+                lora_strength=kwargs.get("lora_strength", 1.0),
+                steps=kwargs.get("steps", 20),
+                cfg=kwargs.get("cfg", 1.0),
+                width=kwargs.get("width", 1024),
+                height=kwargs.get("height", 1024),
+                filename_prefix=f"bestof_{i+1}",
+            ),
             **quality_kwargs,
         )
 
@@ -283,11 +306,13 @@ def main_abtest() -> None:
     parser.add_argument("--prompts", nargs=2, required=True,
                         help="两个 prompt（A vs B）")
     parser.add_argument("--seed", type=int, default=-1, help="统一 seed（-1=随机）")
-    parser.add_argument("--model", choices=["9b", "4b"], default="9b")
+    parser.add_argument("--model", choices=["9b", "4b", "sdxl"], default="9b")
     parser.add_argument("--lora", default=None)
     parser.add_argument("--lora-strength", type=float, default=1.0)
     parser.add_argument("--steps", type=int, default=20)
     parser.add_argument("--cfg", type=float, default=1.0)
+    parser.add_argument("--width", type=int, default=1024)
+    parser.add_argument("--height", type=int, default=1024)
     parser.add_argument("--raw", action="store_true")
     _add_quality_args(parser)
     args = parser.parse_args()
@@ -298,6 +323,7 @@ def main_abtest() -> None:
         model=args.model, lora=args.lora,
         lora_strength=args.lora_strength,
         steps=args.steps, cfg=args.cfg,
+        width=args.width, height=args.height,
         preset=args.preset, min_score=args.min_score,
         retry=args.retry, no_validate=args.no_validate,
     )
@@ -310,11 +336,14 @@ def main_bestof() -> None:
     )
     parser.add_argument("prompt", help="画面描述")
     parser.add_argument("--count", type=int, default=4, help="生成张数")
-    parser.add_argument("--model", choices=["9b", "4b"], default="9b")
+    parser.add_argument("--seed", type=int, default=-1, help="统一 seed（-1=每次随机）")
+    parser.add_argument("--model", choices=["9b", "4b", "sdxl"], default="9b")
     parser.add_argument("--lora", default=None)
     parser.add_argument("--lora-strength", type=float, default=1.0)
     parser.add_argument("--steps", type=int, default=20)
     parser.add_argument("--cfg", type=float, default=1.0)
+    parser.add_argument("--width", type=int, default=1024)
+    parser.add_argument("--height", type=int, default=1024)
     parser.add_argument("--raw", action="store_true")
     _add_quality_args(parser)
     args = parser.parse_args()
@@ -325,6 +354,8 @@ def main_bestof() -> None:
         model=args.model, lora=args.lora,
         lora_strength=args.lora_strength,
         steps=args.steps, cfg=args.cfg,
+        seed=args.seed,
+        width=args.width, height=args.height,
         preset=args.preset, min_score=args.min_score,
         retry=args.retry, no_validate=args.no_validate,
     )

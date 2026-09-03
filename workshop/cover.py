@@ -179,7 +179,9 @@ def _add_title_zone(image_path, output_path, title=None, subtitle=None, ctype="v
                       fill=(230, 230, 230), font=font_sub)
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    img.save(output_path)
+    from workshop.image_utils import save_image_with_meta
+    save_image_with_meta(img, output_path, source_path=None,
+                         extra_meta={'cover': str(ctype)})
     return output_path
 
 

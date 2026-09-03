@@ -232,7 +232,9 @@ def idphoto(image_path, bg='blue', size='1inch', output=None, beauty=False,
         else:
             p = output or str(PROJECT / 'outputs' / f"idphoto_{bg}_{time.strftime('%Y%m%d_%H%M%S')}.png")
         os.makedirs(os.path.dirname(p), exist_ok=True)
-        final.save(p)
+        from workshop.image_utils import save_image_with_meta
+        save_image_with_meta(final, p, source_path=image_path,
+                             extra_meta={'idphoto': 'true', 'idphoto_bg': bg, 'idphoto_size': size})
         print(f'  🪪 证件照: {p} ({out_w}x{out_h} {c}底)')
         out_paths.append(p)
 

@@ -75,8 +75,15 @@ def _load_image_file(image_path):
     return r['name']
 
 
-def _build_img2img_wf(upload_name, prompt, negative, seed, denoise=0.6):
-    """img2img 工作流（VAEEncode + denoise 控制相似度）"""
+def _build_img2img_wf(upload_name, prompt, negative, seed, denoise=0.6,
+                      ckpt='waiIllustriousSDXL_v160.safetensors',
+                      steps=None, cfg=None):
+    """img2img 工作流（VAEEncode + denoise 控制相似度）
+
+    2026-08-31: ckpt 原为硬编码 waiIllustrious → 二次元↔真人互转(方向④)无法换底模。
+      现开放 ckpt/steps/cfg 参数, 默认值与原行为一致(向后兼容)。
+      真人侧用 RealVisXL_V5.0_fp16.safetensors, 二次元侧用 waiIllustrious。
+    """
     wf = {}
     # 加载原图
     wf['10'] = {'class_type': 'LoadImage', 'inputs': {'image': upload_name}}
@@ -84,14 +91,16 @@ def _build_img2img_wf(upload_name, prompt, negative, seed, denoise=0.6):
     wf['11'] = {'class_type': 'VAEEncode', 'inputs': {'pixels': ['10', 0], 'vae': ['1', 2]}}
     # 模型
     wf['1'] = {'class_type': 'CheckpointLoaderSimple',
-               'inputs': {'ckpt_name': 'waiIllustriousSDXL_v160.safetensors'}}
+               'inputs': {'ckpt_name': ckpt}}
     wf['2'] = {'class_type': 'CLIPTextEncode',
                'inputs': {'text': prompt, 'clip': ['1', 1]}}
     wf['3'] = {'class_type': 'CLIPTextEncode',
                'inputs': {'text': negative or 'worst quality, blurry, low quality, deformed', 'clip': ['1', 1]}}
     wf['5'] = {'class_type': 'KSampler',
                'inputs': {'model': ['1', 0], 'positive': ['2', 0], 'negative': ['3', 0],
-                          'latent_image': ['11', 0], 'seed': seed, 'steps': 28, 'cfg': 6.0,
+                          'latent_image': ['11', 0], 'seed': seed,
+                          'steps': steps if steps is not None else 28,
+                          'cfg': cfg if cfg is not None else 6.0,
                           'sampler_name': 'dpmpp_2m', 'scheduler': 'karras', 'denoise': denoise}}
     wf['6'] = {'class_type': 'VAEDecode', 'inputs': {'samples': ['5', 0], 'vae': ['1', 2]}}
     wf['7'] = {'class_type': 'SaveImage',

@@ -1,0 +1,48 @@
+# -*- coding: utf-8 -*-
+import os, re, sys
+sys.path.insert(0, 'C:/Users/zwq/aigc-comfy-pipeline')
+sys.path.insert(0, 'C:/Users/zwq/aigc-comfy-pipeline/agents')
+
+from go_sdxl import build_sdxl_workflow
+from comfy_utils import generate_with_quality, comfy_post_prompt, wait_images
+
+prompt = """cinematic close up of a middle-aged man in suit, standing in auditorium,
+stern face with subtle emotional change: from confident to uncertain,
+slight narrowing of eyes, lip tightening, dramatic lighting,
+sharp focus on face, background bokeh, professional photography"""
+
+print("[导演深度验证] 镜05 CU 特写")
+print("生成参数: NoobAI, 768x1024, seed 20260820, steps 28, cfg 7.0")
+t0 = os.times()[4]
+
+# 用 build_sdxl_workflow 直接构建
+wf = build_sdxl_workflow(
+    checkpoint="NoobAI-XL-v1.1.safetensors",
+    prompt=prompt,
+    steps=28,
+    cfg=7.0,
+    sampler_name="dpmpp_2m",
+    scheduler="karras",
+    width=768,
+    height=1024,
+    seed=20260820,
+    batch_size=1,
+    filename_prefix="director_cu_05"
+)
+
+print(f"工作流构建: {os.times()[4]-t0:.1f}s")
+
+# 用 comfy_post_prompt 提交
+resp = comfy_post_prompt(wf)
+print(f"提交: {os.times()[4]-t0:.1f}s, 响应: {resp}")
+
+# 等图
+out_dir = 'C:/Users/zwq/AppData/Local/Temp/director_work'
+os.makedirs(out_dir, exist_ok=True)
+images = wait_images(resp, timeout=300, output_dir=out_dir)
+print(f"等图完成: {os.times()[4]-t0:.1f}s")
+
+if images:
+    print(f"出图: {images[0]}")
+else:
+    print("出图失败")

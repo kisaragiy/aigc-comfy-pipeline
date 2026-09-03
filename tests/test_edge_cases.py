@@ -492,3 +492,80 @@ def test_oc_duplicate(clean_tmp, monkeypatch):
 @pytest.fixture
 def clean_tmp(tmp_path):
     return str(tmp_path)
+
+# ── 元数据透传（业界最佳：成品可溯源） ──
+
+def _make_png_with_meta(path, prompt='masterpiece, 1girl, silver hair', seed='12345'):
+    """造带 ComfyUI tEXt 的 PNG"""
+    from PIL import Image, PngImagePlugin
+    pnginfo = PngImagePlugin.PngInfo()
+    pnginfo.add_text('prompt', prompt)
+    pnginfo.add_text('parameters', f'steps: 20, seed: {seed}')
+    Image.new('RGB', (64, 64), (200, 100, 50)).save(path, format='PNG', pnginfo=pnginfo)
+
+
+def test_save_image_with_meta_passthrough(tmp_path):
+    """后处理保存透传源图 AI 元数据（prompt/parameters）"""
+    from workshop.image_utils import read_png_meta, save_image_with_meta
+    from PIL import Image
+    src = str(tmp_path / 'src.png')
+    out = str(tmp_path / 'out.png')
+    _make_png_with_meta(src)
+    save_image_with_meta(Image.new('RGB', (64, 64)), out, source_path=src)
+    meta = read_png_meta(out)
+    assert meta.get('prompt') == 'masterpiece, 1girl, silver hair'
+    assert 'seed: 12345' in meta.get('parameters', '')
+
+
+def test_save_image_with_meta_extra(tmp_path):
+    """后处理自定义参数写入（colorgrade_params 等）"""
+    from workshop.image_utils import read_png_meta, save_image_with_meta
+    from PIL import Image
+    src = str(tmp_path / 'src.png')
+    out = str(tmp_path / 'out.png')
+    _make_png_with_meta(src)
+    save_image_with_meta(Image.new('RGB', (64, 64)), out, source_path=src,
+                         extra_meta={'colorgrade_params': 'warm=0.1'})
+    meta = read_png_meta(out)
+    assert meta.get('colorgrade_params') == 'warm=0.1'
+    assert meta.get('prompt')  # 源图元数据仍在
+
+
+def test_read_png_meta_standard_only(tmp_path):
+    """标准键过滤模式（info.py 兼容）：不返回自定义键"""
+    from workshop.image_utils import read_png_meta, save_image_with_meta
+    from PIL import Image
+    src = str(tmp_path / 'src.png')
+    out = str(tmp_path / 'out.png')
+    _make_png_with_meta(src)
+    save_image_with_meta(Image.new('RGB', (64, 64)), out, source_path=src,
+                         extra_meta={'custom_key': 'v1'})
+    std = read_png_meta(out, include_all=False)
+    assert 'custom_key' not in std
+    assert 'prompt' in std
+
+
+def test_save_image_with_meta_no_meta(tmp_path):
+    """无源元数据 → 正常保存不崩（增强非核心）"""
+    from workshop.image_utils import read_png_meta, save_image_with_meta
+    from PIL import Image
+    out = str(tmp_path / 'plain.png')
+    save_image_with_meta(Image.new('RGB', (64, 64)), out, source_path='C:/nope.png')
+    assert read_png_meta(out) == {}
+    assert os.path.exists(out)
+
+
+def test_save_image_with_meta_jpeg_ok(tmp_path):
+    """JPEG 输出不写 PNG 元数据但保存正常"""
+    from workshop.image_utils import read_png_meta, save_image_with_meta
+    from PIL import Image
+    src = str(tmp_path / 'src.png')
+    out = str(tmp_path / 'out.jpg')
+    _make_png_with_meta(src)
+    save_image_with_meta(Image.new('RGB', (64, 64)), out, source_path=src)
+    assert os.path.exists(out)
+    meta = read_png_meta(out)
+    # jpg 无 PNG tEXt：不应包含 AI 生成键（EXIF 键 jfif 等可能存在，忽略）
+    assert 'prompt' not in meta
+    assert 'parameters' not in meta
+    assert 'colorgrade_params' not in meta
