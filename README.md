@@ -1,11 +1,17 @@
-# AIGC ComfyUI Pipeline
+# AIGC ComfyUI Pipeline — v1.0.0
 
-> Python 编排 ComfyUI · LoRA 训练 · 批量生图 · 模型管理  
+> Python 编排 ComfyUI · LoRA 训练 · 批量生图 · 质量门禁 · 模型管理  
 > **工程化工具链** — Python 脚本是产品，生图是产出  
 > 作者：张伟强
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](requirements.txt)
 ![Version](https://img.shields.io/badge/version-v1.0.0-green)
+[![tests](https://img.shields.io/badge/tests-729%20passed-brightgreen)]()
+[![CI](https://img.shields.io/badge/CI-github%20actions-blue)]()
+[![License](https://img.shields.io/badge/License-MIT-f5de17)](LICENSE)
+
+> **不是课程项目**：自研质量门禁（gate.py 三层：代码量化 460 行 + VLM 定位 + 放大复核）+ 729 项 pytest + CI（push/PR 自动触发）。
+> 关键决策记录：IPAdapter 7 变种实测无法锁动漫角色特征 → LoRA（dim32/64 网格对比）胜出（[workshop/character-consistency.md](workshop/character-consistency.md)）。
 
 ## 定位
 
