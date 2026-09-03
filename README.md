@@ -29,6 +29,7 @@
 | 一致性验证 | `workshop verify` | 跨图片质检比较 + 波动标记 |
 | 面试样张 | `workshop demo` | 5 场景 Gallery + 质量报告 |
 | 批量处理 | `--batch-file` | 文件驱动的批量管线 |
+| 商业立绘门禁 | `agents/gate.py` | 商业级质量判据：代码量化层(糊/平涂/黑图) + VLM 定位 + 放大复核，三层分工拦截半成品 |
 
 ## 快速开始
 
@@ -128,6 +129,14 @@ python -m agents workshop demo "银发精灵 Alice, 蓝瞳, 白色长裙" --coun
 | V0.X.0 | 大功能 |
 | V0.0.XXX | 小修 |
 | VX.0.0 | 架构级里程碑 |
+
+## 测试
+
+```bash
+python -m pytest tests/ -q
+```
+
+实测（2026-09-04）：**729 passed / 2 failed / 3 skipped**。2 个失败为环境依赖：storyboard 用例需可用的 LLM 端点，inspect CLI 用例需本地图片文件——非代码缺陷。
 
 ## License
 
