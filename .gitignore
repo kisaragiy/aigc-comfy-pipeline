@@ -87,6 +87,22 @@ scripts/*.bat
 scripts/start_vlm_server.bat
 refs/
 
+# 工作区产物（运行时生成，勿入库）
+workspace/
+workspace_*/
+bench_samples/
+bestof_ranking.jpg
+cost_log.jsonl
+
+# 角色素材 / 版权图（本地保留，公开仓库不入库）
+fix_museum_f/
+workspace_ref*/
+
+# 备份文件
+*.bak
+*.bak_*
+*.orig
+
 # 工具脚本和临时分析文件
 workshop/_*.py
 workshop/_*_workflow.json
@@ -102,3 +118,6 @@ workshop/*_workflow.json
 workshop/*_test/
 workshop/ac2_pipeline.py
 workshop/ac_pipeline.py
+
+# 运行管线记录(时间戳生成)
+manifests/
