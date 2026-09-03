@@ -359,6 +359,10 @@ def main() -> None:
     parser.add_argument("--width", type=int, default=1024, help="输出宽度")
     parser.add_argument("--height", type=int, default=1024, help="输出高度")
     parser.add_argument("--model", choices=["9b", "4b"], default="9b", help="模型变体")
+    parser.add_argument("--ref", default=None,
+                        help="参考图文件名（Klein 原生 ReferenceLatent 视觉参考，可锁定构图/风格）")
+    parser.add_argument("--ip-weight", type=float, default=0.7,
+                        help="参考图影响权重（0.0~1.0，默认 0.7）")
     parser.add_argument("--lora", default=None, help="LoRA 权重文件名")
     parser.add_argument("--lora-strength", type=float, default=1.0, help="LoRA 权重")
     parser.add_argument("--sampler", default=None, help="采样器（预设自动）")
@@ -401,6 +405,8 @@ def main() -> None:
         width=args.width,
         height=args.height,
         model_variant=args.model,
+        ref_image=args.ref,
+        ip_weight=args.ip_weight,
         lora_name=args.lora,
         lora_strength=args.lora_strength,
         sampler=args.sampler,

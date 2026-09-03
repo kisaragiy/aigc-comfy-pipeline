@@ -89,6 +89,7 @@ def build_controlnet_workflow(
     scheduler: str = "normal",
     strength: float = 0.8,
     prefix: str = "control",
+    ckpt: str = "NoobAI-XL-v1.1.safetensors",
 ) -> tuple[dict[str, Any], int]:
     """构建 Flux/SDXL + ControlNet 工作流。
 
@@ -99,10 +100,10 @@ def build_controlnet_workflow(
         return _build_sdxl_controlnet_workflow(
             prompt, ref_image, control_type,
             negative=negative, seed=seed, steps=steps, cfg=cfg,
-            sampler=sampler, scheduler=scheduler,
-            strength=strength, width=width, height=height,
+            sampler=sampler, scheduler=scheduler, strength=strength,
+            width=width, height=height,
             lora_name=lora_name, lora_strength=lora_strength,
-            prefix=prefix,
+            prefix=prefix, ckpt=ckpt,
         )
     return _build_flux_controlnet_workflow(
         prompt, ref_image, control_type,
@@ -197,16 +198,18 @@ def _build_flux_controlnet_workflow(
     n6 = nxt()
     wf[n6] = {"class_type": "LoadImage", "inputs": {"image": ref_image}}
 
-    # 7. ControlNetApply (conditioning → ControlNet 修正)
+    # 7. ControlNetApplyAdvanced (Flux: 像素 image + 可选 vae 输入)
     n7 = nxt()
-    wf[n7] = {"class_type": "ControlNetApply", "inputs": {
-        "conditioning": [n4, 0], "control_net": [n5, 0],
-        "image": [n6, 0], "strength": strength}}
+    wf[n7] = {"class_type": "ControlNetApplyAdvanced", "inputs": {
+        "positive": [n4, 0], "negative": [n4, 0],
+        "control_net": [n5, 0], "image": [n6, 0],
+        "strength": strength, "start_percent": 0.0, "end_percent": 1.0,
+        "vae": [n3, 0]}}
 
     # 8. ConditioningZeroOut (negative)
     n8 = nxt()
     wf[n8] = {"class_type": "ConditioningZeroOut", "inputs": {
-        "conditioning": [n4, 0]}}
+        "conditioning": [n7, 0]}}
 
     neg_conditioning = [n8, 0]
     if negative:
@@ -284,6 +287,7 @@ def _build_sdxl_controlnet_workflow(
     lora_name: str | None = None,
     lora_strength: float = 0.9,
     prefix: str = "control",
+    ckpt: str = "NoobAI-XL-v1.1.safetensors",
 ) -> tuple[dict[str, Any], int]:
     """构建 SDXL + ControlNet 工作流（原版回退）。"""
     sdxl_model, _ = CONTROLNET_MODELS.get(control_type, (CONTROLNET_MODELS["depth"][0], None))
@@ -293,7 +297,7 @@ def _build_sdxl_controlnet_workflow(
 
     # 1. CheckpointLoader
     wf["1"] = {"class_type": "CheckpointLoaderSimple", "inputs": {
-        "ckpt_name": "sd_xl_base.safetensors"}}
+        "ckpt_name": ckpt}}
 
     model_out = ["1", 0]
     clip_out = ["1", 1]
@@ -361,6 +365,8 @@ def main() -> None:
     parser.add_argument("--strength", type=float, default=0.8, help="ControlNet 强度")
     parser.add_argument("--model", choices=["9b", "4b", "sdxl"], default="9b",
                         help="模型架构：9b/4b(Flux) / sdxl")
+    parser.add_argument("--ckpt", default="NoobAI-XL-v1.1.safetensors",
+                        help="SDXL 模式下的 checkpoint 文件名（默认 NoobAI-XL-v1.1）")
     parser.add_argument("--negative", default="", help="负向提示词")
     parser.add_argument("--seed", type=int, default=-1)
     parser.add_argument("--steps", type=int, default=None, help="采样步数（预设自动）")
@@ -406,6 +412,7 @@ def main() -> None:
         sampler=args.sampler, scheduler=args.scheduler,
         width=args.width, height=args.height,
         model_variant=args.model,
+        ckpt=args.ckpt,
         negative=args.negative,
         lora_name=args.lora, lora_strength=args.lora_strength,
         prefix=args.prefix,

@@ -12,6 +12,7 @@ workshop/enhance.py — 高清修复管线（B-enhance）v1.0
 
 import argparse, os, sys, time
 from pathlib import Path
+import urllib.request
 
 PROJECT = Path(__file__).resolve().parent.parent
 
@@ -92,7 +93,19 @@ def enhance(image_path, upscale=2, color=False, face=True, compare=True,
                     wf = _build_inpaint_wf(current, mask_path,
                                            'detailed face, clear facial features, natural skin, high quality',
                                            'blurry face, deformed face, bad anatomy', 0.4, s)
-                    files = _wait_images(_json.dumps({'prompt': wf}), timeout=300)
+                    # 提交工作流 → 拿 prompt_id → 轮询（修复：原来把请求 JSON 当 prompt_id 传导致死等）
+                    from workshop.fix import _http, COMFY
+                    body = _json.dumps({'prompt': wf}).encode()
+                    req = urllib.request.Request(COMFY + '/prompt', data=body,
+                                                 headers={'Content-Type': 'application/json'})
+                    r = _json.loads(_http().open(req, timeout=30).read())
+                    if 'error' in r:
+                        print(f'  ⚠️ 提交失败: {str(r["error"])[:80]}')
+                        pid = None
+                    else:
+                        pid = r['prompt_id']
+                        print(f'  已提交 prompt_id={pid}，等待生成...')
+                    files = _wait_images(pid, timeout=300) if pid else []
                     if files:
                         r3 = str(out_dir / 'step3_face.png')
                         with open(os.path.join(r'C:\DrawingLive\ComfyUI\output', files[0]), 'rb') as f_in, open(r3, 'wb') as f_out:

@@ -106,7 +106,9 @@ def blend_images(img_a, img_b, weight=0.5, output=None, refine=None, seed=-1,
 
     out_path = output or str(PROJECT / 'outputs' / f"blend_{time.strftime('%Y%m%d_%H%M%S')}.png")
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    blended.save(out_path)
+    from workshop.image_utils import save_image_with_meta
+    save_image_with_meta(blended, out_path, source_path=img_a,
+                         extra_meta={'blend': 'true', 'blend_source_b': str(img_b)})
     print(f'  📄 输出: {out_path}')
     results = [out_path]
 

@@ -50,10 +50,13 @@ def colorgrade(image_path, warm=None, saturation=1.05, strength=0.5, output=None
     if saturation != 1.0:
         img = ImageEnhance.Color(img).enhance(1 + (saturation - 1) * strength)
 
-    # 5. 保存
+    # 5. 保存（透传源图 AI 元数据——成品可溯源）
     out = output or (Path(image_path).parent / f'color_grade_{Path(image_path).stem}.png')
     out = str(out)
-    img.save(out)
+    from workshop.image_utils import save_image_with_meta
+    save_image_with_meta(img, out, source_path=image_path,
+                         extra_meta={'color_grade': 'true',
+                                     'colorgrade_params': f'warm={warm} saturation={saturation} strength={strength}'})
     print(f'  🎨 色彩统一完成: {out}')
     print(f'  （白平衡增益 R:{gains[0]:.2f} G:{gains[1]:.2f} B:{gains[2]:.2f}'
           + (f' | 色温 {"暖" if warm > 0 else "冷"}{abs(warm):.2f}' if warm is not None else ' | 自动白平衡')

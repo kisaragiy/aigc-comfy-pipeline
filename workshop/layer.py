@@ -118,20 +118,19 @@ def _gen_layer(prompt, model_type, out_dir, seed, extra=''):
 # ── SAM 抠图 ──
 
 def _sam_cutout(char_path, prompt='person'):
-    """GroundingDINO + SAM 分割 → 返回 mask 图路径"""
+    """SAM2 文本定位分割 → 返回 mask 图路径（修复：旧 GroundingDinoSAMSegment 在
+    transformers 新版崩溃 + 保存 IMAGE 而非 MASK；改用 SAM2Segment 输出 MASK_IMAGE）"""
     fname = os.path.basename(char_path)
     shutil.copy(char_path, os.path.join(COMFY_INPUT, fname))
     wf = {
         '1': {'class_type': 'LoadImage', 'inputs': {'image': fname}},
-        '2': {'class_type': 'GroundingDinoModelLoader (segment anything)',
-              'inputs': {'model_name': 'GroundingDINO_SwinT_OGC (694MB)'}},
-        '3': {'class_type': 'SAMModelLoader (segment anything)',
-              'inputs': {'model_name': 'sam_vit_b (375MB)'}},
-        '4': {'class_type': 'GroundingDinoSAMSegment (segment anything)',
-              'inputs': {'sam_model': ['3', 0], 'grounding_dino_model': ['2', 0],
-                         'image': ['1', 0], 'prompt': prompt, 'threshold': 0.3}},
-        '5': {'class_type': 'SaveImage',
-              'inputs': {'images': ['4', 0], 'filename_prefix': 'layer_mask'}},
+        '2': {'class_type': 'SAM2Segment',
+              'inputs': {'image': ['1', 0], 'prompt': prompt,
+                         'sam2_model': 'sam2.1_hiera_tiny',
+                         'dino_model': 'GroundingDINO_SwinT_OGC (694MB)',
+                         'device': 'Auto', 'threshold': 0.3, 'box_threshold': 0.3}},
+        '3': {'class_type': 'SaveImage',
+              'inputs': {'images': ['2', 2], 'filename_prefix': 'layer_mask'}},
     }
     files = _submit(wf, timeout=180)
     if not files:
@@ -151,7 +150,7 @@ def _human_segment(char_path, method='human_parsing_lip'):
         '1': {'class_type': 'LoadImage', 'inputs': {'image': fname}},
         '2': {'class_type': 'easy humanSegmentation',
               'inputs': {'image': ['1', 0], 'method': method, 'confidence': 0.4,
-                         'crop_multi': 0.0, 'mask_components': []}},
+                         'crop_multi': 0.0, 'mask_components': [0]}},
         '3': {'class_type': 'MaskToImage', 'inputs': {'mask': ['2', 1]}},
         '4': {'class_type': 'SaveImage',
               'inputs': {'images': ['3', 0], 'filename_prefix': 'layer_human_mask'}},
@@ -167,7 +166,6 @@ def _human_segment(char_path, method='human_parsing_lip'):
 def _apply_mask_to_fg(char_path, mask_path, feather=3):
     """角色图 + mask 图 → RGBA（alpha=invert(mask)，黑=保留）。
     easy humanSegmentation 的 mask 语义: 白=背景 黑=人体"""
-    import numpy as np
     img = Image.open(char_path).convert('RGB')
     mask = Image.open(mask_path).convert('L').resize(img.size, Image.LANCZOS)
     rgba = img.convert('RGBA')
@@ -220,25 +218,36 @@ def _cutout_white(char_path, feather=3, threshold=230):
 
 def _cutout_adaptive(char_path, feather=3, threshold=45):
     """自适应背景色抠图：四角采样背景主色 → 色距阈值 alpha。
-    只取四角 8x8 区域均值（角色居中时四角必是背景）。
+    纯 PIL 实现（不依赖 numpy——hermes venv numpy 损坏）。
     返回 RGBA 图"""
-    import numpy as np
     img = Image.open(char_path).convert('RGB')
-    arr = np.asarray(img, dtype=np.float32)
-    h, w, _ = arr.shape
-    def corner(y, x):
-        return arr[y:y + 8, x:x + 8].reshape(-1, 3).mean(axis=0)
-    pts = [corner(0, 0), corner(0, w - 8), corner(h - 8, 0), corner(h - 8, w - 8)]
-    bg = np.median(np.stack(pts), axis=0)
-    dist = np.sqrt(((arr - bg) ** 2).sum(axis=2))
-    # 二值化（背景→0，角色→255）；边缘柔化交给 GaussianBlur
-    alpha = np.where(dist > threshold, 255, 0).astype(np.uint8)
-    rgba = np.dstack([arr.astype(np.uint8), alpha])
-    out = Image.fromarray(rgba, 'RGBA')
+    w, h = img.size
+    # 四角 8x8 区域平均色
+    def corner_avg(x, y):
+        px = img.crop((x, y, min(x + 8, w), min(y + 8, h)))
+        sm = [0, 0, 0]
+        cnt = 0
+        for p in px.getdata():
+            sm[0] += p[0]; sm[1] += p[1]; sm[2] += p[2]; cnt += 1
+        return tuple(s // cnt for s in sm)
+    corners = [corner_avg(0, 0), corner_avg(w - 8, 0),
+               corner_avg(0, h - 8), corner_avg(w - 8, h - 8)]
+    # 中位数背景色
+    bg = tuple(sorted(c[i] for c in corners)[len(corners) // 2] for i in range(3))
+    # 逐像素色距 → alpha
+    alpha = Image.new('L', (w, h), 0)
+    src = img.load()
+    dst = alpha.load()
+    for y in range(h):
+        for x in range(w):
+            r, g, b = src[x, y]
+            dist = ((r - bg[0]) ** 2 + (g - bg[1]) ** 2 + (b - bg[2]) ** 2) ** 0.5
+            dst[x, y] = 255 if dist > threshold else 0
     if feather > 0:
-        a = out.getchannel('A').filter(ImageFilter.GaussianBlur(feather))
-        out.putalpha(a)
-    return out, bg
+        alpha = alpha.filter(ImageFilter.GaussianBlur(feather))
+    rgba = img.convert('RGBA')
+    rgba.putalpha(alpha)
+    return rgba, bg
 
 # ── PIL 合成 ──
 
@@ -367,19 +376,18 @@ def main(argv=None):
         print('❌ 分层生成失败')
         return
 
-    # 3. 抠图（语义分割优先 → 自适应色距兜底）
-    print('# 抠图（人体语义分割）...')
+    # 3. 抠图（自适应色距优先——SAM2/语义分割均有 transformers 兼容坑，纯 PIL 最稳）
+    print('# 抠图（自适应色距）...')
     try:
-        mask_path = _human_segment(char_path)
-        fg_rgba = _apply_mask_to_fg(char_path, mask_path)
+        fg_rgba, bg_color = _cutout_adaptive(char_path)
         fg_rgba.save(run_dir / 'char_cutout.png')
-        print(f'  → {run_dir / "char_cutout.png"}')
+        print(f'  → {run_dir / "char_cutout.png"}（背景色: {tuple(int(x) for x in bg_color)}）')
     except Exception as e:
-        print(f'⚠️ 语义分割失败: {str(e)[:100]}，回退自适应色距')
+        print(f'⚠️ 自适应抠图失败: {str(e)[:100]}，回退品红/白底')
         try:
-            fg_rgba, bg_color = _cutout_adaptive(char_path)
+            fg_rgba = _cutout_magenta(char_path)
             fg_rgba.save(run_dir / 'char_cutout.png')
-            print(f'  背景色: {bg_color.astype(int)}')
+            print(f'  品红抠图成功')
         except Exception as e2:
             print(f'❌ 抠图失败: {str(e2)[:80]}')
             return

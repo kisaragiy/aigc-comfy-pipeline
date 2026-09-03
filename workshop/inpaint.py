@@ -68,13 +68,17 @@ def _load_image_file(image_path):
 
 
 def _sam_mask_wf(upload_name, prompt_area):
-    """SAM 文本定位 mask 工作流 → 返回 mask 图文件名"""
+    """SAM2 文本定位 mask 工作流 → 返回 mask 图文件名"""
     wf = {}
     wf['10'] = {'class_type': 'LoadImage', 'inputs': {'image': upload_name}}
-    wf['20'] = {'class_type': 'SAMModelLoader', 'inputs': {'model_name': 'sam_vit_b_01ec64.pth'}}
-    wf['30'] = {'class_type': 'GroundingDinoSAMSegment',
-                'inputs': {'sam_model': ['20', 0], 'image': ['10', 0],
-                           'prompt': prompt_area, 'threshold': 0.3, 'box_threshold': 0.3}}
+    wf['30'] = {'class_type': 'SAM2Segment',
+                'inputs': {'image': ['10', 0], 'prompt': prompt_area,
+                           'sam2_model': 'sam2.1_hiera_tiny',
+                           'dino_model': 'GroundingDINO_SwinT_OGC (694MB)',
+                           'device': 'Auto',
+                           'threshold': 0.3, 'box_threshold': 0.3}}
+    # 输出 MASK_IMAGE（索引 2）保存为图
+    wf['50'] = {'class_type': 'SaveImage', 'inputs': {'images': ['30', 2], 'filename_prefix': 'sam_mask'}}
     return wf
 
 

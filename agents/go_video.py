@@ -158,6 +158,8 @@ def main() -> None:
                         default=None, help="视频预设（quality/balanced/fast/cinematic）")
     parser.add_argument("--count", type=int, default=1,
                         help="批量生成数量（不同 seed，默认 1）")
+    parser.add_argument("--camera", default=None,
+                        help="运镜描述（注入 prompt，如：缓缓推近/环绕旋转/镜头从下往上摇）")
     parser.add_argument("--preview", action="store_true",
                         help="快速预览模式（低帧数/低分辨率/低步数/低CFG）")
     args = parser.parse_args()
@@ -181,6 +183,10 @@ def main() -> None:
         sys.exit(1)
 
     prompt = user if args.raw else optimize_prompt(user)
+
+    # 运镜注入（Wan2.2 对 prompt 级运镜响应良好）
+    if args.camera:
+        prompt = f"{prompt}。镜头运动：{args.camera}。"
 
     # 预览模式参数覆盖
     steps_val = PREVIEW_STEPS if preview else args.steps

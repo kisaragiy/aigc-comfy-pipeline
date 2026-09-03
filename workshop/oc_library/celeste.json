@@ -7,21 +7,25 @@
     "hair_color": "银白",
     "eyes": "凤眼",
     "eye_color": "琥珀金",
-    "skin": "",
-    "face_shape": "",
-    "height": "",
-    "body": ""
+    "skin": "白皙",
+    "face_shape": "精致鹅蛋脸",
+    "height": "少女体型",
+    "body": "纤细",
+    "concept_anchor": "celestial",
+    "memory_point": "color_anchor,glowing_eyes,hair_sign",
+    "worldview": "fantasy"
   },
   "style": {
     "art_style": "电影感光影，日漫线条，游戏立绘结构",
-    "color_palette": "",
-    "lighting": ""
+    "color_palette": "黑金主调（硬黑哥特裙 + 琥珀金瞳孔）",
+    "lighting": "逆光/柔和顶光，发丝发光"
   },
   "outfits": [
     "黑色哥特连衣裙，蕾丝细节"
   ],
-  "personality": "",
-  "background": "",
+  "personality": "冷然、神秘、贵族感",
+  "background": "图书馆/哥特世界的贵族少女",
   "created": "2026-08-14 19:09",
-  "version": "1.0"
+  "updated": "2026-08-30",
+  "version": "1.2"
 }

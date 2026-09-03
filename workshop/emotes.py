@@ -129,12 +129,15 @@ def _export_wx_specs(emote_images: dict[str, str], out_dir: Path) -> dict[str, s
         img.thumbnail((240, 240), Image.LANCZOS)
         main.paste(img, ((240 - img.width) // 2, (240 - img.height) // 2), img)
         mpath = wx_dir / f"main_{i+1:02d}_{name}.png"
-        main.save(mpath)
+        from workshop.image_utils import save_image_with_meta
+        save_image_with_meta(main, mpath, source_path=path,
+                             extra_meta={'emote': name, 'wx_spec': 'main'})
         exported[f"main_{i+1:02d}"] = str(mpath)
         # 缩略图 120×120
         thumb = main.resize(WX_SPECS["thumb"], Image.LANCZOS)
         tpath = wx_dir / f"thumb_{i+1:02d}_{name}.png"
-        thumb.save(tpath)
+        save_image_with_meta(thumb, tpath, source_path=path,
+                             extra_meta={'emote': name, 'wx_spec': 'thumb'})
         exported[f"thumb_{i+1:02d}"] = str(tpath)
 
     # 2. 横幅 750×400（前 3 个表情平铺）
@@ -149,7 +152,9 @@ def _export_wx_specs(emote_images: dict[str, str], out_dir: Path) -> dict[str, s
             y = (400 - im.height) // 2
             banner.paste(im, (x, y), im)
     bpath = wx_dir / "banner_750x400.png"
-    banner.save(bpath)
+    _src = items[0][1] if items else (next(iter(emote_images.values())) if emote_images else None)
+    from workshop.image_utils import save_image_with_meta
+    save_image_with_meta(banner, bpath, source_path=_src, extra_meta={'wx_spec': 'banner'})
     exported["banner"] = str(bpath)
 
     # 3. 详情页封面 240×240（第 1 个表情 + 白底）
@@ -169,7 +174,9 @@ def _export_wx_specs(emote_images: dict[str, str], out_dir: Path) -> dict[str, s
         im.thumbnail((700, 700), Image.LANCZOS)
         artist.paste(im, ((750 - im.width) // 2, (750 - im.height) // 2), im)
     apath = wx_dir / "artist_750x750.png"
-    artist.save(apath)
+    from workshop.image_utils import save_image_with_meta
+    save_image_with_meta(artist, apath, source_path=(items[0][1] if items else None),
+                         extra_meta={"wx_spec": "artist"})
     exported["artist"] = str(apath)
 
     # 5. 标题图 750×560（白底 + 首表情 + 文字）
@@ -179,7 +186,7 @@ def _export_wx_specs(emote_images: dict[str, str], out_dir: Path) -> dict[str, s
         im.thumbnail((400, 400), Image.LANCZOS)
         title.paste(im, ((750 - im.width) // 2, 40), im)
     tpath = wx_dir / "title_750x560.png"
-    title.save(tpath)
+    save_image_with_meta(title, tpath, source_path=(items[0][1] if items else None), extra_meta={'wx_spec': 'title'})
     exported["title"] = str(tpath)
 
     return exported

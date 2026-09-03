@@ -1,5 +1,5 @@
 """
-Agent 质量闭环 — 超越"换种子重试"的智能 Agent 迭代循环。
+Agent 质量闭环 — 超越"换种子重试"的智能 Agent 迭代。
 
 流程:
   生成 → VLM 评分 → 分析缺陷 → 针对性修改 prompt →
@@ -36,7 +36,7 @@ VERBOSE = True
 # 第1步: VLM 分析图片缺陷
 # ═══════════════════════════════════════════════════
 
-DEFECT_ANALYSIS_PROMPT = """You are a professional art director analyzing a generated image.
+DEFECT_ANALYSIS_PROMPT = """You are a professional art director analyzing an image.
 Look at this image carefully and identify its specific flaws and weaknesses.
 
 Return ONLY valid JSON with these fields:
@@ -45,7 +45,7 @@ Return ONLY valid JSON with these fields:
     {
       "aspect": "<face|hands|composition|color|lighting|anatomy|detail|style|other>",
       "severity": <1-10>,
-      "description": "<specific issue description>",
+      "description": "<specific issue>",
       "how_to_fix": "<how to fix this in the prompt>"
     }
   ],
@@ -63,27 +63,27 @@ def analyze_defects(image_path: str) -> dict[str, Any]:
             import base64
             img_b64 = base64.b64encode(f.read()).decode("utf-8")
 
+        # 2026-08-20 修复：/api/generate + num_predict=2048（而非 /api/chat + max_tokens=1024）
         payload = {
             "model": "qwen3-vl:8b",
-            "messages": [
-                {"role": "user", "content": DEFECT_ANALYSIS_PROMPT,
-                 "images": [img_b64]},
-            ],
-            "options": {"temperature": 0.1, "max_tokens": 1024},
+            "prompt": DEFECT_ANALYSIS_PROMPT,
+            "images": [img_b64],
             "stream": False,
+            "options": {"temperature": 0.1, "num_predict": 2048},
         }
 
         import requests
-        r = requests.post("http://127.0.0.1:11434/api/chat", json=payload, timeout=90)
+        r = requests.post("http://127.0.0.1:11434/api/generate", json=payload, timeout=90)
         r.raise_for_status()
-        content = r.json().get("message", {}).get("content", "").strip()
+        data = r.json()
+        content = data.get("response", "").strip()
 
-        # 清理 think 标签
-        if "</think>" in content:
-            content = re.sub(r'<think>.*?</think>\s*', '', content, flags=re.DOTALL).strip()
-        elif "<think>" in content:
-            idx = content.index("<think>")
-            end = content.find("</think>", idx)
+        # 清理 think 标签（备用）
+        if " response" in content:
+            content = re.sub(r' thinking.*? response\s*', '', content, flags=re.DOTALL).strip()
+        elif " thinking" in content:
+            idx = content.index(" thinking")
+            end = content.find(" response", idx)
             content = content[:idx] + (content[end + 8:] if end > 0 else "")
 
         # 提取 JSON
@@ -211,7 +211,7 @@ def agent_quality_loop(
             count=2,
             inspect=True,
             aesthetic_min_score=0.0,
-            prompt_ready=(iteration > 1),  # 跳过 prompt 增强（已手动优化）
+            prompt_ready=(iteration > 1),
             use_vlm=False,
             no_validate=False,
             **create_kwargs,
@@ -307,8 +307,7 @@ def agent_quality_loop(
                 current_prompt = improved
             else:
                 if verbose:
-                    print("  ⚠️  Prompt 未改进，换用其他策略")
-                # 回退策略：从 quality DB 换参数
+                    print("  ⚠️  Prompt 未改进，换用策略")
                 current_prompt = current_prompt + " (masterpiece, best quality, extremely detailed)"
 
     return {

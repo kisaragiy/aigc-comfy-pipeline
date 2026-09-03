@@ -512,6 +512,7 @@ def _run_workshop() -> None:
         print('  aesthetic <图片> — VLM 审美评分')
         print('  aesthetic compare <图1> <图2> — VLM 质量对比')
         print('  models  [list|recommend] — 模型管理')
+        print('  cost    [--days N] [--json] — 生成成本账（每张图耗时/达标率）')
         print()
         print("示例:")
         print('  python -m agents workshop create "银发少女校服教室窗边逆光" --count 6 --inspect')
@@ -536,6 +537,9 @@ def _run_workshop() -> None:
     elif sub == "cover":
         from workshop.cover import main as cover_main
         cover_main(args)
+    elif sub == "cost":
+        from workshop.cost_tracker import main as cost_main
+        sys.exit(cost_main(args))
     elif sub == "emotes":
         from workshop.emotes import main as emotes_main
         emotes_main(args)
@@ -781,6 +785,8 @@ def _workshop_create(args: list[str]) -> None:
                         help="断点续跑：跳过 batch_metadata.json 中已成功的条目")
     parser.add_argument("--from-scenes", default=None,
                         help="从 scenes JSON 批量生成插画（workshop extract 输出）")
+    parser.add_argument("--prompt-ready", action="store_true",
+                        help="prompt 已完整构建，跳过 ollama/引擎增强（商业叙事词不被稀释——2026-08-16 修复）")
     parsed = parser.parse_args(args)
 
     nl_text = " ".join(parsed.nl_text) if parsed.nl_text else ""
@@ -1048,6 +1054,7 @@ def _workshop_create(args: list[str]) -> None:
         seed=parsed.seed,
         negative_prompt=parsed.negative or "",
         use_ollama=parsed.ollama,
+        prompt_ready=parsed.prompt_ready,
         output_dir=parsed.output,
         verbose=parsed.verbose,
         gallery_dir=gallery_dir,

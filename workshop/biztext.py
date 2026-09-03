@@ -212,7 +212,11 @@ def add_text(image_path, title, sub=None, pos='bottom-center', font_size=72,
 
     out_path = output or str(PROJECT / 'outputs' / f"biztext_{time.strftime('%Y%m%d_%H%M%S')}.png")
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    img.save(out_path)
+    from workshop.image_utils import save_image_with_meta
+    save_image_with_meta(img, out_path, source_path=image_path,
+                         extra_meta={'biztext': 'true',
+                                     'biztext_title': title,
+                                     'biztext_template': template})
     print(f'  📝 文字合成完成: {out_path}')
     print(f'      标题: {title}' + (f' | 副标题: {sub}' if sub else '') + f' | 位置: {pos}')
     return out_path

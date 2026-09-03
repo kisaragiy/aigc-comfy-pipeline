@@ -320,7 +320,9 @@ def make_variants(source_image, output_dir=None):
         canvas = Image.new('RGB', (w, h), (255, 255, 255))
         canvas.paste(resized, ((w - nw) // 2, (h - nh) // 2))
         out = str(out_root / f"{name}.png")
-        canvas.save(out)
+        from workshop.image_utils import save_image_with_meta
+        save_image_with_meta(canvas, out, source_path=source_image,
+                             extra_meta={'biz_variant': str(name)})
         saved.append(out)
         print(f'  ✅ {name}: {w}x{h}')
     print(f'\n📁 多规格输出: {out_root}（{len(saved)} 张）')

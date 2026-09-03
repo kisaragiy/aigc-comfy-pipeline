@@ -148,6 +148,8 @@
 | G130 | **blend 目录当图（EDGE-10）** | 目录路径友好报错 | ✅ open_image_safe 判定目录 → '路径是目录不是图片' | 🟢 对齐 | 输入边界 | ✅ 已补（1 测试） |
 | G131 | **异尺寸对比/非法格式（EDGE-11）** | compare 横竖图+interrogate 坏格式 | ✅ compare contain 统一异尺寸正常；interrogate 非法 fmt 友好报错 | 🟢 对齐 | 边界输入 | ✅ 已补（2 测试） |
 | G132 | **风格蒸馏全链路实测（SD-4）** | 数据集→门禁→训练→验证闭环跑通 | ✅ 实测：4 图门禁 85 分全过 → 800 步 23 分钟 loss 0.092 → VLM 确认"右图更贴合目标（暖调光影+日漫线条+游戏立绘质感）"→ kb 0.94 分 | 🟢 对齐 | 原创性核心 | ✅ 实测验证 |
+| G133 | **后处理元数据透传（META-1）**
+| G134 | **生成成本追踪（G8）** | 每张图成本/耗时/引擎对比 | ✅ `workshop/cost_tracker.py` JSONL 记账 + `workshop cost` 汇总（实测 NoobAI 420s vs Flux 95s，批量估时/引擎对比立现） | 🟢 对齐 | 之前「单人需求低不补」——用户成本敏感，时间账=最值钱的度量 | ✅ 已补（9 测试，718 全量过） | | 成品可溯源（ComfyUI tEXt 透传） | ✅ `image_utils.save_image_with_meta()` 已实现：colorgrade/biztext/restore(3)/blend/idphoto/cover/biz_variants/emotes-wx(5) 共 13 保存点接入，成品自带 prompt/seed/后处理参数 | 🟢 对齐 | ComfyUI 出图带 tEXt，PIL 后处理重存丢失——成品无法溯源 | ✅ 已补（5 测试，709 全量过） |
 
 ---
 
