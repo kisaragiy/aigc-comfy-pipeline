@@ -10,7 +10,7 @@
 [![CI](https://img.shields.io/badge/CI-github%20actions-blue)]()
 [![License](https://img.shields.io/badge/License-MIT-f5de17)](LICENSE)
 
-> **不是课程项目**：自研质量门禁（gate.py 三层：代码量化 460 行 + VLM 定位 + 放大复核）+ 729 项 pytest + CI（push/PR 自动触发）。
+> 自研质量门禁（gate.py 三层：代码量化 460 行 + VLM 定位 + 放大复核）+ 729 项 pytest + CI（push/PR 自动触发）。
 > 关键决策记录：IPAdapter 7 变种实测无法锁动漫角色特征 → LoRA（dim32/64 网格对比）胜出（[workshop/character-consistency.md](workshop/character-consistency.md)）。
 
 ## 定位
